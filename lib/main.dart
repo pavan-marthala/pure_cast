@@ -1,7 +1,10 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/DI/injection.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/home_screen.dart';
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
@@ -59,15 +62,25 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      routerConfig: _goRouter,
-      title: 'Pure Cast',
-      theme: AppTheme.dark,
-      darkTheme: AppTheme.dark,
-      debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        return child ?? const Scaffold();
-      },
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<CastDiscoveryBloc>(
+          create: (context) => getIt<CastDiscoveryBloc>(),
+        ),
+        BlocProvider<CastSessionBloc>(
+          create: (context) => getIt<CastSessionBloc>(),
+        ),
+      ],
+      child: MaterialApp.router(
+        routerConfig: _goRouter,
+        title: 'Pure Cast',
+        theme: AppTheme.dark,
+        darkTheme: AppTheme.dark,
+        debugShowCheckedModeBanner: false,
+        builder: (context, child) {
+          return child ?? const Scaffold();
+        },
+      ),
     );
   }
 }

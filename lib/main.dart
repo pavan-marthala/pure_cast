@@ -4,6 +4,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/DI/injection.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_event.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/home_screen.dart';
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
@@ -65,10 +68,15 @@ class _MyAppState extends State<MyApp> {
     return MultiBlocProvider(
       providers: [
         BlocProvider<CastDiscoveryBloc>(
-          create: (context) => getIt<CastDiscoveryBloc>(),
+          create: (context) => getIt<CastDiscoveryBloc>()
+            ..add(const StartDiscoveryEvent()),
         ),
         BlocProvider<CastSessionBloc>(
           create: (context) => getIt<CastSessionBloc>(),
+        ),
+        BlocProvider<QueueBloc>(
+          create: (context) => getIt<QueueBloc>()
+            ..add(const LoadQueueEvent()),
         ),
       ],
       child: MaterialApp.router(

@@ -152,8 +152,24 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<PlaybackHistoryTableData?> getMostRecentHistory() async {
+    final list = await (select(playbackHistoryTable)
+          ..orderBy([(t) => OrderingTerm.desc(t.lastPlayedAt)])
+          ..limit(1))
+        .get();
+    return list.isNotEmpty ? list.first : null;
+  }
+
   Future<void> recordPlaybackHistory(PlaybackHistoryTableCompanion entry) async {
     await into(playbackHistoryTable).insertOnConflictUpdate(entry);
+  }
+
+  Future<void> removePlaybackHistory(String id) async {
+    await (delete(playbackHistoryTable)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<void> clearPlaybackHistory() async {
+    await delete(playbackHistoryTable).go();
   }
 
   // ── User Preferences Queries ──

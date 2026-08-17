@@ -4,17 +4,19 @@ import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
+import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'cast_session_event.dart';
 import 'cast_session_state.dart';
 
 @injectable
 class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   final ICastService _castService;
+  final PlaybackHistoryRepository _historyRepo;
   StreamSubscription<PureCastSessionState>? _stateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
 
-  CastSessionBloc(this._castService) : super(const CastSessionState()) {
+  CastSessionBloc(this._castService, this._historyRepo) : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
     on<LoadMediaEvent>(_onLoadMedia);
@@ -157,6 +159,19 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     Emitter<CastSessionState> emit,
   ) {
     emit(state.copyWith(sessionState: event.newState));
+    _checkpointHistory(completed: event.newState == PureCastSessionState.completed);
+  }
+
+  void _checkpointHistory({bool completed = false}) {
+    final media = state.activeMedia;
+    if (media != null) {
+      _historyRepo.recordHistoryCheckpoint(
+        media: media,
+        position: state.position,
+        duration: state.duration,
+        completed: completed,
+      );
+    }
   }
 
   void _onPositionUpdated(

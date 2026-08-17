@@ -1,7 +1,1 @@
-enum StateStatus {
-  initial,
-  loading,
-  loaded,
-  empty,
-  error,
-}
+enum StateStatus { initial, loading, loaded, empty, error }

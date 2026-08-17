@@ -6,7 +6,6 @@ import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 
-@LazySingleton(as: ICastService)
 /// Concrete adapter wrapping dart_cast package services.
 class DartCastAdapter implements ICastService {
   final dart_cast.CastService _castService;

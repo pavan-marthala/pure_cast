@@ -13,10 +13,9 @@ import 'package:dart_cast/dart_cast.dart' as _i869;
 import 'package:get_it/get_it.dart' as _i174;
 import 'package:injectable/injectable.dart' as _i526;
 import 'package:pure_cast/core/database/app_database.dart' as _i600;
+import 'package:pure_cast/core/DI/injection.dart' as _i98;
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart'
     as _i1071;
-import 'package:pure_cast/core/features/casting/data/repository/dart_cast_adapter.dart'
-    as _i944;
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart'
     as _i187;
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart'
@@ -33,13 +32,15 @@ extension GetItInjectableX on _i174.GetIt {
     _i526.EnvironmentFilter? environmentFilter,
   }) {
     final gh = _i526.GetItHelper(this, environment, environmentFilter);
+    final injectionModule = _$InjectionModule();
+    gh.lazySingleton<_i869.CastService>(() => injectionModule.castService);
     gh.lazySingleton<_i600.AppDatabase>(() => _i600.AppDatabase());
     gh.factory<_i723.QueueBloc>(() => _i723.QueueBloc(gh<_i600.AppDatabase>()));
     gh.lazySingleton<_i187.PlaybackHistoryRepository>(
       () => _i187.PlaybackHistoryRepository(gh<_i600.AppDatabase>()),
     );
     gh.lazySingleton<_i1071.ICastService>(
-      () => _i944.DartCastAdapter(castService: gh<_i869.CastService>()),
+      () => injectionModule.getICastService(gh<_i869.CastService>()),
     );
     gh.factory<_i445.CastSessionBloc>(
       () => _i445.CastSessionBloc(
@@ -56,3 +57,5 @@ extension GetItInjectableX on _i174.GetIt {
     return this;
   }
 }
+
+class _$InjectionModule extends _i98.InjectionModule {}

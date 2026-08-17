@@ -215,8 +215,8 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.se
 /// @nodoc
 
 
-class _CastSessionState implements CastSessionState {
-  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.sessionStatus = StateStatus.initial, this.sessionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.duration = Duration.zero, this.volume = 1.0});
+class _CastSessionState extends CastSessionState {
+  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.sessionStatus = StateStatus.initial, this.sessionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.duration = Duration.zero, this.volume = 1.0}): super._();
   
 
 @override@JsonKey() final  PureCastSessionState sessionState;

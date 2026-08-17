@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -17,11 +18,11 @@ class HomeScreen extends StatelessWidget {
               padding: .all(6),
               decoration: BoxDecoration(
                 color: colors.primary,
-                borderRadius: .circular(8)
+                borderRadius: .circular(8),
               ),
-              child: Icon(Icons.cast_sharp,size: 18,),
+              child: Icon(Icons.cast_sharp, size: 18),
             ),
-            Text("Pure Cast")
+            Text("Pure Cast"),
           ],
         ),
         actions: [
@@ -31,6 +32,11 @@ class HomeScreen extends StatelessWidget {
         bottom: PreferredSize(
           preferredSize: Size(double.infinity, 2),
           child: Divider(),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(children: [PlayerSection()]),
         ),
       ),
     );

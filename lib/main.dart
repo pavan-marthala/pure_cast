@@ -68,15 +68,14 @@ class _MyAppState extends State<MyApp> {
     return MultiBlocProvider(
       providers: [
         BlocProvider<CastDiscoveryBloc>(
-          create: (context) => getIt<CastDiscoveryBloc>()
-            ..add(const StartDiscoveryEvent()),
+          create: (context) =>
+              getIt<CastDiscoveryBloc>()..add(const StartDiscoveryEvent()),
         ),
         BlocProvider<CastSessionBloc>(
           create: (context) => getIt<CastSessionBloc>(),
         ),
         BlocProvider<QueueBloc>(
-          create: (context) => getIt<QueueBloc>()
-            ..add(const LoadQueueEvent()),
+          create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
         ),
       ],
       child: MaterialApp.router(

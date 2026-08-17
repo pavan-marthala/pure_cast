@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:developer';
+
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
@@ -42,9 +44,10 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
 
   void _onQueueStateChanged(QueueState queueState) {
     if (_isTransitioning || _sessionBloc == null) return;
-
+    log("Queue State Changed", name: "Playback Coordinator");
     final sessionState = _sessionBloc!.state;
     final items = queueState.items;
+    log("Queue Length ${items.length}", name: "Playback Coordinator");
     final currentIndex = queueState.currentIndex;
 
     final previousLength = _lastHandledQueueLength ?? 0;
@@ -52,14 +55,17 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
 
     // Case 1: First media added to an empty queue
     if (previousLength == 0 && items.isNotEmpty && currentIndex == 0) {
+      log("Added first media", name: "Playback Coordinator");
       if (sessionState.activeMedia == null) {
+        log("Calling Load media event", name: "Playback Coordinator");
         _loadMediaAtCurrentIndex(items[0]);
         return;
       }
     }
 
     // Case 2: Explicit queue index advance (Next/Previous/Index change)
-    if (_lastHandledQueueIndex != null && _lastHandledQueueIndex != currentIndex) {
+    if (_lastHandledQueueIndex != null &&
+        _lastHandledQueueIndex != currentIndex) {
       _lastHandledQueueIndex = currentIndex;
       if (currentIndex >= 0 && currentIndex < items.length) {
         _loadMediaAtCurrentIndex(items[currentIndex]);
@@ -109,9 +115,9 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
 
   void _loadMediaAtCurrentIndex(PureCastMedia media) {
     if (_isTransitioning || _sessionBloc == null) return;
-
     _isTransitioning = true;
     try {
+      log("Loading media event", name: "Playback Coordinator");
       _sessionBloc!.add(LoadMediaEvent(media));
     } finally {
       _isTransitioning = false;

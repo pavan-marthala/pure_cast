@@ -157,7 +157,6 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     emit(state.copyWith(status: StateStatus.loading, error: null));
     try {
       final items = await _mediaRepository.pickFiles();
-      print(items.toString());
       final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
       emit(state.copyWith(items: items, status: status));
     } catch (e) {

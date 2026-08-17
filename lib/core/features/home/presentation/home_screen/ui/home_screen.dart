@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 
@@ -26,7 +27,12 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          IconButton(onPressed: () {}, icon: Icon(Icons.tv)),
+          IconButton(
+            onPressed: () {
+              DeviceManagerScreen.show(context);
+            },
+            icon: Icon(Icons.tv),
+          ),
           IconButton(onPressed: () {}, icon: Icon(Icons.settings)),
         ],
         bottom: PreferredSize(

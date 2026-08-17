@@ -18,6 +18,8 @@ import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.
     as _i1071;
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart'
     as _i187;
+import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart'
+    as _i755;
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart'
     as _i619;
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart'
@@ -41,6 +43,9 @@ extension GetItInjectableX on _i174.GetIt {
     );
     gh.lazySingleton<_i1071.ICastService>(
       () => injectionModule.getICastService(gh<_i869.CastService>()),
+    );
+    gh.lazySingleton<_i755.PlaybackCoordinator>(
+      () => _i755.PlaybackCoordinator(gh<_i187.PlaybackHistoryRepository>()),
     );
     gh.factory<_i445.CastSessionBloc>(
       () => _i445.CastSessionBloc(

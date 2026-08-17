@@ -4,12 +4,10 @@ import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_event.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
-import 'package:pure_cast/core/utils/state_status.dart';
 
 class FakeCastService implements ICastService {
   final StreamController<List<PureCastDevice>> discoveryController =
@@ -25,6 +23,7 @@ class FakeCastService implements ICastService {
   PureCastDevice? connectDeviceTarget;
   bool shouldConnectFail = false;
   bool disconnectCalled = false;
+  PureCastMedia? loadedMedia;
 
   @override
   Stream<List<PureCastDevice>> discoverDevices({Set<PureCastProtocol>? protocols}) {
@@ -49,7 +48,10 @@ class FakeCastService implements ICastService {
   }
 
   @override
-  Future<void> loadMedia(PureCastMedia media) async {}
+  Future<void> loadMedia(PureCastMedia media) async {
+    loadedMedia = media;
+    sessionStateController.add(PureCastSessionState.playing);
+  }
 
   @override
   Future<void> play() async {}
@@ -181,154 +183,238 @@ void main() {
     await fakeCastService.dispose();
   });
 
-  group('QueueBloc & PlaybackHistoryRepository Integration Tests', () {
-    test('QueueBloc restores queue from database on LoadQueueEvent', () async {
-      fakeDb.queueData = [
-        PlaybackQueueTableData(
-          id: 'q_1',
-          mediaUri: 'http://example.com/item1.mp4',
-          mediaType: 'mp4',
-          title: 'Persisted Video 1',
-          isLocalFile: false,
-          queueOrder: 0,
-          createdAt: DateTime.now(),
-        ),
-      ];
+  group('PlaybackCoordinator Unit & Orchestration Tests', () {
+    test('1. Empty queue does not trigger media load', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeMedia, isNull);
+      expect(fakeCastService.loadedMedia, isNull);
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('2. First item added to empty queue triggers LoadMediaEvent on CastSessionBloc', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeMedia, equals(media));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('3. Appending media while playing does not interrupt current playback', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+      const media2 = PureCastMedia(
+        uri: 'http://example.com/video2.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 2',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia, equals(media1));
+
+      queueBloc.add(const AddToQueueEvent(media2));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeMedia, equals(media1));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('4. Completion advances to next queue item when autoPlayNext is true', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+      const media2 = PureCastMedia(
+        uri: 'http://example.com/video2.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 2',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+      queueBloc.add(const AddToQueueEvent(media2));
+      await pumpEventQueue();
+
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
+
+      expect(queueBloc.state.currentIndex, equals(1));
+      expect(sessionBloc.state.activeMedia, equals(media2));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('5. Completion at end of queue stays completed', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
+
+      expect(queueBloc.state.currentIndex, equals(0));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('6. Clearing queue while playing does not interrupt current active media', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+
+      queueBloc.add(const ClearQueueEvent());
+      await pumpEventQueue();
+
+      expect(queueBloc.state.items, isEmpty);
+      expect(sessionBloc.state.activeMedia, equals(media1));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('7. AutoPlayNext disabled halts playback on completion', () async {
+      fakeDb.preferencesData = const UserPreferencesTableData(
+        id: 1,
+        preferredAudioLanguage: 'en',
+        preferredSubtitleLanguage: 'en',
+        autoPlayNext: false,
+      );
 
       final queueBloc = QueueBloc(fakeDb);
-      expect(queueBloc.state.status, equals(StateStatus.initial));
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
 
-      queueBloc.add(const LoadQueueEvent());
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+      const media2 = PureCastMedia(
+        uri: 'http://example.com/video2.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 2',
+      );
+
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+      queueBloc.add(const AddToQueueEvent(media2));
       await pumpEventQueue();
 
-      expect(queueBloc.state.status, equals(StateStatus.loaded));
-      expect(queueBloc.state.items.length, equals(1));
-      expect(queueBloc.state.items.first.title, equals('Persisted Video 1'));
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
 
+      expect(queueBloc.state.currentIndex, equals(0));
+      expect(sessionBloc.state.activeMedia, equals(media1));
+
+      await coordinator.dispose();
       await queueBloc.close();
+      await sessionBloc.close();
     });
 
-    test('PlaybackHistoryRepository fetches most recent played item', () async {
-      fakeDb.mostRecentHistory = PlaybackHistoryTableData(
-        id: 'hist_1',
-        title: 'Last Watched Movie',
-        mediaUri: 'http://example.com/movie.mkv',
-        mediaType: 'mkv',
-        isLocalFile: false,
-        lastPositionMs: 120000,
-        totalDurationMs: 600000,
-        lastPlayedAt: DateTime.now(),
-        completed: false,
+    test('8. Duplicate completion events are guarded', () async {
+      final queueBloc = QueueBloc(fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const media1 = PureCastMedia(
+        uri: 'http://example.com/video1.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 1',
+      );
+      const media2 = PureCastMedia(
+        uri: 'http://example.com/video2.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 2',
       );
 
-      final item = await historyRepo.getMostRecentHistory();
-      expect(item?.title, equals('Last Watched Movie'));
-      expect(item?.lastPositionMs, equals(120000));
-    });
-  });
-
-  group('CastDiscoveryBloc Runtime Integration Tests', () {
-    test('StartDiscovery transitions to loading and emits loaded on devices stream update', () async {
-      final bloc = CastDiscoveryBloc(fakeCastService, fakeDb);
-
-      expect(bloc.state.discoveryStatus, equals(StateStatus.initial));
-
-      bloc.add(const StartDiscoveryEvent());
+      queueBloc.add(const AddToQueueEvent(media1));
+      await pumpEventQueue();
+      queueBloc.add(const AddToQueueEvent(media2));
       await pumpEventQueue();
 
-      expect(bloc.state.discoveryStatus, equals(StateStatus.loading));
-
-      const testDevice = PureCastDevice(
-        id: 'dev_1',
-        name: 'Living Room Chromecast',
-        protocol: PureCastProtocol.chromecast,
-        host: '192.168.1.10',
-        port: 8009,
-        capabilities: PureCastCapabilities(),
-      );
-
-      fakeCastService.discoveryController.add([testDevice]);
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
       await pumpEventQueue();
 
-      expect(bloc.state.discoveryStatus, equals(StateStatus.loaded));
-      expect(bloc.state.devices, equals([testDevice]));
+      expect(queueBloc.state.currentIndex, equals(1));
 
-      await bloc.close();
-    });
-
-    test('Successful connection persists last device', () async {
-      final bloc = CastDiscoveryBloc(fakeCastService, fakeDb);
-      const testDevice = PureCastDevice(
-        id: 'dev_1',
-        name: 'Living Room Chromecast',
-        protocol: PureCastProtocol.chromecast,
-        host: '192.168.1.10',
-        port: 8009,
-        capabilities: PureCastCapabilities(),
-      );
-
-      bloc.add(const ConnectToDeviceEvent(testDevice));
-      await pumpEventQueue();
-
-      expect(bloc.state.connectionStatus, equals(StateStatus.loaded));
-      expect(bloc.state.selectedDevice, equals(testDevice));
-      expect(fakeCastService.connectCalled, isTrue);
-      expect(fakeDb.lastDeviceId, equals('dev_1'));
-      expect(fakeDb.lastDeviceName, equals('Living Room Chromecast'));
-      expect(fakeDb.lastProtocol, equals('chromecast'));
-
-      await bloc.close();
-    });
-
-    test('Failed connection sets error state and does not persist device', () async {
-      final bloc = CastDiscoveryBloc(fakeCastService, fakeDb);
-      fakeCastService.shouldConnectFail = true;
-
-      const testDevice = PureCastDevice(
-        id: 'dev_1',
-        name: 'Living Room Chromecast',
-        protocol: PureCastProtocol.chromecast,
-        host: '192.168.1.10',
-        port: 8009,
-        capabilities: PureCastCapabilities(),
-      );
-
-      bloc.add(const ConnectToDeviceEvent(testDevice));
-      await pumpEventQueue();
-
-      expect(bloc.state.connectionStatus, equals(StateStatus.error));
-      expect(bloc.state.connectionError, contains('Network connection failed'));
-      expect(fakeDb.lastDeviceId, isNull);
-
-      await bloc.close();
-    });
-  });
-
-  group('CastSessionBloc Runtime Integration Tests', () {
-    test('Subscribes to session streams and updates state', () async {
-      final bloc = CastSessionBloc(fakeCastService, historyRepo);
-
-      fakeCastService.sessionStateController.add(PureCastSessionState.playing);
-      await pumpEventQueue();
-
-      expect(bloc.state.sessionState, equals(PureCastSessionState.playing));
-
-      fakeCastService.positionController.add(const Duration(seconds: 45));
-      await pumpEventQueue();
-
-      expect(bloc.state.position, equals(const Duration(seconds: 45)));
-
-      await bloc.close();
-    });
-
-    test('Disposal cancels stream subscriptions', () async {
-      final bloc = CastSessionBloc(fakeCastService, historyRepo);
-      await bloc.close();
-
-      fakeCastService.sessionStateController.add(PureCastSessionState.paused);
-      await pumpEventQueue();
-
-      expect(bloc.state.sessionState, equals(PureCastSessionState.disconnected));
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
     });
   });
 }

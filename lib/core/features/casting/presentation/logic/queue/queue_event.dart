@@ -30,3 +30,17 @@ class ReorderQueueEvent extends QueueEvent {
 class ClearQueueEvent extends QueueEvent {
   const ClearQueueEvent();
 }
+
+class NextQueueItemEvent extends QueueEvent {
+  const NextQueueItemEvent();
+}
+
+class PreviousQueueItemEvent extends QueueEvent {
+  const PreviousQueueItemEvent();
+}
+
+class SetCurrentIndexEvent extends QueueEvent {
+  final int index;
+
+  const SetCurrentIndexEvent(this.index);
+}

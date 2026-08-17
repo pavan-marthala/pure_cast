@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_state.dart';
+import 'package:pure_cast/core/theme/app_theme.dart';
 
 class PlayerSection extends StatelessWidget {
   const PlayerSection({super.key});
@@ -33,6 +34,43 @@ class NothingPlayingSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container();
+    final colors = context.appColors;
+    final typo = context.appTypography;
+    return Container(
+      padding: .all(14),
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: .circular(12),
+      ),
+      child: Row(
+        spacing: 14,
+        children: [
+          Container(
+            padding: .all(6),
+            decoration: BoxDecoration(
+              color: colors.gray,
+              borderRadius: .circular(8),
+            ),
+            child: Icon(Icons.tv, size: 20),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: .start,
+              children: [
+                Text("Nothing Playing right now", style: typo.titleSmall),
+                Text("Pick something form your media to start casting"),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {},
+            child: Text(
+              "Browse Files",
+              style: typo.titleSmall.copyWith(color: colors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

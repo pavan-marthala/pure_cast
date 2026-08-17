@@ -36,6 +36,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
+          padding: .all(16),
           child: Column(children: [PlayerSection()]),
         ),
       ),

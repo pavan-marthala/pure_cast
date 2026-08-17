@@ -17,6 +17,9 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     on<RemoveFromQueueEvent>(_onRemoveFromQueue);
     on<ReorderQueueEvent>(_onReorderQueue);
     on<ClearQueueEvent>(_onClearQueue);
+    on<NextQueueItemEvent>(_onNextQueueItem);
+    on<PreviousQueueItemEvent>(_onPreviousQueueItem);
+    on<SetCurrentIndexEvent>(_onSetCurrentIndex);
   }
 
   Future<void> _onLoadQueue(
@@ -93,9 +96,38 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) async {
     try {
       await _db.clearQueue();
-      emit(state.copyWith(items: const [], status: StateStatus.empty));
+      emit(state.copyWith(items: const [], currentIndex: 0, status: StateStatus.empty));
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
+    }
+  }
+
+  void _onNextQueueItem(
+    NextQueueItemEvent event,
+    Emitter<QueueState> emit,
+  ) {
+    if (state.items.isEmpty) return;
+    if (state.currentIndex < state.items.length - 1) {
+      emit(state.copyWith(currentIndex: state.currentIndex + 1));
+    }
+  }
+
+  void _onPreviousQueueItem(
+    PreviousQueueItemEvent event,
+    Emitter<QueueState> emit,
+  ) {
+    if (state.items.isEmpty) return;
+    if (state.currentIndex > 0) {
+      emit(state.copyWith(currentIndex: state.currentIndex - 1));
+    }
+  }
+
+  void _onSetCurrentIndex(
+    SetCurrentIndexEvent event,
+    Emitter<QueueState> emit,
+  ) {
+    if (event.index >= 0 && event.index < state.items.length) {
+      emit(state.copyWith(currentIndex: event.index));
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/DI/injection.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
@@ -78,14 +79,22 @@ class _MyAppState extends State<MyApp> {
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
         ),
       ],
-      child: MaterialApp.router(
-        routerConfig: _goRouter,
-        title: 'Pure Cast',
-        theme: AppTheme.dark,
-        darkTheme: AppTheme.dark,
-        debugShowCheckedModeBanner: false,
-        builder: (context, child) {
-          return child ?? const Scaffold();
+      child: Builder(
+        builder: (context) {
+          final queueBloc = BlocProvider.of<QueueBloc>(context);
+          final sessionBloc = BlocProvider.of<CastSessionBloc>(context);
+          getIt<PlaybackCoordinator>().start(queueBloc, sessionBloc);
+
+          return MaterialApp.router(
+            routerConfig: _goRouter,
+            title: 'Pure Cast',
+            theme: AppTheme.dark,
+            darkTheme: AppTheme.dark,
+            debugShowCheckedModeBanner: false,
+            builder: (context, child) {
+              return child ?? const Scaffold();
+            },
+          );
         },
       ),
     );

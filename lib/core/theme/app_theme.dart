@@ -26,25 +26,16 @@ class AppTheme {
       brightness: brightness,
     ).copyWith(
       extensions: [colors, typography, gradients],
-
       colorScheme: ColorScheme(
         brightness: brightness,
         primary: colors.primary,
         onPrimary: colors.white,
-        primaryContainer: isDark
-            ? const Color(0xFF2D2580)
-            : const Color(0xFFE4E2FA),
-        onPrimaryContainer: isDark
-            ? const Color(0xFFE4E2FA)
-            : const Color(0xFF1A1650),
+        primaryContainer: colors.primary800,
+        onPrimaryContainer: colors.primary100,
         secondary: colors.secondary,
         onSecondary: colors.white,
-        secondaryContainer: isDark
-            ? const Color(0xFF7A1A4A)
-            : const Color(0xFFFFE0EE),
-        onSecondaryContainer: isDark
-            ? const Color(0xFFFFE0EE)
-            : const Color(0xFF4A0D2C),
+        secondaryContainer: colors.secondary200,
+        onSecondaryContainer: colors.secondary900,
         surface: colors.surfaceLight,
         onSurface: colors.textPrimary,
         error: colors.error,

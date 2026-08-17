@@ -67,169 +67,186 @@ class AppGradients extends ThemeExtension<AppGradients> {
     required this.passwordStrong,
   });
 
-  // ── Dark Preset ──────────────────────────────────────────────
+  // ── Dark Preset — Electric Violet ───────────────────────────
+  //
+  // Same legend as app_colors.dart: EXACT = literal HTML value/stop,
+  // DERIVED = no equivalent exists in the HTML app (it deliberately avoids
+  // gradients on most surfaces — buttons are flat fills, not gradients).
+  //
   static final dark = AppGradients(
+    // EXACT — accent (#8B5CF6) -> accentHover (#7C3AED), the two literal
+    // violet values used for interactive fills in the HTML app. Note the
+    // HTML app itself uses these as flat solid colors, not a gradient —
+    // this is provided for callers of your theme that specifically need a
+    // gradient variant of the primary color.
     primary: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [Color(0xFFFFA94D), Color(0xFFF97316)],
+      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
     ),
     primaryReverse: const LinearGradient(
       begin: Alignment.centerRight,
       end: Alignment.centerLeft,
-      colors: [Color(0xFFFFA94D), Color(0xFFF97316)],
+      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
     ),
     primaryVertical: const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFFFA94D), Color(0xFFF97316)],
+      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
     ),
 
-    // Secondary — lighter maroon/red (dark mode)
+    // DERIVED — no secondary hue in the HTML app; neutral gray duo instead.
     secondary: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [Color(0xFFC23B4A), Color(0xFFE05252)],
+      colors: [Color(0xFF444452), Color(0xFF5C5C6E)],
     ),
     secondaryReverse: const LinearGradient(
       begin: Alignment.centerRight,
       end: Alignment.centerLeft,
-      colors: [Color(0xFFC23B4A), Color(0xFFE05252)],
+      colors: [Color(0xFF444452), Color(0xFF5C5C6E)],
     ),
 
-    // Glass — orange → gold diagonal blend (matches prototype --grad-glass)
+    // EXACT — the linear component of the HTML app's featured-art / stage
+    // background: linear-gradient(150deg, #20202C, #0D0D11)
     glass: const LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [Color(0xFFFFA94D), Color(0xFFE8C868)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF20202C), Color(0xFF0D0D11)],
     ),
     glassReverse: const LinearGradient(
-      begin: Alignment.centerRight,
-      end: Alignment.centerLeft,
-      colors: [Color(0xFFFFA94D), Color(0xFFE8C868)],
+      begin: Alignment.bottomRight,
+      end: Alignment.topLeft,
+      colors: [Color(0xFF20202C), Color(0xFF0D0D11)],
     ),
     glassVertical: const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFFFA94D), Color(0xFFE8C868)],
+      colors: [Color(0xFF20202C), Color(0xFF0D0D11)],
     ),
 
-    // Signature combos
+    // DERIVED — the HTML app has no "purple + rose" two-hue combos (single
+    // accent system), so these are repurposed as violet light/dark pairings.
+    // Colors themselves are still exact violet-ramp hexes.
     purpleRose: const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFFFA94D), Color(0xFFC23B4A)], // orange → maroon
+      colors: [
+        Color(0xFFC4B5FD),
+        Color(0xFF7C3AED),
+      ], // primary300 -> primary600
     ),
     rosePurple: const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFFC23B4A), Color(0xFFFFA94D)], // maroon → orange
+      begin: Alignment.bottomRight,
+      end: Alignment.topLeft,
+      colors: [Color(0xFFC4B5FD), Color(0xFF7C3AED)],
     ),
+    // EXACT — the app's two accent-swatch options combined: Indigo (#6366F1,
+    // the HTML app's default accent) -> Violet (#8B5CF6, this preset's accent)
     purpleIndigo: const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFE8C868), Color(0xFFFFA94D)], // gold → orange
+      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
     ),
     roseDeep: const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFFE05252), Color(0xFFC23B4A)], // red → deep maroon
+      colors: [
+        Color(0xFF7C3AED),
+        Color(0xFF4C1D95),
+      ], // primary600 -> primary900
     ),
 
-    // Backgrounds
+    // EXACT — --bg -> --surface-1 -> --surface-2, same three-tier ordering
+    // the HTML app uses for elevation.
     backgroundDark: const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xFF15120F), Color(0xFF211D19)], // bg → surface
+      colors: [Color(0xFF0A0A0D), Color(0xFF131318)],
     ),
     backgroundLight: const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        Color(0xFF211D19),
-        Color(0xFF2D2925),
-      ], // surface → surface-secondary
+      colors: [Color(0xFF131318), Color(0xFF1B1B22)],
     ),
     surface: const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [
-        Color(0xFF2D2925),
-        Color(0xFF3B342F),
-      ], // surface-secondary → border
+      colors: [Color(0xFF1B1B22), Color(0xFF24242D)],
     ),
 
-    // Overlays
+    // EXACT hexes (accent / accentHover) at an alpha within the HTML app's
+    // own --indigo-wash / --indigo-wash-strong range (.14–.26).
     glassOverlay: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        const Color(0xFFF97316).withValues(alpha: 0.15),
-        const Color(0xFF8B1E2D).withValues(alpha: 0.15),
+        const Color(0xFF8B5CF6).withValues(alpha: 0.18),
+        const Color(0xFF7C3AED).withValues(alpha: 0.18),
       ],
     ),
     glassOverlaySubtle: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        const Color(0xFFF97316).withValues(alpha: 0.08),
-        const Color(0xFF8B1E2D).withValues(alpha: 0.08),
+        const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+        const Color(0xFF7C3AED).withValues(alpha: 0.08),
       ],
     ),
-    overlayBottom: LinearGradient(
+
+    // EXACT — matches the HTML app's stage/hero fade precisely:
+    // linear-gradient(180deg, rgba(10,10,13,0), var(--bg) 92%)
+    overlayBottom: const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        const Color(0xFF000000).withValues(alpha: 0.8),
-      ],
+      colors: [Colors.transparent, Color(0xFF0A0A0D)],
+      stops: [0.0, 0.92],
     ),
-    overlayTop: LinearGradient(
+    // DERIVED direction (HTML has no literal "top" overlay), same exact colors/stop.
+    overlayTop: const LinearGradient(
       begin: Alignment.bottomCenter,
       end: Alignment.topCenter,
-      colors: [
-        Colors.transparent,
-        const Color(0xFF000000).withValues(alpha: 0.8),
-      ],
+      colors: [Colors.transparent, Color(0xFF0A0A0D)],
+      stops: [0.0, 0.92],
     ),
 
-    // Shimmer — subtle white flash for skeleton loaders
-    shimmer: LinearGradient(
+    // EXACT — matches the HTML app's skeleton-loading shimmer precisely:
+    // linear-gradient(100deg, surface-1 30%, surface-2 50%, surface-1 70%)
+    shimmer: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [
-        Colors.transparent,
-        Colors.white.withValues(alpha: 0.08),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.5, 1.0],
+      colors: [Color(0xFF131318), Color(0xFF1B1B22), Color(0xFF131318)],
+      stops: [0.3, 0.5, 0.7],
     ),
 
-    // Welcome box tint
+    // DERIVED — no equivalent component in the HTML app; reuses the two
+    // accent-swatch hexes (Violet + Indigo) at a low wash alpha.
     welcomeBox: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        const Color(0xFFF97316).withValues(alpha: 0.10),
-        const Color(0xFF8B1E2D).withValues(alpha: 0.10),
+        const Color(0xFF8B5CF6).withValues(alpha: 0.10),
+        const Color(0xFF6366F1).withValues(alpha: 0.10),
       ],
     ),
 
-    // Password strength indicators (shared across presets)
+    // DERIVED — no password-strength UI in Pure Cast; recolored using the
+    // exact semantic error/warning/success base hexes with a derived darker
+    // second stop for gradient effect.
     passwordWeak: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [Color(0xFFF87171), Color(0xFFDC2626)],
+      colors: [Color(0xFFF0576B), Color(0xFFC23349)],
     ),
     passwordMedium: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)],
+      colors: [Color(0xFFF5A623), Color(0xFFC97D0E)],
     ),
     passwordStrong: const LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
-      colors: [Color(0xFF34D399), Color(0xFF16A34A)],
+      colors: [Color(0xFF34D399), Color(0xFF1FA372)],
     ),
   );
 

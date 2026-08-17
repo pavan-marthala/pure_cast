@@ -3,17 +3,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/utils/state_status.dart';
 import 'cast_session_event.dart';
 import 'cast_session_state.dart';
 
 @injectable
-class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionBlocState> {
+class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   final ICastService _castService;
   StreamSubscription<PureCastSessionState>? _stateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
 
-  CastSessionBloc(this._castService) : super(const CastSessionBlocState()) {
+  CastSessionBloc(this._castService) : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
     on<LoadMediaEvent>(_onLoadMedia);
@@ -45,127 +46,129 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionBlocState> {
 
   Future<void> _onConnectDevice(
     ConnectDeviceEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     emit(state.copyWith(
-      status: PureCastSessionState.connecting,
+      sessionStatus: StateStatus.loading,
       activeDevice: event.device,
-      clearError: true,
+      sessionError: null,
     ));
     try {
       await _castService.connect(event.device);
+      emit(state.copyWith(sessionStatus: StateStatus.loaded));
     } catch (e) {
       emit(state.copyWith(
-        status: PureCastSessionState.disconnected,
-        errorMessage: e.toString(),
+        sessionStatus: StateStatus.error,
+        sessionError: e.toString(),
       ));
     }
   }
 
   Future<void> _onDisconnectDevice(
     DisconnectDeviceEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.disconnect();
-      emit(const CastSessionBlocState());
+      emit(const CastSessionState());
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(sessionError: e.toString()));
     }
   }
 
   Future<void> _onLoadMedia(
     LoadMediaEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     emit(state.copyWith(
-      status: PureCastSessionState.loading,
+      playbackStatus: StateStatus.loading,
       activeMedia: event.media,
-      clearError: true,
+      playbackError: null,
     ));
     try {
       await _castService.loadMedia(event.media);
+      emit(state.copyWith(playbackStatus: StateStatus.loaded));
     } catch (e) {
       emit(state.copyWith(
-        status: PureCastSessionState.error,
-        errorMessage: e.toString(),
+        playbackStatus: StateStatus.error,
+        playbackError: e.toString(),
       ));
     }
   }
 
   Future<void> _onPlayMedia(
     PlayMediaEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.play();
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(playbackError: e.toString()));
     }
   }
 
   Future<void> _onPauseMedia(
     PauseMediaEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.pause();
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(playbackError: e.toString()));
     }
   }
 
   Future<void> _onStopMedia(
     StopMediaEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.stop();
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(playbackError: e.toString()));
     }
   }
 
   Future<void> _onSeekMedia(
     SeekMediaEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.seek(event.position);
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(playbackError: e.toString()));
     }
   }
 
   Future<void> _onSetVolume(
     SetVolumeEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) async {
     try {
       await _castService.setVolume(event.volume);
       emit(state.copyWith(volume: event.volume));
     } catch (e) {
-      emit(state.copyWith(errorMessage: e.toString()));
+      emit(state.copyWith(playbackError: e.toString()));
     }
   }
 
   void _onSessionStateChanged(
     SessionStateChangedEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) {
-    emit(state.copyWith(status: event.newState));
+    emit(state.copyWith(sessionState: event.newState));
   }
 
   void _onPositionUpdated(
     PositionUpdatedEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) {
     emit(state.copyWith(position: event.position));
   }
 
   void _onDurationUpdated(
     DurationUpdatedEvent event,
-    Emitter<CastSessionBlocState> emit,
+    Emitter<CastSessionState> emit,
   ) {
     emit(state.copyWith(duration: event.duration));
   }

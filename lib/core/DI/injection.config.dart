@@ -33,11 +33,14 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i1071.ICastService>(
       () => _i944.DartCastAdapter(castService: gh<_i869.CastService>()),
     );
-    gh.factory<_i619.CastDiscoveryBloc>(
-      () => _i619.CastDiscoveryBloc(gh<_i1071.ICastService>()),
-    );
     gh.factory<_i445.CastSessionBloc>(
       () => _i445.CastSessionBloc(gh<_i1071.ICastService>()),
+    );
+    gh.factory<_i619.CastDiscoveryBloc>(
+      () => _i619.CastDiscoveryBloc(
+        gh<_i1071.ICastService>(),
+        gh<_i600.AppDatabase>(),
+      ),
     );
     return this;
   }

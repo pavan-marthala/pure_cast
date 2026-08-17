@@ -1,59 +1,21 @@
-import 'package:equatable/equatable.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/utils/state_status.dart';
 
-class CastSessionBlocState extends Equatable {
-  final PureCastSessionState status;
-  final PureCastDevice? activeDevice;
-  final PureCastMedia? activeMedia;
-  final Duration position;
-  final Duration duration;
-  final double volume;
-  final String? errorMessage;
+part 'cast_session_state.freezed.dart';
 
-  const CastSessionBlocState({
-    this.status = PureCastSessionState.disconnected,
-    this.activeDevice,
-    this.activeMedia,
-    this.position = Duration.zero,
-    this.duration = Duration.zero,
-    this.volume = 1.0,
-    this.errorMessage,
-  });
-
-  bool get isConnected => status != PureCastSessionState.disconnected;
-  bool get isPlaying => status == PureCastSessionState.playing;
-  bool get isPaused => status == PureCastSessionState.paused;
-  bool get isBuffering => status == PureCastSessionState.buffering;
-
-  CastSessionBlocState copyWith({
-    PureCastSessionState? status,
+@freezed
+abstract class CastSessionState with _$CastSessionState {
+  const factory CastSessionState({
+    @Default(PureCastSessionState.disconnected) PureCastSessionState sessionState,
     PureCastDevice? activeDevice,
     PureCastMedia? activeMedia,
-    Duration? position,
-    Duration? duration,
-    double? volume,
-    String? errorMessage,
-    bool clearError = false,
-  }) {
-    return CastSessionBlocState(
-      status: status ?? this.status,
-      activeDevice: activeDevice ?? this.activeDevice,
-      activeMedia: activeMedia ?? this.activeMedia,
-      position: position ?? this.position,
-      duration: duration ?? this.duration,
-      volume: volume ?? this.volume,
-      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-    status,
-    activeDevice,
-    activeMedia,
-    position,
-    duration,
-    volume,
-    errorMessage,
-  ];
+    @Default(StateStatus.initial) StateStatus sessionStatus,
+    String? sessionError,
+    @Default(StateStatus.initial) StateStatus playbackStatus,
+    String? playbackError,
+    @Default(Duration.zero) Duration position,
+    @Default(Duration.zero) Duration duration,
+    @Default(1.0) double volume,
+  }) = _CastSessionState;
 }

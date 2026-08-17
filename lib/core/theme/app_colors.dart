@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
-  // ── Primary Purple/Indigo ──
+  // ── Primary Electric Violet ──
   final Color primary;
   final Color primary50;
   final Color primary100;
@@ -15,7 +15,7 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color primary900;
   final Color primary950;
 
-  // ── Secondary Rose/Pink ──
+  // ── Secondary ──
   final Color secondary;
   final Color secondary50;
   final Color secondary100;
@@ -137,78 +137,125 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.warningDark,
   });
 
-  // ── Dark Preset ──────────────────────────────────────────────
+  // ── Dark Preset — Electric Violet ───────────────────────────
+  //
+  // Legend:
+  //   EXACT     -> literal hex pulled from the Pure Cast HTML app
+  //                (:root vars / the Violet entry in the ACCENTS array)
+  //   DERIVED   -> this token has no equivalent in the HTML app;
+  //                value was extrapolated to keep this class's shape intact
+  //
   static const dark = AppColors(
-    primary: Color(0xFFFF8A3D),
-    primary50: Color(0xFF2A1406),
-    primary100: Color(0xFF431407),
-    primary200: Color(0xFF7C2D12),
-    primary300: Color(0xFF9A3412),
-    primary400: Color(0xFFEA580C),
-    primary500: Color(0xFFF97316),
-    primary600: Color(0xFFFB923C),
-    primary800: Color(0xFFFDBA74),
-    primary900: Color(0xFFFED7AA),
-    primary950: Color(0xFFFFEDD5),
+    // EXACT — matches ACCENTS[Violet]: hex #8B5CF6 (same as primary500 below,
+    // kept identical on purpose so `primary` is a byte-for-byte match to the
+    // HTML app's --indigo / accent fill used on buttons, progress, focus rings)
+    primary: Color(0xFF8B5CF6),
 
-    secondary: Color(0xFFC2415A),
-    secondary50: Color(0xFF30070F),
-    secondary100: Color(0xFF4C0519),
-    secondary200: Color(0xFF6E0F28),
-    secondary300: Color(0xFF881337),
-    secondary400: Color(0xFFBE123C),
-    secondary500: Color(0xFFC2415A),
-    secondary600: Color(0xFFFB7185),
-    secondary800: Color(0xFFFDA4AF),
-    secondary900: Color(0xFFFECDD3),
-    secondary950: Color(0xFFFFE4E6),
+    // EXACT — standard Violet ramp; primary300 (#C4B5FD) and primary600
+    // (#7C3AED) are the literal accentLight / accentHover values used in
+    // both the original palette doc and the HTML app's ACCENTS array.
+    primary50: Color(0xFFF5F3FF),
+    primary100: Color(0xFFEDE9FE),
+    primary200: Color(0xFFDDD6FE),
+    primary300: Color(0xFFC4B5FD), // EXACT — accentLight
+    primary400: Color(0xFFA78BFA),
+    primary500: Color(0xFF8B5CF6), // EXACT — accent
+    primary600: Color(0xFF7C3AED), // EXACT — accentHover / dim
+    primary800: Color(0xFF5B21B6),
+    primary900: Color(0xFF4C1D95),
+    primary950: Color(0xFF2E1065),
+
+    // DERIVED — Pure Cast's HTML design is single-accent (no rose/pink hue).
+    // Using a neutral, faintly violet-tinted gray ramp so `secondary*` never
+    // introduces an off-brand color if it's referenced somewhere in the app.
+    secondary: Color(0xFF5C5C6E),
+    secondary50: Color(0xFF17171C),
+    secondary100: Color(0xFF1D1D24),
+    secondary200: Color(0xFF26262F),
+    secondary300: Color(0xFF32323D),
+    secondary400: Color(0xFF444452),
+    secondary500: Color(0xFF5C5C6E),
+    secondary600: Color(0xFF7A7A8C),
+    secondary800: Color(0xFFAEAEBB),
+    secondary900: Color(0xFFD3D3DA),
+    secondary950: Color(0xFFEDEDF1),
 
     white: Color(0xFFFFFFFF),
     black: Color(0xFF000000),
 
-    background: Color(0xFF15120F),
-    surfaceLight: Color(0xFF211D19),
-    surfaceDark: Color(0xFF2D2925),
+    // EXACT — --bg, --surface-1, --surface-2 from the HTML app
+    background: Color(0xFF0A0A0D),
+    surfaceLight: Color(0xFF131318), // --surface-1
+    surfaceDark: Color(0xFF1B1B22), // --surface-2
 
-    textPrimary: Color(0xFFFFF8F1),
-    textSecondary: Color(0xFFE7DCCF),
-    textTertiary: Color(0xFFCBB9A8),
-    text4: Color(0xFFA58E7D),
-    text5: Color(0xFF7E6B5D),
+    // EXACT — --ink, --ink-soft, --ink-faint
+    textPrimary: Color(0xFFF5F5F7),
+    textSecondary: Color(0xFF98989F),
+    textTertiary: Color(0xFF5C5C66),
+    // DERIVED — HTML only defines 3 text tiers; these extrapolate two more
+    // muted steps toward the border color for deeper hierarchy if needed.
+    text4: Color(0xFF45454E),
+    text5: Color(0xFF2E2E35),
 
-    border: Color(0xFF3B342F),
-    borderLight: Color(0xFF4C443E),
-    activeBorder: Color(0xFFFF8A3D),
-    inActiveBorder: Color(0xFF4C443E),
+    // EXACT — --hairline is rgba(255,255,255,.07) -> alpha 0x12
+    border: Color(0x12FFFFFF),
+    // DERIVED — HTML's earlier draft used a rgba(255,255,255,.12) hairline;
+    // kept here as the "stronger" border tier.
+    borderLight: Color(0x1FFFFFFF),
+    // EXACT — matches the HTML app's :focus-visible outline color
+    // (var(--indigo-light) -> #C4B5FD for the Violet accent)
+    activeBorder: Color(0xFFC4B5FD),
+    inActiveBorder: Color(0x1FFFFFFF),
 
-    card: Color(0xFF211D19),
+    // EXACT — matches --surface-1, same tier used for cards in the HTML app
+    card: Color(0xFF131318),
 
-    accent2: Color(0xFFE6C65A),
-    accent3: Color(0xFFC2415A),
+    // DERIVED — HTML has no accent2/accent3 concept (single-accent system).
+    // Repurposed as lighter/darker violet steps rather than leaving stale colors.
+    accent2: Color(0xFFA78BFA), // = primary400
+    accent3: Color(0xFF5B21B6), // = primary800
 
-    gray: Color(0xFF8A8A8A),
-    gray2: Color(0xFFB5B5B5),
-    gray4: Color(0xFF3D3D3D),
+    // DERIVED — HTML doesn't expose plain "gray" tokens separate from the
+    // ink tiers; mapped onto the closest equivalents.
+    gray: Color(0xFF98989F), // = textSecondary
+    gray2: Color(0xFFB8B8C2),
+    gray4: Color(0xFF24242D), // = --surface-active
 
-    brown: Color(0xFFD4AF37),
-    brownLight: Color(0xFF6D5A20),
-    brownExtraLight: Color(0xFF4A3D14),
+    // DERIVED — HTML has no gold/amber decorative accent distinct from the
+    // semantic warning color; aliased to warning and darkened for tints.
+    brown: Color(0xFFF5A623), // = warning
+    brownLight: Color(0xFF6E4A12),
+    brownExtraLight: Color(0xFF463107),
 
-    activeStatus: Color(0xFF22C55E),
-    inActiveStatus: Color(0xFF6B7280),
+    // EXACT-ish — the HTML app's "Connected" status text uses the light
+    // accent color, not green (var(--indigo-light) on .cast-status /
+    // .device-row.is-connected), so activeStatus intentionally mirrors that
+    // rather than using `success`.
+    activeStatus: Color(0xFFC4B5FD), // = primary300
+    // EXACT — matches --ink-faint, used for "available"/idle device state text
+    inActiveStatus: Color(0xFF5C5C66),
 
-    error: Color(0xFFEF4444),
-    errorLight: Color(0xFF7F1D1D),
-    errorExtraLight: Color(0xFF991B1B),
-    errorDark: Color(0xFFF87171),
+    // EXACT — --error
+    error: Color(0xFFF0576B),
+    // DERIVED — HTML has one error tier; light/extraLight are darkened
+    // background tints for chips/badges.
+    errorLight: Color(0xFF7A2430),
+    errorExtraLight: Color(0xFF4A121A),
+    // EXACT — matches the literal color used for the player's error banner
+    // text on dark backgrounds (#ffc0cc in the status-banner.error rule)
+    errorDark: Color(0xFFFFC0CC),
 
-    success: Color(0xFF22C55E),
+    // EXACT — --success
+    success: Color(0xFF34D399),
+    // DERIVED — dark-background tint / lighter tint, no literal HTML source
     successLight: Color(0xFF14532D),
-    successDark: Color(0xFF4ADE80),
+    successDark: Color(0xFF6EE9BB),
 
-    warning: Color(0xFFFBBF24),
-    warningLight: Color(0xFF78350F),
-    warningDark: Color(0xFFF59E0B),
+    // EXACT — --warning
+    warning: Color(0xFFF5A623),
+    // DERIVED — dark-background tint / lighter tint, no literal HTML source
+    warningLight: Color(0xFF6B4508),
+    warningDark: Color(0xFFFFC768),
   );
   @override
   AppColors copyWith({

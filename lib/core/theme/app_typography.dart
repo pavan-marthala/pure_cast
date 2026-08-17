@@ -46,76 +46,89 @@ class AppTypography extends ThemeExtension<AppTypography> {
     required this.caption,
   });
 
+  // Note on sizes: the Pure Cast HTML app never defines a formal Material-style
+  // type ramp (its type sizes are contextual/responsive: e.g. hero titles run
+  // clamp(22px, 5cqw, 34px) and scale up to ~52px on desktop). So the numeric
+  // `fontSize`/`height` values below are UNCHANGED from your original scale —
+  // only `color` and `fontWeight` were updated to match how the HTML app
+  // actually uses Inter (colors are EXACT matches to --ink / --ink-soft /
+  // --ink-faint; weights were bumped where the HTML app is visibly heavier,
+  // e.g. large titles are font-weight 800 there, not 600).
   static const dark = AppTypography(
     // Display
     displayLarge: TextStyle(
       fontSize: 57,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w800,
       height: 1.12,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      letterSpacing: -0.5,
+      color: Color(0xFFF5F5F7), // EXACT — --ink
     ),
     displayMedium: TextStyle(
       fontSize: 45,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w700,
       height: 1.16,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      letterSpacing: -0.4,
+      color: Color(0xFFF5F5F7),
     ),
     displaySmall: TextStyle(
       fontSize: 36,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w700,
       height: 1.22,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      letterSpacing: -0.3,
+      color: Color(0xFFF5F5F7),
     ),
 
     // Headline
     headlineLarge: TextStyle(
       fontSize: 32,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w800, // matches the HTML app's hero/player title weight
       height: 1.25,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      letterSpacing: -0.3,
+      color: Color(0xFFF5F5F7),
     ),
     headlineMedium: TextStyle(
       fontSize: 28,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w700,
       height: 1.29,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      letterSpacing: -0.2,
+      color: Color(0xFFF5F5F7),
     ),
     headlineSmall: TextStyle(
       fontSize: 24,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w700,
       height: 1.33,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      color: Color(0xFFF5F5F7),
     ),
 
     // Title
     titleLarge: TextStyle(
       fontSize: 22,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w700, // matches HTML section headings (~700/750)
       height: 1.27,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      color: Color(0xFFF5F5F7),
     ),
     titleMedium: TextStyle(
       fontSize: 16,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w600,
       height: 1.50,
       letterSpacing: 0.15,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      color: Color(0xFFF5F5F7),
     ),
     titleSmall: TextStyle(
       fontSize: 14,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w600, // matches e.g. device/card name weight
       height: 1.43,
       letterSpacing: 0.10,
       fontFamily: 'Inter',
-      color: Color(0xFFFFF8F1),
+      color: Color(0xFFF5F5F7),
     ),
 
     // Body
@@ -125,7 +138,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
       height: 1.50,
       letterSpacing: 0.50,
       fontFamily: 'Inter',
-      color: Color(0xFFE7DCCF),
+      color: Color(0xFF98989F), // EXACT — --ink-soft
     ),
     bodyMedium: TextStyle(
       fontSize: 14,
@@ -133,7 +146,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
       height: 1.43,
       letterSpacing: 0.25,
       fontFamily: 'Inter',
-      color: Color(0xFFE7DCCF),
+      color: Color(0xFF98989F),
     ),
     bodySmall: TextStyle(
       fontSize: 12,
@@ -141,38 +154,41 @@ class AppTypography extends ThemeExtension<AppTypography> {
       height: 1.33,
       letterSpacing: 0.40,
       fontFamily: 'Inter',
-      color: Color(0xFFCBB9A8),
+      color: Color(0xFF5C5C66), // EXACT — --ink-faint
     ),
 
     // Label
     labelLarge: TextStyle(
       fontSize: 14,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w600,
       height: 1.43,
       letterSpacing: 0.10,
       fontFamily: 'Inter',
-      color: Color(0xFFE7DCCF),
+      color: Color(0xFF98989F),
     ),
     labelMedium: TextStyle(
       fontSize: 12,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w600,
       height: 1.33,
       letterSpacing: 0.50,
       fontFamily: 'Inter',
-      color: Color(0xFFCBB9A8),
+      color: Color(0xFF5C5C66),
     ),
+    // This one is a near-exact translation of the HTML app's `.eyebrow` style:
+    // 11px / weight 700 / letter-spacing .14em (11 * 0.14 ≈ 1.5) / --ink-faint
     labelSmall: TextStyle(
       fontSize: 11,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w700,
       height: 1.45,
-      letterSpacing: 0.50,
+      letterSpacing: 1.5,
       fontFamily: 'Inter',
-      color: Color(0xFFA58E7D),
+      color: Color(0xFF5C5C66),
     ),
 
+    // EXACT — HTML primary buttons are font-weight 700, white text on a solid fill
     button: TextStyle(
       fontSize: 14,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w700,
       height: 1.42,
       letterSpacing: 0.10,
       fontFamily: 'Inter',
@@ -181,11 +197,11 @@ class AppTypography extends ThemeExtension<AppTypography> {
 
     caption: TextStyle(
       fontSize: 12,
-      fontWeight: FontWeight.w400,
+      fontWeight: FontWeight.w500,
       height: 1.33,
       letterSpacing: 0.40,
       fontFamily: 'Inter',
-      color: Color(0xFFCBB9A8),
+      color: Color(0xFF5C5C66), // EXACT — --ink-faint
     ),
   );
   @override

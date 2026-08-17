@@ -25,6 +25,7 @@ class DartCastAdapter implements ICastService {
   PureCastDevice? _currentDevice;
   PureCastSessionState _currentState = PureCastSessionState.disconnected;
 
+  @factoryMethod
   DartCastAdapter({dart_cast.CastService? castService})
     : _castService =
           castService ??

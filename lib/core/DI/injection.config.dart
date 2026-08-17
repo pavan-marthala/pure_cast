@@ -49,12 +49,15 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i270.MediaRepository>(
       () => _i270.MediaRepositoryImpl(gh<_i50.LocalMediaDataSource>()),
     );
-    gh.factory<_i723.QueueBloc>(() => _i723.QueueBloc(gh<_i600.AppDatabase>()));
     gh.lazySingleton<_i187.PlaybackHistoryRepository>(
       () => _i187.PlaybackHistoryRepository(gh<_i600.AppDatabase>()),
     );
     gh.factory<_i597.MediaBloc>(
       () => _i597.MediaBloc(gh<_i270.MediaRepository>()),
+    );
+    gh.factory<_i723.QueueBloc>(
+      () =>
+          _i723.QueueBloc(gh<_i600.AppDatabase>(), gh<_i270.MediaRepository>()),
     );
     gh.lazySingleton<_i1071.ICastService>(
       () => injectionModule.getICastService(gh<_i869.CastService>()),

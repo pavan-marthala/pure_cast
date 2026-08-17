@@ -3,8 +3,6 @@ import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_event.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_state.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 
 abstract interface class IPlaybackCoordinator {

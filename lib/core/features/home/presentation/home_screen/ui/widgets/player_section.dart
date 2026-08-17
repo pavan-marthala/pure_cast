@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 
@@ -62,7 +63,9 @@ class NothingPlayingSection extends StatelessWidget {
             ),
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: () {
+              context.read<QueueBloc>().add(PicFilesEvent());
+            },
             child: Text(
               "Browse Files",
               style: typo.titleSmall.copyWith(color: colors.primary),

@@ -31,6 +31,12 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Pure Cast requires access to your local network to discover and connect to Chromecast and DLNA devices.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-    <string>In order to access your photo library</string>
+	<string>Pure Cast requires access to your photo and video library to display local media for casting.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Pure Cast requires access to your photo library to save casted media items.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Pure Cast requires access to your music library to select audio files for casting.</string>
+	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
+	<true/>
 </dict>
 </plist>

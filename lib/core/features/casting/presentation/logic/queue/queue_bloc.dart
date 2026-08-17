@@ -1,17 +1,21 @@
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/features/music_library/data/repository/media_repository.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
-import 'queue_event.dart';
-import 'queue_state.dart';
+
+part 'queue_event.dart';
+part 'queue_state.dart';
+part 'queue_bloc.freezed.dart';
 
 @injectable
 class QueueBloc extends Bloc<QueueEvent, QueueState> {
   final AppDatabase _db;
-
-  QueueBloc(this._db) : super(const QueueState()) {
+  final MediaRepository _mediaRepository;
+  QueueBloc(this._db, this._mediaRepository) : super(const QueueState()) {
     on<LoadQueueEvent>(_onLoadQueue);
     on<AddToQueueEvent>(_onAddToQueue);
     on<RemoveFromQueueEvent>(_onRemoveFromQueue);
@@ -20,6 +24,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     on<NextQueueItemEvent>(_onNextQueueItem);
     on<PreviousQueueItemEvent>(_onPreviousQueueItem);
     on<SetCurrentIndexEvent>(_onSetCurrentIndex);
+    on<PicFilesEvent>(_onPickFiles);
   }
 
   Future<void> _onLoadQueue(
@@ -29,14 +34,20 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     emit(state.copyWith(status: StateStatus.loading, error: null));
     try {
       final rows = await _db.getQueue();
-      final items = rows.map((r) => PureCastMedia(
-        uri: r.mediaUri,
-        type: _mapStringToMediaType(r.mediaType),
-        title: r.title,
-        thumbnailUrl: r.thumbnail,
-        duration: r.durationMs != null ? Duration(milliseconds: r.durationMs!) : null,
-        isLocalFile: r.isLocalFile,
-      )).toList();
+      final items = rows
+          .map(
+            (r) => PureCastMedia(
+              uri: r.mediaUri,
+              type: _mapStringToMediaType(r.mediaType),
+              title: r.title,
+              thumbnailUrl: r.thumbnail,
+              duration: r.durationMs != null
+                  ? Duration(milliseconds: r.durationMs!)
+                  : null,
+              isLocalFile: r.isLocalFile,
+            ),
+          )
+          .toList();
 
       final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
       emit(state.copyWith(items: items, status: status));
@@ -50,7 +61,8 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     Emitter<QueueState> emit,
   ) async {
     try {
-      final updatedItems = List<PureCastMedia>.from(state.items)..add(event.media);
+      final updatedItems = List<PureCastMedia>.from(state.items)
+        ..add(event.media);
       emit(state.copyWith(items: updatedItems, status: StateStatus.loaded));
       await _persistQueue(updatedItems);
     } catch (e) {
@@ -63,8 +75,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     Emitter<QueueState> emit,
   ) async {
     try {
-      final updatedItems = state.items.where((i) => i.uri != event.mediaUri).toList();
-      final status = updatedItems.isEmpty ? StateStatus.empty : StateStatus.loaded;
+      final updatedItems = state.items
+          .where((i) => i.uri != event.mediaUri)
+          .toList();
+      final status = updatedItems.isEmpty
+          ? StateStatus.empty
+          : StateStatus.loaded;
       emit(state.copyWith(items: updatedItems, status: status));
       await _persistQueue(updatedItems);
     } catch (e) {
@@ -96,16 +112,19 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) async {
     try {
       await _db.clearQueue();
-      emit(state.copyWith(items: const [], currentIndex: 0, status: StateStatus.empty));
+      emit(
+        state.copyWith(
+          items: const [],
+          currentIndex: 0,
+          status: StateStatus.empty,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
   }
 
-  void _onNextQueueItem(
-    NextQueueItemEvent event,
-    Emitter<QueueState> emit,
-  ) {
+  void _onNextQueueItem(NextQueueItemEvent event, Emitter<QueueState> emit) {
     if (state.items.isEmpty) return;
     if (state.currentIndex < state.items.length - 1) {
       emit(state.copyWith(currentIndex: state.currentIndex + 1));
@@ -128,6 +147,21 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) {
     if (event.index >= 0 && event.index < state.items.length) {
       emit(state.copyWith(currentIndex: event.index));
+    }
+  }
+
+  Future<void> _onPickFiles(
+    PicFilesEvent event,
+    Emitter<QueueState> emit,
+  ) async {
+    emit(state.copyWith(status: StateStatus.loading, error: null));
+    try {
+      final items = await _mediaRepository.pickFiles();
+      print(items.toString());
+      final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
+      emit(state.copyWith(items: items, status: status));
+    } catch (e) {
+      emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
   }
 

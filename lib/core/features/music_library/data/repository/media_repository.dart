@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:injectable/injectable.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
@@ -12,6 +13,7 @@ abstract class MediaRepository {
     int size = 50,
   });
   Future<File?> getMediaFile(String assetId);
+  Future<List<PureCastMedia>> pickFiles();
 }
 
 @LazySingleton(as: MediaRepository)
@@ -41,5 +43,10 @@ class MediaRepositoryImpl implements MediaRepository {
   @override
   Future<File?> getMediaFile(String assetId) async {
     return _localMediaSource.getAssetFile(assetId);
+  }
+
+  @override
+  Future<List<PureCastMedia>> pickFiles() async {
+    return _localMediaSource.pickFiles();
   }
 }

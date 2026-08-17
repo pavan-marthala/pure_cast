@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:injectable/injectable.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
@@ -12,6 +13,7 @@ abstract class LocalMediaDataSource {
     int size = 50,
   });
   Future<File?> getAssetFile(String assetId);
+  Future<List<PureCastMedia>> pickFiles();
 }
 
 @LazySingleton(as: LocalMediaDataSource)
@@ -81,5 +83,42 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
   Future<File?> getAssetFile(String assetId) async {
     final asset = await AssetEntity.fromId(assetId);
     return asset?.file;
+  }
+
+  @override
+  Future<List<PureCastMedia>> pickFiles() async {
+    final List<PureCastMedia> mediaItems = [];
+
+    List<PlatformFile> files = await FilePicker.pickFiles();
+
+    if (files.isNotEmpty) {
+      for (final platformFile in files) {
+        final xFile = platformFile.xFile;
+        final PureCastMediaType mediaType;
+        if (xFile.mimeType != null && xFile.mimeType!.startsWith('video/')) {
+          mediaType = PureCastMediaType.video;
+        } else if (xFile.mimeType != null &&
+            xFile.mimeType!.startsWith('audio/')) {
+          mediaType = PureCastMediaType.audio;
+        } else {
+          mediaType = PureCastMediaType.video;
+        }
+
+        mediaItems.add(
+          PureCastMedia(
+            uri: xFile.path,
+            type: mediaType,
+            title: xFile.name,
+            duration: await xFile.length() > 0
+                ? Duration(seconds: await xFile.length())
+                : null,
+            isLocalFile: true,
+          ),
+        );
+      }
+      return mediaItems;
+    } else {
+      return mediaItems;
+    }
   }
 }

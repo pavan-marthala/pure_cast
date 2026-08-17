@@ -5,13 +5,10 @@ import 'package:pure_cast/core/DI/injection.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/home_screen.dart';
 import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart';
-import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_event.dart';
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
@@ -75,11 +72,7 @@ class _MyAppState extends State<MyApp> {
               getIt<CastDiscoveryBloc>()..add(const StartDiscoveryEvent()),
         ),
         BlocProvider(create: (context) => getIt<CastSessionBloc>()),
-        BlocProvider(
-          create: (context) =>
-              getIt<MediaBloc>()..add(RequestPermissionMediaEvent()),
-          lazy: false,
-        ),
+        BlocProvider(create: (context) => getIt<MediaBloc>()),
         BlocProvider(
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
           lazy: false,

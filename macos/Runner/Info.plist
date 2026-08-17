@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Pure Cast requires access to your local network to discover and connect to Chromecast and DLNA devices.</string>
 </dict>
 </plist>

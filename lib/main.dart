@@ -38,9 +38,10 @@ class _MyAppState extends State<MyApp> {
         final path = state.matchedLocation;
         final isOnSplash = path == AppRoutes.splash;
         if (isOnSplash) {
-          await Future.delayed(Duration(seconds: 2));
+          await Future.delayed(const Duration(seconds: 2));
           return AppRoutes.home;
         }
+        return null;
       },
       routes: [
         GoRoute(

@@ -55,6 +55,8 @@
 	<string>Main</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Pure Cast requires access to your local network to discover and connect to Chromecast and DLNA devices.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>In order to access your photo library</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_googlecast._tcp</string>

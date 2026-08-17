@@ -76,14 +76,14 @@ class PureCastCapabilities {
 
   @override
   int get hashCode => Object.hash(
-        canPlay,
-        canPause,
-        canSeek,
-        canSetVolume,
-        canChangeAudioTrack,
-        canChangeSubtitle,
-        canQueue,
-      );
+    canPlay,
+    canPause,
+    canSeek,
+    canSetVolume,
+    canChangeAudioTrack,
+    canChangeSubtitle,
+    canQueue,
+  );
 }
 
 /// Unified Cast Device domain model.
@@ -178,7 +178,8 @@ class PureCastMedia {
           isLocalFile == other.isLocalFile;
 
   @override
-  int get hashCode => Object.hash(uri, type, title, thumbnailUrl, duration, isLocalFile);
+  int get hashCode =>
+      Object.hash(uri, type, title, thumbnailUrl, duration, isLocalFile);
 }
 
 /// Domain exception for casting failures.

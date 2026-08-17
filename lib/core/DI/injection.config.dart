@@ -26,6 +26,12 @@ import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_b
     as _i723;
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart'
     as _i445;
+import 'package:pure_cast/core/features/music_library/data/data_source/photo_manager_media_source.dart'
+    as _i50;
+import 'package:pure_cast/core/features/music_library/data/repository/media_repository.dart'
+    as _i270;
+import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart'
+    as _i597;
 
 extension GetItInjectableX on _i174.GetIt {
   // initializes the registration of main-scope dependencies inside of GetIt
@@ -37,9 +43,18 @@ extension GetItInjectableX on _i174.GetIt {
     final injectionModule = _$InjectionModule();
     gh.lazySingleton<_i869.CastService>(() => injectionModule.castService);
     gh.lazySingleton<_i600.AppDatabase>(() => _i600.AppDatabase());
+    gh.lazySingleton<_i50.LocalMediaDataSource>(
+      () => _i50.PhotoManagerMediaSource(),
+    );
+    gh.lazySingleton<_i270.MediaRepository>(
+      () => _i270.MediaRepositoryImpl(gh<_i50.LocalMediaDataSource>()),
+    );
     gh.factory<_i723.QueueBloc>(() => _i723.QueueBloc(gh<_i600.AppDatabase>()));
     gh.lazySingleton<_i187.PlaybackHistoryRepository>(
       () => _i187.PlaybackHistoryRepository(gh<_i600.AppDatabase>()),
+    );
+    gh.factory<_i597.MediaBloc>(
+      () => _i597.MediaBloc(gh<_i270.MediaRepository>()),
     );
     gh.lazySingleton<_i1071.ICastService>(
       () => injectionModule.getICastService(gh<_i869.CastService>()),

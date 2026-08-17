@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_state.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 
 class PlayerSection extends StatelessWidget {

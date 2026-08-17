@@ -1,8 +1,4 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
-import 'package:pure_cast/core/utils/state_status.dart';
-
-part 'cast_session_state.freezed.dart';
+part of 'cast_session_bloc.dart';
 
 @freezed
 abstract class CastSessionState with _$CastSessionState {

@@ -6,8 +6,6 @@ import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_b
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_event.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_state.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_event.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_state.dart';
 
 abstract interface class IPlaybackCoordinator {
   void start(QueueBloc queueBloc, CastSessionBloc sessionBloc);

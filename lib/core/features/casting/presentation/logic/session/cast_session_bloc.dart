@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
-import 'cast_session_event.dart';
-import 'cast_session_state.dart';
+
+part 'cast_session_event.dart';
+part 'cast_session_state.dart';
+part 'cast_session_bloc.freezed.dart';
 
 @injectable
 class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
@@ -16,7 +19,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
 
-  CastSessionBloc(this._castService, this._historyRepo) : super(const CastSessionState()) {
+  CastSessionBloc(this._castService, this._historyRepo)
+    : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
     on<LoadMediaEvent>(_onLoadMedia);
@@ -50,19 +54,23 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     ConnectDeviceEvent event,
     Emitter<CastSessionState> emit,
   ) async {
-    emit(state.copyWith(
-      sessionStatus: StateStatus.loading,
-      activeDevice: event.device,
-      sessionError: null,
-    ));
+    emit(
+      state.copyWith(
+        sessionStatus: StateStatus.loading,
+        activeDevice: event.device,
+        sessionError: null,
+      ),
+    );
     try {
       await _castService.connect(event.device);
       emit(state.copyWith(sessionStatus: StateStatus.loaded));
     } catch (e) {
-      emit(state.copyWith(
-        sessionStatus: StateStatus.error,
-        sessionError: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          sessionStatus: StateStatus.error,
+          sessionError: e.toString(),
+        ),
+      );
     }
   }
 
@@ -82,19 +90,23 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     LoadMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
-    emit(state.copyWith(
-      playbackStatus: StateStatus.loading,
-      activeMedia: event.media,
-      playbackError: null,
-    ));
+    emit(
+      state.copyWith(
+        playbackStatus: StateStatus.loading,
+        activeMedia: event.media,
+        playbackError: null,
+      ),
+    );
     try {
       await _castService.loadMedia(event.media);
       emit(state.copyWith(playbackStatus: StateStatus.loaded));
     } catch (e) {
-      emit(state.copyWith(
-        playbackStatus: StateStatus.error,
-        playbackError: e.toString(),
-      ));
+      emit(
+        state.copyWith(
+          playbackStatus: StateStatus.error,
+          playbackError: e.toString(),
+        ),
+      );
     }
   }
 
@@ -159,7 +171,9 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     Emitter<CastSessionState> emit,
   ) {
     emit(state.copyWith(sessionState: event.newState));
-    _checkpointHistory(completed: event.newState == PureCastSessionState.completed);
+    _checkpointHistory(
+      completed: event.newState == PureCastSessionState.completed,
+    );
   }
 
   void _checkpointHistory({bool completed = false}) {

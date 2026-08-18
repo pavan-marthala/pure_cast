@@ -23,7 +23,6 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
   StreamSubscription<CastSessionState>? _sessionSubscription;
 
   bool _isTransitioning = false;
-  int? _lastHandledQueueLength;
   int? _lastHandledQueueIndex;
   PureCastSessionState? _lastHandledSessionState;
 
@@ -50,34 +49,31 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
     log("Queue Length ${items.length}", name: "Playback Coordinator");
     final currentIndex = queueState.currentIndex;
 
-    final previousLength = _lastHandledQueueLength ?? 0;
-    _lastHandledQueueLength = items.length;
+    final hasActivePlayback = sessionState.activeMedia != null &&
+        sessionState.sessionState != PureCastSessionState.disconnected &&
+        sessionState.sessionState != PureCastSessionState.completed;
 
-    // Case 1: Media added to an empty active session queue
-    if (previousLength == 0 && items.isNotEmpty && currentIndex == 0) {
-      log("Added first media", name: "Playback Coordinator");
-      if (sessionState.activeMedia == null) {
-        log("Calling Load media event", name: "Playback Coordinator");
-        _loadMediaAtCurrentIndex(items[0]);
+    // Case 1: First item added, or item added when there is NO active playback
+    if (!hasActivePlayback && items.isNotEmpty) {
+      // If a new media item was appended to an existing queue while playback was inactive,
+      // load the newly added media item (or current index if valid).
+      final targetIndex = (items.length > 1 && currentIndex == 0) ? items.length - 1 : currentIndex;
+      if (targetIndex >= 0 && targetIndex < items.length) {
+        log("Loading media (no active playback) index $targetIndex", name: "Playback Coordinator");
+        if (targetIndex != currentIndex && _queueBloc != null) {
+          _queueBloc!.add(SetCurrentIndexEvent(targetIndex));
+        }
+        _loadMediaAtCurrentIndex(items[targetIndex]);
         return;
       }
     }
 
-    // Case 2: Adding media after previous playback completed
-    if (previousLength > 0 &&
-        items.length > previousLength &&
-        sessionState.sessionState == PureCastSessionState.completed) {
-      if (currentIndex >= 0 && currentIndex < items.length) {
-        _loadMediaAtCurrentIndex(items[currentIndex]);
-        return;
-      }
-    }
-
-    // Case 3: Explicit queue index advance (Next/Previous/Index change)
+    // Case 2: Explicit queue index advance (Next/Previous/Manual Index change)
     if (_lastHandledQueueIndex != null &&
         _lastHandledQueueIndex != currentIndex) {
       _lastHandledQueueIndex = currentIndex;
       if (currentIndex >= 0 && currentIndex < items.length) {
+        log("Queue index changed to $currentIndex", name: "Playback Coordinator");
         _loadMediaAtCurrentIndex(items[currentIndex]);
         return;
       }

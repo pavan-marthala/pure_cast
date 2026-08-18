@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/media_crontroller_screen.dart';
-import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
 
@@ -82,11 +81,40 @@ class CurrentlyPlaying extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    Text(
-                      media?.title ?? "Unknown Title",
-                      style: typo.titleLarge.copyWith(color: colors.white),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      spacing: 6,
+                      children: [
+                        if (sessionState.sessionState == .buffering)
+                        SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        ),
+                        if (sessionState.sessionState == .paused)
+                        IconButton(
+                          onPressed: () {
+                            context.read<CastSessionBloc>().add(
+                              CastSessionEvent.playMedia(),
+                            );
+                          },
+                          icon: Icon(Icons.play_arrow),
+                        ),
+                        if (sessionState.sessionState == .playing)
+                        IconButton(
+                          onPressed: () {
+                            context.read<CastSessionBloc>().add(
+                              CastSessionEvent.pauseMedia(),
+                            );
+                          },
+                          icon: Icon(Icons.pause),
+                        ),
+                        Text(
+                          media?.title ?? "Unknown Title",
+                          style: typo.titleLarge.copyWith(color: colors.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     LinearProgressIndicator(

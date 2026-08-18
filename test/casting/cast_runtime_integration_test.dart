@@ -541,5 +541,122 @@ void main() {
       await queueBloc.close();
       await sessionBloc.close();
     });
+
+    test('3. Completed A + queue still contains A + select B -> B starts immediately', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const mediaA = PureCastMedia(
+        uri: 'http://example.com/videoA.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video A',
+      );
+      const mediaB = PureCastMedia(
+        uri: 'http://example.com/videoB.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video B',
+      );
+
+      // Add A -> starts playing
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia, equals(mediaA));
+
+      // Media A completes -> active playback becomes completed
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
+      expect(sessionBloc.state.sessionState, equals(PureCastSessionState.completed));
+
+      // User selects Media B while queue still contains A
+      queueBloc.add(const AddToQueueEvent(mediaB));
+      await pumpEventQueue();
+
+      // B starts playing immediately because there was NO active playback (A was completed)
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaB.uri));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('4. Active A + select B -> B added to queue without interrupting A', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const mediaA = PureCastMedia(
+        uri: 'http://example.com/videoA.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video A',
+      );
+      const mediaB = PureCastMedia(
+        uri: 'http://example.com/videoB.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video B',
+      );
+
+      // Add A -> starts playing
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      fakeCastService.sessionStateController.add(PureCastSessionState.playing);
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+      expect(sessionBloc.state.sessionState, equals(PureCastSessionState.playing));
+
+      // User adds B while A is actively playing
+      queueBloc.add(const AddToQueueEvent(mediaB));
+      await pumpEventQueue();
+
+      // Media A remains active playback, B is in queue
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+      expect(queueBloc.state.items.length, equals(2));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('5. Stopped A + select B -> B starts immediately', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const mediaA = PureCastMedia(
+        uri: 'http://example.com/videoA.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video A',
+      );
+      const mediaB = PureCastMedia(
+        uri: 'http://example.com/videoB.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video B',
+      );
+
+      // Add A -> starts playing
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+
+      // User stops playback or receiver stops -> session disconnected/stopped
+      fakeCastService.sessionStateController.add(PureCastSessionState.disconnected);
+      await pumpEventQueue();
+
+      // User selects B -> B starts playing immediately
+      queueBloc.add(const AddToQueueEvent(mediaB));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaB.uri));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
   });
 }

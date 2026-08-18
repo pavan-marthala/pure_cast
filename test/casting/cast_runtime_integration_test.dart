@@ -658,5 +658,48 @@ void main() {
       await queueBloc.close();
       await sessionBloc.close();
     });
+
+    test('6. Automatic queue continuation: A completes -> B starts casting automatically', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+
+      const mediaA = PureCastMedia(
+        uri: 'http://example.com/videoA.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video A',
+      );
+      const mediaB = PureCastMedia(
+        uri: 'http://example.com/videoB.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video B',
+      );
+
+      // Add A -> starts playing
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      fakeCastService.sessionStateController.add(PureCastSessionState.playing);
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+
+      // Add B while A is playing
+      queueBloc.add(const AddToQueueEvent(mediaB));
+      await pumpEventQueue();
+      expect(queueBloc.state.items.length, equals(2));
+
+      // Video A completes
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
+
+      // Coordinator automatically advances queue index to B and sends LoadMediaEvent for B
+      expect(queueBloc.state.currentIndex, equals(1));
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaB.uri));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
   });
 }

@@ -179,6 +179,7 @@ class DartCastAdapter implements ICastService {
 
   @override
   Future<void> dispose() async {
+    _bufferingDebounceTimer?.cancel();
     _sessionStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
@@ -189,13 +190,29 @@ class DartCastAdapter implements ICastService {
   }
 
   // ── Subscriptions & Helpers ──
+  Timer? _bufferingDebounceTimer;
+
   void _subscribeToSession(dart_cast.CastSession session) {
     _sessionStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _bufferingDebounceTimer?.cancel();
 
     _sessionStateSub = session.stateStream.listen((state) {
       final domainState = _mapStateToDomain(state);
+
+      if (domainState == PureCastSessionState.buffering &&
+          _currentState == PureCastSessionState.playing) {
+        // Debounce transient buffering status returned during periodic position polling.
+        // If buffering lasts longer than 1.5 seconds, emit buffering.
+        _bufferingDebounceTimer?.cancel();
+        _bufferingDebounceTimer = Timer(const Duration(milliseconds: 1500), () {
+          _updateState(PureCastSessionState.buffering);
+        });
+        return;
+      }
+
+      _bufferingDebounceTimer?.cancel();
       _updateState(domainState);
     });
 

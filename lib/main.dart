@@ -13,6 +13,7 @@ import 'package:pure_cast/core/features/music_library/presentation/logic/recentl
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
+import 'package:pure_cast/core/utils/check_platforms.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
@@ -64,8 +65,14 @@ class _MyAppState extends State<MyApp> {
     super.initState();
   }
 
+  /// 1st in Load file event need to chack there iis any active event or not
+  /// 2nd
   @override
   Widget build(BuildContext context) {
+    final MediaBloc mediaBloc = getIt<MediaBloc>();
+    if (PlatformChecker.isAndroid()) {
+      mediaBloc.add(MediaEvent.requestPermission());
+    }
     return MultiBlocProvider(
       providers: [
         BlocProvider(
@@ -73,11 +80,7 @@ class _MyAppState extends State<MyApp> {
               getIt<CastDiscoveryBloc>()..add(const StartDiscoveryEvent()),
         ),
         BlocProvider(create: (context) => getIt<CastSessionBloc>()),
-        BlocProvider(
-          create: (context) =>
-              getIt<MediaBloc>()..add(MediaEvent.requestPermission()),
-          lazy: false,
-        ),
+        BlocProvider(create: (context) => mediaBloc, lazy: false),
         BlocProvider(
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
           lazy: false,

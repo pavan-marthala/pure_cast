@@ -17,6 +17,8 @@ class RecentlyPlayedSection extends StatelessWidget {
             : MasonryGridView.count(
                 itemCount: state.media.length,
                 shrinkWrap: true,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
                 physics: NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
                 itemBuilder: (BuildContext context, int index) {

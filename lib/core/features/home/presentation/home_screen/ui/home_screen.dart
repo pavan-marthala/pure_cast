@@ -5,6 +5,7 @@ import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/music_library_screen.dart';
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/recently_played_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
+import 'package:pure_cast/core/utils/check_platforms.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -62,9 +63,15 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               SizedBox(height: 20),
-              Text("Recently Played", style: context.appTypography.titleLarge),
-              SizedBox(height: 12),
-              RecentlyPlayedSection()
+              if (PlatformChecker.isAndroid()) ...[
+                Text(
+                  "Recently Played",
+                  style: context.appTypography.titleLarge,
+                ),
+                SizedBox(height: 12),
+                RecentlyPlayedSection(),
+                SizedBox(height: 20),
+              ],
             ],
           ),
         ),

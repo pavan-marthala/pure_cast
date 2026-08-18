@@ -58,11 +58,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     ConnectDeviceEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    final previousDevice = state.activeDevice;
     emit(
       state.copyWith(
-        sessionStatus: StateStatus.loading,
+        connectionStatus: StateStatus.loading,
         activeDevice: event.device,
-        sessionError: null,
+        connectionError: null,
       ),
     );
     try {
@@ -72,13 +73,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         deviceName: event.device.name,
         protocol: event.device.protocol.name,
       );
-      emit(state.copyWith(sessionStatus: StateStatus.loaded));
+      emit(state.copyWith(connectionStatus: StateStatus.loaded));
     } catch (e) {
       emit(
         state.copyWith(
-          sessionStatus: StateStatus.error,
-          sessionError: e.toString(),
-          activeDevice: null,
+          connectionStatus: StateStatus.error,
+          connectionError: e.toString(),
+          activeDevice: previousDevice,
         ),
       );
     }
@@ -92,7 +93,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       await _castService.disconnect();
       emit(const CastSessionState());
     } catch (e) {
-      emit(state.copyWith(sessionError: e.toString()));
+      emit(state.copyWith(connectionError: e.toString()));
     }
   }
 
@@ -180,6 +181,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     SessionStateChangedEvent event,
     Emitter<CastSessionState> emit,
   ) {
+    if (event.newState == PureCastSessionState.disconnected) {
+      emit(const CastSessionState());
+      return;
+    }
+
     emit(state.copyWith(sessionState: event.newState));
     _checkpointHistory(
       completed: event.newState == PureCastSessionState.completed,

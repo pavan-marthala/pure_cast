@@ -42,13 +42,12 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
       builder: (context, state) {
         return BlocConsumer<CastSessionBloc, CastSessionState>(
           listener: (context, sessionState) {
-            if (sessionState.sessionError != null &&
-                sessionState.sessionStatus == .error) {
-              showErrorToast(message: sessionState.sessionError!);
+            if (sessionState.connectionError != null &&
+                sessionState.connectionStatus == StateStatus.error) {
+              showErrorToast(message: sessionState.connectionError!);
             }
           },
           builder: (context, sessionState) {
-            print(sessionState);
             return SingleChildScrollView(
               padding: .symmetric(horizontal: 16),
               child: Column(
@@ -67,9 +66,12 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                       final device = state.devices[index];
                       final isSelected =
                           device.id == sessionState.activeDevice?.id;
-                      final isLoading =
+                      final isConnecting =
                           isSelected &&
-                          sessionState.sessionStatus == StateStatus.loading;
+                          sessionState.connectionStatus == StateStatus.loading;
+                      final isConnected =
+                          isSelected &&
+                          sessionState.connectionStatus == StateStatus.loaded;
                       return GestureDetector(
                         onTap: () {
                           context.read<CastSessionBloc>().add(
@@ -110,7 +112,35 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                                 ],
                               ),
                             ),
-                            if (isLoading) CircularProgressIndicator(),
+                            if (isConnecting) ...[
+                              SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colors.primary400,
+                                ),
+                              ),
+                              Text(
+                                "Connecting...",
+                                style: typo.labelSmall.copyWith(
+                                  color: colors.primary400,
+                                ),
+                              ),
+                            ],
+                            if (isConnected) ...[
+                              Icon(
+                                Icons.check,
+                                size: 20,
+                                color: colors.primary400,
+                              ),
+                              Text(
+                                "Connected",
+                                style: typo.labelSmall.copyWith(
+                                  color: colors.primary400,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -122,6 +152,20 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                     ),
                     itemCount: state.devices.length,
                   ),
+                  if (state.discoveryStatus == .loading) ...[
+                    SizedBox(height: 20),
+                    Row(
+                      spacing: 12,
+                      children: [
+                        SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        Text("Still looking for more devices..."),
+                      ],
+                    ),
+                  ],
                   SizedBox(height: 20),
                   AppButton(
                     text: "Cancel",

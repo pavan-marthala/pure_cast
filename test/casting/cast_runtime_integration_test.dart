@@ -286,14 +286,14 @@ void main() {
 
       expect(fakeCastService.connectCalled, isTrue);
       expect(fakeCastService.connectDeviceTarget, equals(deviceA));
-      expect(sessionBloc.state.sessionStatus, equals(StateStatus.loaded));
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loaded));
       expect(sessionBloc.state.activeDevice, equals(deviceA));
       expect(fakeDb.lastDeviceId, equals('tv_a'));
 
       await sessionBloc.close();
     });
 
-    test('2. Connect failure preserves previous activeDevice and sets sessionStatus error', () async {
+    test('2. Connect failure preserves previous activeDevice and sets connectionStatus error', () async {
       final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
 
       const deviceA = PureCastDevice(
@@ -323,8 +323,8 @@ void main() {
       sessionBloc.add(const ConnectDeviceEvent(deviceB));
       await pumpEventQueue();
 
-      expect(sessionBloc.state.sessionStatus, equals(StateStatus.error));
-      expect(sessionBloc.state.sessionError, contains('Network connection failed'));
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.error));
+      expect(sessionBloc.state.connectionError, contains('Network connection failed'));
       expect(sessionBloc.state.activeDevice, equals(deviceA));
 
       await sessionBloc.close();
@@ -385,6 +385,33 @@ void main() {
 
       expect(sessionBloc.state.activeDevice, equals(deviceB));
       expect(fakeDb.lastDeviceId, equals('tv_b'));
+
+      await sessionBloc.close();
+    });
+
+    test('5. Receiver-initiated disconnect event resets session state and clears activeDevice', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+
+      const deviceA = PureCastDevice(
+        id: 'tv_a',
+        name: 'TV A',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.20',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+
+      // Receiver emits disconnected status on stream
+      fakeCastService.sessionStateController.add(PureCastSessionState.disconnected);
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeDevice, isNull);
+      expect(sessionBloc.state.sessionState, equals(PureCastSessionState.disconnected));
+      expect(sessionBloc.state.activeMedia, isNull);
 
       await sessionBloc.close();
     });

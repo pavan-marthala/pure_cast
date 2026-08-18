@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/media_crontroller_screen.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
 
@@ -120,7 +122,6 @@ class CurrentlyPlaying extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class CurrentlyPlayingBG extends StatelessWidget {
@@ -169,9 +170,7 @@ class NothingPlayingSection extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              // context.read<QueueBloc>().add(PicFilesEvent());
-              MediaControllerScreen.show(context);
-
+              context.read<QueueBloc>().add(PicFilesEvent());
             },
             child: Text(
               "Browse Files",

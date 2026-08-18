@@ -114,6 +114,73 @@ void main() {
         expect(remoteMedia.thumbnailBytes, isNull);
         expect(remoteMedia.isLocalFile, isFalse);
       });
+
+      test('5. Video thumbnail extraction yields small frame preview byte array', () async {
+        final videoMedia = PureCastMedia(
+          uri: '/storage/emulated/0/Download/video.mp4',
+          type: PureCastMediaType.video,
+          title: 'sample_video.mp4',
+          thumbnailUrl: null,
+          thumbnailBytes: Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]),
+          duration: const Duration(seconds: 120),
+          isLocalFile: true,
+        );
+
+        expect(videoMedia.type, equals(PureCastMediaType.video));
+        expect(videoMedia.duration, equals(const Duration(seconds: 120)));
+        expect(videoMedia.thumbnailUrl, isNull);
+        expect(videoMedia.thumbnailBytes, isNotNull);
+        // Verify thumbnailBytes is small preview bytes (4 bytes in mock) and not full media file
+        expect(videoMedia.thumbnailBytes!.length, equals(4));
+      });
+
+      test('6. Audio metadata extraction yields embedded artwork and duration', () async {
+        final audioMedia = PureCastMedia(
+          uri: '/storage/emulated/0/Download/song.mp3',
+          type: PureCastMediaType.audio,
+          title: 'Track Title',
+          thumbnailUrl: null,
+          thumbnailBytes: Uint8List.fromList([0x89, 0x50, 0x4E, 0x47]),
+          duration: const Duration(seconds: 210),
+          isLocalFile: true,
+        );
+
+        expect(audioMedia.type, equals(PureCastMediaType.audio));
+        expect(audioMedia.title, equals('Track Title'));
+        expect(audioMedia.duration, equals(const Duration(seconds: 210)));
+        expect(audioMedia.thumbnailBytes, isNotNull);
+      });
+
+      test('7. Audio without embedded artwork has thumbnailBytes == null', () async {
+        final audioMediaNoArt = PureCastMedia(
+          uri: '/storage/emulated/0/Download/song2.mp3',
+          type: PureCastMediaType.audio,
+          title: 'song2.mp3',
+          thumbnailUrl: null,
+          thumbnailBytes: null,
+          duration: const Duration(seconds: 180),
+          isLocalFile: true,
+        );
+
+        expect(audioMediaNoArt.thumbnailBytes, isNull);
+        expect(audioMediaNoArt.duration, equals(const Duration(seconds: 180)));
+      });
+
+      test('8. Metadata failure fallback preserves filename as title and null duration/thumbnail', () async {
+        final fallbackMedia = PureCastMedia(
+          uri: '/storage/emulated/0/Download/corrupted.mp3',
+          type: PureCastMediaType.audio,
+          title: 'corrupted.mp3',
+          thumbnailUrl: null,
+          thumbnailBytes: null,
+          duration: null,
+          isLocalFile: true,
+        );
+
+        expect(fallbackMedia.title, equals('corrupted.mp3'));
+        expect(fallbackMedia.duration, isNull);
+        expect(fallbackMedia.thumbnailBytes, isNull);
+      });
     },
   );
 }

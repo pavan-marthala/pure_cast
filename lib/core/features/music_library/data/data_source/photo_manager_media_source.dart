@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:injectable/injectable.dart';
+import 'package:media_metadata/media_metadata.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 
@@ -107,7 +108,9 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
         if (filePath == null) continue;
 
         final mimeType = platformFile.xFile.mimeType?.toLowerCase();
-        final ext = filePath.contains('.') ? filePath.split('.').last.toLowerCase() : '';
+        final ext = filePath.contains('.')
+            ? filePath.split('.').last.toLowerCase()
+            : '';
 
         final PureCastMediaType? mediaType;
         if (mimeType != null && mimeType.startsWith('video/')) {
@@ -123,24 +126,36 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
           continue;
         }
 
+        String title = platformFile.name;
+        Duration? duration;
         Uint8List? thumbBytes;
+
         try {
-          final file = File(filePath);
-          if (await file.exists()) {
-            thumbBytes = await file.readAsBytes();
+          final metadata = await MediaMetadata.read(
+            filePath,
+            createThumbnail: true,
+          );
+          if (metadata != null) {
+            if (metadata.title != null && metadata.title!.trim().isNotEmpty) {
+              title = metadata.title!;
+            }
+            duration = metadata.duration;
+            if (metadata.imageMetadata?.data != null) {
+              thumbBytes = metadata.imageMetadata!.data;
+            }
           }
         } catch (_) {
-          thumbBytes = null;
+          // Metadata extraction fallback
         }
 
         mediaItems.add(
           PureCastMedia(
             uri: filePath,
             type: mediaType,
-            title: platformFile.name,
+            title: title,
             thumbnailUrl: null,
             thumbnailBytes: thumbBytes,
-            duration: null,
+            duration: duration,
             isLocalFile: true,
           ),
         );

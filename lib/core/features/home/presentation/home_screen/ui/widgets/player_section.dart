@@ -43,7 +43,7 @@ class CurrentlyPlaying extends StatelessWidget {
           width: double.infinity,
           child: Stack(
             children: [
-              const CurrentlyPlayingBG(),
+              CurrentlyPlayingBG(sessionState: sessionState),
               Padding(
                 padding: .all(20),
                 child: Column(
@@ -85,34 +85,38 @@ class CurrentlyPlaying extends StatelessWidget {
                       spacing: 6,
                       children: [
                         if (sessionState.sessionState == .buffering)
-                        SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 1.5),
-                        ),
+                          SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                          ),
                         if (sessionState.sessionState == .paused)
-                        IconButton(
-                          onPressed: () {
-                            context.read<CastSessionBloc>().add(
-                              CastSessionEvent.playMedia(),
-                            );
-                          },
-                          icon: Icon(Icons.play_arrow),
-                        ),
+                          IconButton(
+                            onPressed: () {
+                              context.read<CastSessionBloc>().add(
+                                CastSessionEvent.playMedia(),
+                              );
+                            },
+                            icon: Icon(Icons.play_arrow),
+                          ),
                         if (sessionState.sessionState == .playing)
-                        IconButton(
-                          onPressed: () {
-                            context.read<CastSessionBloc>().add(
-                              CastSessionEvent.pauseMedia(),
-                            );
-                          },
-                          icon: Icon(Icons.pause),
-                        ),
-                        Text(
-                          media?.title ?? "Unknown Title",
-                          style: typo.titleLarge.copyWith(color: colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          IconButton(
+                            onPressed: () {
+                              context.read<CastSessionBloc>().add(
+                                CastSessionEvent.pauseMedia(),
+                              );
+                            },
+                            icon: Icon(Icons.pause),
+                          ),
+                        Expanded(
+                          child: Text(
+                            media?.title ?? "Unknown Title",
+                            style: typo.titleLarge.copyWith(
+                              color: colors.white,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -153,12 +157,19 @@ class CurrentlyPlaying extends StatelessWidget {
 }
 
 class CurrentlyPlayingBG extends StatelessWidget {
-  const CurrentlyPlayingBG({super.key});
-
+  const CurrentlyPlayingBG({super.key, required this.sessionState});
+  final CastSessionState sessionState;
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(gradient: context.appGradients.surface),
+      decoration: BoxDecoration(
+        gradient: context.appGradients.surface,
+        image: sessionState.activeMedia?.thumbnailBytes != null
+            ? DecorationImage(
+                image: MemoryImage(sessionState.activeMedia!.thumbnailBytes!),
+              )
+            : null,
+      ),
     );
   }
 }

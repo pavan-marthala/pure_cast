@@ -2,6 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
@@ -59,6 +61,7 @@ class Body extends StatelessWidget {
             child: Column(
               crossAxisAlignment: .start,
               children: [
+                SizedBox(height: 16),
                 Text(
                   media?.title ?? "Unknown Title",
                   style: typo.titleLarge.copyWith(color: colors.white),
@@ -89,6 +92,8 @@ class Body extends StatelessWidget {
                     ),
                   ],
                 ),
+                SizedBox(height: 20),
+                PlayerControls(),
               ],
             ),
           ),
@@ -103,24 +108,37 @@ class Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverAppBar(
-      expandedHeight: 360,
-      centerTitle: true,
-      pinned: true,
-      stretch: true,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      scrolledUnderElevation: 20,
-      leading: BackButton(),
-      surfaceTintColor: Colors.transparent,
-      flexibleSpace: LayoutBuilder(
-        builder: (context, constraints) {
-          return FlexibleSpaceBar(
-            centerTitle: true,
-            background: CurrentlyPlayingBG(),
-          );
-        },
-      ),
+    return BlocBuilder<CastSessionBloc, CastSessionState>(
+      builder: (context, state) {
+        return SliverAppBar(
+          expandedHeight: 360,
+          centerTitle: true,
+          pinned: true,
+          stretch: true,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          scrolledUnderElevation: 20,
+          leading: BackButton(),
+          surfaceTintColor: Colors.transparent,
+          actions: [
+            IconButton(
+              onPressed: () {
+                QueueManagerScreen.show(context);
+              },
+              icon: Icon(Icons.queue_music),
+            ),
+          ],
+          flexibleSpace: LayoutBuilder(
+            builder: (context, constraints) {
+              return FlexibleSpaceBar(
+                centerTitle: true,
+
+                background: CurrentlyPlayingBG(sessionState: state),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

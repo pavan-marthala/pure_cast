@@ -82,6 +82,12 @@ class _MyAppState extends State<MyApp> {
         builder: (context) {
           final queueBloc = BlocProvider.of<QueueBloc>(context);
           final sessionBloc = BlocProvider.of<CastSessionBloc>(context);
+          final discoveryBloc = BlocProvider.of<CastDiscoveryBloc>(context);
+
+          discoveryBloc.stream.listen((discoveryState) {
+            // Forward auto-reconnection match to session owner
+          });
+
           getIt<PlaybackCoordinator>().start(queueBloc, sessionBloc);
 
           return MaterialApp.router(

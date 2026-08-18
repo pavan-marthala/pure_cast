@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
+import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
@@ -16,11 +17,13 @@ part 'cast_session_bloc.freezed.dart';
 class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   final ICastService _castService;
   final PlaybackHistoryRepository _historyRepo;
+  final AppDatabase _db;
+
   StreamSubscription<PureCastSessionState>? _stateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
 
-  CastSessionBloc(this._castService, this._historyRepo)
+  CastSessionBloc(this._castService, this._historyRepo, this._db)
     : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
@@ -64,12 +67,18 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     );
     try {
       await _castService.connect(event.device);
+      await _db.setLastCastedDevice(
+        deviceId: event.device.id,
+        deviceName: event.device.name,
+        protocol: event.device.protocol.name,
+      );
       emit(state.copyWith(sessionStatus: StateStatus.loaded));
     } catch (e) {
       emit(
         state.copyWith(
           sessionStatus: StateStatus.error,
           sessionError: e.toString(),
+          activeDevice: null,
         ),
       );
     }

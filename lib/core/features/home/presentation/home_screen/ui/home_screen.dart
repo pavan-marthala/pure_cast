@@ -3,8 +3,8 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/music_library_screen.dart';
+import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/recently_played_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
-import 'package:pure_cast/core/utils/app_buitton.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -63,6 +63,8 @@ class HomeScreen extends StatelessWidget {
               ),
               SizedBox(height: 20),
               Text("Recently Played", style: context.appTypography.titleLarge),
+              SizedBox(height: 12),
+              RecentlyPlayedSection()
             ],
           ),
         ),

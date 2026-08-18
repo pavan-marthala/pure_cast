@@ -9,6 +9,7 @@ import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_b
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/home_screen.dart';
 import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart';
+import 'package:pure_cast/core/features/music_library/presentation/logic/recently_played/recently_played_bloc.dart';
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
@@ -79,6 +80,11 @@ class _MyAppState extends State<MyApp> {
         ),
         BlocProvider(
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
+          lazy: false,
+        ),
+        BlocProvider(
+          create: (context) =>
+              getIt<RecentlyPlayedBloc>()..add(const LoadRecentlyPlayedEvent()),
           lazy: false,
         ),
       ],

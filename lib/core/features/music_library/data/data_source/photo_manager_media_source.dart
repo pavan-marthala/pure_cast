@@ -134,7 +134,6 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
             filePath,
             createThumbnail: true,
           );
-          print(metadata);
           if (metadata != null) {
             if (metadata.title != null && metadata.title!.trim().isNotEmpty) {
               title = metadata.title!;

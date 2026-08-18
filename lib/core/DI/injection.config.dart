@@ -32,6 +32,8 @@ import 'package:pure_cast/core/features/music_library/data/repository/media_repo
     as _i270;
 import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart'
     as _i597;
+import 'package:pure_cast/core/features/music_library/presentation/logic/recently_played/recently_played_bloc.dart'
+    as _i36;
 
 extension GetItInjectableX on _i174.GetIt {
   // initializes the registration of main-scope dependencies inside of GetIt
@@ -58,6 +60,9 @@ extension GetItInjectableX on _i174.GetIt {
     gh.factory<_i723.QueueBloc>(
       () =>
           _i723.QueueBloc(gh<_i600.AppDatabase>(), gh<_i270.MediaRepository>()),
+    );
+    gh.factory<_i36.RecentlyPlayedBloc>(
+      () => _i36.RecentlyPlayedBloc(gh<_i187.PlaybackHistoryRepository>()),
     );
     gh.lazySingleton<_i1071.ICastService>(
       () => injectionModule.getICastService(gh<_i869.CastService>()),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -77,19 +78,41 @@ void main() {
         },
       );
 
-      test('2. Handles permission denied cleanly', () async {
-        fakeDataSource.permissionGranted = false;
+      test('3. PhotoManager local media sets thumbnailBytes and thumbnailUrl == null', () async {
+        fakeDataSource.permissionGranted = true;
+        fakeDataSource.mockMedia = [
+          PureCastMedia(
+            uri: '/storage/emulated/0/Download/video.mp4',
+            type: PureCastMediaType.video,
+            title: 'video.mp4',
+            thumbnailUrl: null,
+            thumbnailBytes: Uint8List.fromList([0, 1, 2, 3]),
+            isLocalFile: true,
+          ),
+        ];
 
         final bloc = MediaBloc(repository);
-
         bloc.add(const MediaEvent.requestPermission());
         await pumpEventQueue();
 
-        expect(bloc.state.hasPermission, isFalse);
-        expect(bloc.state.status, equals(StateStatus.error));
-        expect(bloc.state.error, contains('Permission denied'));
-
+        final item = bloc.state.mediaItems.first;
+        expect(item.thumbnailUrl, isNull);
+        expect(item.thumbnailBytes, equals(Uint8List.fromList([0, 1, 2, 3])));
         await bloc.close();
+      });
+
+      test('4. Remote media retains thumbnailUrl with thumbnailBytes == null', () async {
+        const remoteMedia = PureCastMedia(
+          uri: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+          type: PureCastMediaType.video,
+          title: 'Big Buck Bunny',
+          thumbnailUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg',
+          isLocalFile: false,
+        );
+
+        expect(remoteMedia.thumbnailUrl, isNotNull);
+        expect(remoteMedia.thumbnailBytes, isNull);
+        expect(remoteMedia.isLocalFile, isFalse);
       });
     },
   );

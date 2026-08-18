@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:injectable/injectable.dart';
@@ -63,16 +64,24 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
         mediaType = PureCastMediaType.video;
       }
 
+      Uint8List? thumbBytes;
+      try {
+        thumbBytes = await asset.thumbnailData;
+      } catch (_) {
+        thumbBytes = null;
+      }
+
       mediaItems.add(
         PureCastMedia(
           uri: file.path,
           type: mediaType,
           title: asset.title ?? file.path.split('/').last,
+          thumbnailUrl: null,
+          thumbnailBytes: thumbBytes,
           duration: asset.duration > 0
               ? Duration(seconds: asset.duration)
               : null,
           isLocalFile: true,
-
         ),
       );
     }
@@ -90,34 +99,53 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
   Future<List<PureCastMedia>> pickFiles() async {
     final List<PureCastMedia> mediaItems = [];
 
-    List<PlatformFile> files = await FilePicker.pickFiles();
+    final List<PlatformFile> files = await FilePicker.pickFiles();
 
     if (files.isNotEmpty) {
       for (final platformFile in files) {
-        final xFile = platformFile.xFile;
-        final PureCastMediaType mediaType;
-        if (xFile.mimeType != null && xFile.mimeType!.startsWith('video/')) {
+        final filePath = platformFile.path;
+        if (filePath == null) continue;
+
+        final mimeType = platformFile.xFile.mimeType?.toLowerCase();
+        final ext = filePath.contains('.') ? filePath.split('.').last.toLowerCase() : '';
+
+        final PureCastMediaType? mediaType;
+        if (mimeType != null && mimeType.startsWith('video/')) {
           mediaType = PureCastMediaType.video;
-        } else if (xFile.mimeType != null &&
-            xFile.mimeType!.startsWith('audio/')) {
+        } else if (mimeType != null && mimeType.startsWith('audio/')) {
+          mediaType = PureCastMediaType.audio;
+        } else if (['mp4', 'mkv', 'mov', 'avi', 'webm', 'flv'].contains(ext)) {
+          mediaType = PureCastMediaType.video;
+        } else if (['mp3', 'aac', 'wav', 'flac', 'm4a', 'ogg'].contains(ext)) {
           mediaType = PureCastMediaType.audio;
         } else {
-          mediaType = PureCastMediaType.video;
+          // Unsupported / unknown file type — skip
+          continue;
+        }
+
+        Uint8List? thumbBytes;
+        try {
+          final file = File(filePath);
+          if (await file.exists()) {
+            thumbBytes = await file.readAsBytes();
+          }
+        } catch (_) {
+          thumbBytes = null;
         }
 
         mediaItems.add(
           PureCastMedia(
-            uri: xFile.path,
+            uri: filePath,
             type: mediaType,
-            title: xFile.name,
+            title: platformFile.name,
+            thumbnailUrl: null,
+            thumbnailBytes: thumbBytes,
             duration: null,
             isLocalFile: true,
           ),
         );
       }
-      return mediaItems;
-    } else {
-      return mediaItems;
     }
+    return mediaItems;
   }
 }

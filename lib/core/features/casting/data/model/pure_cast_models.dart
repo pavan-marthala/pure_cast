@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Supported casting protocols in Pure Cast.
 enum PureCastProtocol { chromecast, dlna }
 
@@ -152,6 +154,7 @@ class PureCastMedia {
   final PureCastMediaType type;
   final String title;
   final String? thumbnailUrl;
+  final Uint8List? thumbnailBytes;
   final Duration? duration;
   final bool isLocalFile;
   final List<PureCastSubtitleTrack> subtitles;
@@ -161,6 +164,7 @@ class PureCastMedia {
     required this.type,
     required this.title,
     this.thumbnailUrl,
+    this.thumbnailBytes,
     this.duration,
     this.isLocalFile = false,
     this.subtitles = const [],

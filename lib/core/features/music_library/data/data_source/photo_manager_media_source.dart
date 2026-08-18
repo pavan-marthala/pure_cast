@@ -41,7 +41,6 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
       type: type,
       onlyAll: true,
     );
-
     if (albums.isEmpty) return [];
 
     final AssetPathEntity recentAlbum = albums.first;
@@ -135,6 +134,7 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
             filePath,
             createThumbnail: true,
           );
+          print(metadata);
           if (metadata != null) {
             if (metadata.title != null && metadata.title!.trim().isNotEmpty) {
               title = metadata.title!;

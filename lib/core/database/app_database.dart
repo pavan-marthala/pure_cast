@@ -14,7 +14,7 @@ class LastCastedDeviceTable extends Table {
 
   TextColumn get deviceId => text()();
   TextColumn get deviceName => text()();
-  TextColumn get protocol => text()(); // 'chromecast' | 'dlna'
+  TextColumn get protocol => text()();
   DateTimeColumn get lastCastAt => dateTime()();
 
   @override

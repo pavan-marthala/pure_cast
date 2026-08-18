@@ -72,7 +72,11 @@ class _MyAppState extends State<MyApp> {
               getIt<CastDiscoveryBloc>()..add(const StartDiscoveryEvent()),
         ),
         BlocProvider(create: (context) => getIt<CastSessionBloc>()),
-        BlocProvider(create: (context) => getIt<MediaBloc>()),
+        BlocProvider(
+          create: (context) =>
+              getIt<MediaBloc>()..add(MediaEvent.requestPermission()),
+          lazy: false,
+        ),
         BlocProvider(
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),
           lazy: false,

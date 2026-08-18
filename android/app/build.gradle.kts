@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.pk.pure_cast"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

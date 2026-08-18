@@ -53,7 +53,7 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
     final previousLength = _lastHandledQueueLength ?? 0;
     _lastHandledQueueLength = items.length;
 
-    // Case 1: First media added to an empty queue
+    // Case 1: Media added to an empty active session queue
     if (previousLength == 0 && items.isNotEmpty && currentIndex == 0) {
       log("Added first media", name: "Playback Coordinator");
       if (sessionState.activeMedia == null) {
@@ -63,7 +63,17 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
       }
     }
 
-    // Case 2: Explicit queue index advance (Next/Previous/Index change)
+    // Case 2: Adding media after previous playback completed
+    if (previousLength > 0 &&
+        items.length > previousLength &&
+        sessionState.sessionState == PureCastSessionState.completed) {
+      if (currentIndex >= 0 && currentIndex < items.length) {
+        _loadMediaAtCurrentIndex(items[currentIndex]);
+        return;
+      }
+    }
+
+    // Case 3: Explicit queue index advance (Next/Previous/Index change)
     if (_lastHandledQueueIndex != null &&
         _lastHandledQueueIndex != currentIndex) {
       _lastHandledQueueIndex = currentIndex;

@@ -1,12 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
-import 'package:skeletonizer/skeletonizer.dart';
 
 class MediaControllerScreen extends StatefulWidget {
   const MediaControllerScreen({super.key});
@@ -34,7 +32,7 @@ class _MediaControllerScreenState extends State<MediaControllerScreen> {
 }
 
 class Body extends StatelessWidget {
-  const new({super.key});
+  const Body({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -105,8 +103,6 @@ class Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.theme.appColors;
-    final typography = context.theme.appTypography;
     return SliverAppBar(
       expandedHeight: 360,
       centerTitle: true,
@@ -119,10 +115,6 @@ class Header extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       flexibleSpace: LayoutBuilder(
         builder: (context, constraints) {
-          final top = constraints.biggest.height;
-          final collapsedHeight =
-              MediaQuery.of(context).padding.top + kToolbarHeight;
-          final isCollapsed = top <= collapsedHeight + 1;
           return FlexibleSpaceBar(
             centerTitle: true,
             background: CurrentlyPlayingBG(),

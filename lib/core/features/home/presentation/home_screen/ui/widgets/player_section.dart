@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/media_crontroller_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
@@ -29,7 +28,6 @@ class CurrentlyPlaying extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessionState = context.watch<CastSessionBloc>().state;
     final media = sessionState.activeMedia;
-    final device = sessionState.activeDevice;
     final colors = context.appColors;
     final typo = context.appTypography;
 

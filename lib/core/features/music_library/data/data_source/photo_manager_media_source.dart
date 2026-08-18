@@ -110,9 +110,7 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
             uri: xFile.path,
             type: mediaType,
             title: xFile.name,
-            duration: await xFile.length() > 0
-                ? Duration(seconds: await xFile.length())
-                : null,
+            duration: null,
             isLocalFile: true,
           ),
         );

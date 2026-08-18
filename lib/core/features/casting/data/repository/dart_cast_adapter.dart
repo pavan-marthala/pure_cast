@@ -101,7 +101,6 @@ class DartCastAdapter implements ICastService {
       final dartMedia = _mapMediaToDartCast(media);
       await session.loadMedia(dartMedia);
     } catch (e) {
-      print(e);
       throw PureCastException('Failed to load media: ${media.title}', e);
     }
   }

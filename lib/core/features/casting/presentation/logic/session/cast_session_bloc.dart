@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -74,6 +75,9 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         protocol: event.device.protocol.name,
       );
       emit(state.copyWith(connectionStatus: StateStatus.loaded));
+      if (state.activeMedia != null) {
+        add(LoadMediaEvent(state.activeMedia!));
+      }
     } catch (e) {
       emit(
         state.copyWith(
@@ -101,6 +105,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     LoadMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    log("loading media");
+
     emit(
       state.copyWith(
         playbackStatus: StateStatus.loading,
@@ -111,7 +117,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     try {
       await _castService.loadMedia(event.media);
       emit(state.copyWith(playbackStatus: StateStatus.loaded));
+      if (state.activeDevice != null) {
+        add(PlayMediaEvent());
+      }
     } catch (e) {
+      log("Error when loading media", error: e);
       emit(
         state.copyWith(
           playbackStatus: StateStatus.error,
@@ -125,9 +135,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     PlayMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    log("Playing media");
+
     try {
       await _castService.play();
     } catch (e) {
+      log("Error when playing media", error: e);
       emit(state.copyWith(playbackError: e.toString()));
     }
   }

@@ -31,9 +31,12 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               DeviceManagerScreen.show(context);
             },
-            icon: Icon(Icons.tv),
+            icon: Icon(Icons.tv, color: colors.textSecondary),
           ),
-          IconButton(onPressed: () {}, icon: Icon(Icons.settings)),
+          IconButton(
+            onPressed: () {},
+            icon: Icon(Icons.settings, color: colors.textSecondary),
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: Size(double.infinity, 2),

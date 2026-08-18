@@ -19,7 +19,7 @@ class DeviceManagerScreen extends StatefulWidget {
       useSafeArea: true,
       useRootNavigator: true,
       showDragHandle: true,
-      backgroundColor: context.appColors.background,
+      backgroundColor: context.appColors.surfaceLight,
       constraints: BoxConstraints(
         maxHeight: context.heightPx * 0.5,
         minWidth: double.infinity,
@@ -55,7 +55,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                 children: [
                   Text(
                     "Choose where to play",
-                    style: typo.titleMedium.copyWith(fontSize: 20),
+                    style: typo.titleMedium.copyWith(fontSize: 18),
                   ),
                   Text("Devices on your network"),
                   SizedBox(height: 20),
@@ -75,7 +75,9 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                       return GestureDetector(
                         onTap: () {
                           context.read<CastSessionBloc>().add(
-                            CastSessionEvent.connectDevice(device),
+                            isConnected
+                                ? CastSessionEvent.disconnectDevice()
+                                : CastSessionEvent.connectDevice(device),
                           );
                         },
                         child: Row(
@@ -85,14 +87,14 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                               isSelected
                                   ? Icons.radio_button_checked
                                   : Icons.radio_button_off,
-                              color: isSelected ? colors.primary : colors.white,
+                              color: isSelected ? colors.primary : colors.gray4,
                             ),
                             Container(
-                              padding: .all(6),
+                              padding: .all(8),
                               decoration: BoxDecoration(
                                 color: isSelected
                                     ? colors.primary.withValues(alpha: 0.2)
-                                    : colors.gray,
+                                    : colors.surfaceDark,
                                 borderRadius: .circular(8),
                               ),
                               child: Icon(
@@ -100,14 +102,14 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                                 size: 20,
                                 color: isSelected
                                     ? colors.primary
-                                    : colors.white,
+                                    : colors.textSecondary,
                               ),
                             ),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: .start,
                                 children: [
-                                  Text(device.name),
+                                  Text(device.name, style: typo.titleSmall),
                                   Text(device.protocol.name),
                                 ],
                               ),
@@ -129,15 +131,11 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                               ),
                             ],
                             if (isConnected) ...[
-                              Icon(
-                                Icons.check,
-                                size: 20,
-                                color: colors.primary400,
-                              ),
+                              Icon(Icons.clear, size: 20, color: colors.error),
                               Text(
-                                "Connected",
+                                "Disconnect",
                                 style: typo.labelSmall.copyWith(
-                                  color: colors.primary400,
+                                  color: colors.error,
                                 ),
                               ),
                             ],
@@ -169,7 +167,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                   SizedBox(height: 20),
                   AppButton(
                     text: "Cancel",
-                    color: colors.card,
+                    color: colors.surfaceDark,
                     width: double.infinity,
                     borderRadius: 20,
                     onPressed: () {

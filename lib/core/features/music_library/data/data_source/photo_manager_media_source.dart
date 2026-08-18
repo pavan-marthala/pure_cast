@@ -72,6 +72,7 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
               ? Duration(seconds: asset.duration)
               : null,
           isLocalFile: true,
+
         ),
       );
     }

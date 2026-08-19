@@ -14,6 +14,7 @@ import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/spl
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
 import 'package:pure_cast/core/utils/check_platforms.dart';
+import 'package:pure_cast/core/utils/state_status.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
@@ -98,7 +99,12 @@ class _MyAppState extends State<MyApp> {
           final discoveryBloc = BlocProvider.of<CastDiscoveryBloc>(context);
 
           discoveryBloc.stream.listen((discoveryState) {
-            // Forward auto-reconnection match to session owner
+            final autoDevice = discoveryState.autoReconnectDevice;
+            if (autoDevice != null &&
+                sessionBloc.state.activeDevice == null &&
+                sessionBloc.state.connectionStatus != StateStatus.loading) {
+              sessionBloc.add(ConnectDeviceEvent(autoDevice));
+            }
           });
 
           getIt<PlaybackCoordinator>().start(queueBloc, sessionBloc);

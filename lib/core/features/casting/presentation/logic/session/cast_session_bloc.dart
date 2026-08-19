@@ -105,8 +105,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     LoadMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
-    log("loading media");
-
     emit(
       state.copyWith(
         playbackStatus: StateStatus.loading,
@@ -114,6 +112,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         playbackError: null,
       ),
     );
+
+    if (state.activeDevice == null) {
+      log("No active device connected, retaining media as pending");
+      emit(state.copyWith(playbackStatus: StateStatus.initial));
+      return;
+    }
+
     try {
       await _castService.loadMedia(event.media);
       emit(state.copyWith(playbackStatus: StateStatus.loaded));
@@ -121,7 +126,18 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         add(PlayMediaEvent());
       }
     } catch (e) {
-      log("Error when loading media", error: e);
+      log(
+        "Error when loading media active device is: ${state.activeDevice?.name}",
+        error: e,
+        name: "Cast Session Bloc",
+      );
+
+      log(
+        "Failed media details:",
+        error: state.activeMedia.toString(),
+        name: "Cast Session Bloc",
+      );
+
       emit(
         state.copyWith(
           playbackStatus: StateStatus.error,
@@ -135,8 +151,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     PlayMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
-    log("Playing media");
-
     try {
       await _castService.play();
     } catch (e) {

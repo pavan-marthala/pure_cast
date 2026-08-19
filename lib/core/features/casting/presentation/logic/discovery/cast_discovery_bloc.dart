@@ -26,7 +26,9 @@ class CastDiscoveryBloc extends Bloc<CastDiscoveryEvent, CastDiscoveryState> {
     on<RefreshDiscoveryEvent>(_onRefreshDiscovery);
     on<DevicesUpdatedEvent>(_onDevicesUpdated);
     on<DiscoveryErrorEvent>(_onDiscoveryError);
-    on<AutoReconnectMatchFoundEvent>((event, emit) {});
+    on<AutoReconnectMatchFoundEvent>((event, emit) {
+      emit(state.copyWith(autoReconnectDevice: event.device));
+    });
   }
 
   Future<void> _onStartDiscovery(

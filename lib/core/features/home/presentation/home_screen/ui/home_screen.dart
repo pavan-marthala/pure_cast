@@ -54,24 +54,21 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: .start,
             children: [
               PlayerSection(),
-              SizedBox(height: 20),
-              Row(
-                spacing: 18,
-                children: [
-                  MediaBotton(filterType: .video),
-                  MediaBotton(filterType: .audio),
-                ],
-              ),
-              SizedBox(height: 20),
               if (PlatformChecker.isAndroid()) ...[
-                Text(
-                  "Recently Played",
-                  style: context.appTypography.titleLarge,
-                ),
-                SizedBox(height: 12),
-                RecentlyPlayedSection(),
                 SizedBox(height: 20),
+                Row(
+                  spacing: 18,
+                  children: [
+                    MediaBotton(filterType: .video),
+                    MediaBotton(filterType: .audio),
+                  ],
+                ),
               ],
+              SizedBox(height: 20),
+              Text("Recently Played", style: context.appTypography.titleLarge),
+              SizedBox(height: 12),
+              RecentlyPlayedSection(),
+              SizedBox(height: 20),
             ],
           ),
         ),

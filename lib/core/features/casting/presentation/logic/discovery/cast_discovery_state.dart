@@ -6,5 +6,6 @@ abstract class CastDiscoveryState with _$CastDiscoveryState {
     @Default([]) List<PureCastDevice> devices,
     @Default(StateStatus.initial) StateStatus discoveryStatus,
     String? discoveryError,
+    PureCastDevice? autoReconnectDevice,
   }) = _CastDiscoveryState;
 }

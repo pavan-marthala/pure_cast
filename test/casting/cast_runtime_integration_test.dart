@@ -701,5 +701,64 @@ void main() {
       await queueBloc.close();
       await sessionBloc.close();
     });
+
+    test('7. Issue 1: Media selected without active cast session retains media as pending without exception', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+
+      const localMedia = PureCastMedia(
+        uri: '/storage/emulated/0/DCIM/Camera/sample.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'sample.mp4',
+        isLocalFile: true,
+      );
+
+      // Select media when activeDevice is null
+      expect(sessionBloc.state.activeDevice, isNull);
+      sessionBloc.add(const LoadMediaEvent(localMedia));
+      await pumpEventQueue();
+
+      // No exception, media is retained as pending activeMedia
+      expect(sessionBloc.state.activeMedia, equals(localMedia));
+      expect(sessionBloc.state.playbackError, isNull);
+
+      // Now connect a device
+      const targetDevice = PureCastDevice(
+        id: 'tv_1',
+        name: 'Living Room TV',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.100',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      sessionBloc.add(const ConnectDeviceEvent(targetDevice));
+      await pumpEventQueue();
+
+      // Pending media is automatically loaded onto connected device
+      expect(sessionBloc.state.activeDevice, equals(targetDevice));
+      expect(fakeCastService.loadedMedia, equals(localMedia));
+
+      await sessionBloc.close();
+    });
+
+    test('8. Issue 1B: Auto-reconnect match found emits autoReconnectDevice in discovery state', () async {
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
+
+      const savedDevice = PureCastDevice(
+        id: 'saved_tv_id',
+        name: 'Saved TV',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.50',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      discoveryBloc.add(const AutoReconnectMatchFoundEvent(savedDevice));
+      await pumpEventQueue();
+
+      expect(discoveryBloc.state.autoReconnectDevice, equals(savedDevice));
+
+      await discoveryBloc.close();
+    });
   });
 }

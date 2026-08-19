@@ -184,6 +184,20 @@ class PureCastMedia {
   @override
   int get hashCode =>
       Object.hash(uri, type, title, thumbnailUrl, duration, isLocalFile);
+
+  @override
+  String toString() {
+    return 'PureCastMedia('
+        'uri: $uri, '
+        'type: $type, '
+        'title: $title, '
+        'thumbnailUrl: $thumbnailUrl, '
+        'thumbnailBytes: ${thumbnailBytes != null ? '<${thumbnailBytes!.lengthInBytes} bytes>' : null}, '
+        'duration: $duration, '
+        'isLocalFile: $isLocalFile, '
+        'subtitles: $subtitles'
+        ')';
+  }
 }
 
 /// Domain exception for casting failures.

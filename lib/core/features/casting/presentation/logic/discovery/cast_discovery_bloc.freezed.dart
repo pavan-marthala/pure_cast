@@ -547,7 +547,7 @@ as PureCastDevice,
 /// @nodoc
 mixin _$CastDiscoveryState {
 
- List<PureCastDevice> get devices; StateStatus get discoveryStatus; String? get discoveryError;
+ List<PureCastDevice> get devices; StateStatus get discoveryStatus; String? get discoveryError; PureCastDevice? get autoReconnectDevice;
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -558,16 +558,16 @@ $CastDiscoveryStateCopyWith<CastDiscoveryState> get copyWith => _$CastDiscoveryS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(devices),discoveryStatus,discoveryError);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(devices),discoveryStatus,discoveryError,autoReconnectDevice);
 
 @override
 String toString() {
-  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError)';
+  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
 }
 
 
@@ -578,7 +578,7 @@ abstract mixin class $CastDiscoveryStateCopyWith<$Res>  {
   factory $CastDiscoveryStateCopyWith(CastDiscoveryState value, $Res Function(CastDiscoveryState) _then) = _$CastDiscoveryStateCopyWithImpl;
 @useResult
 $Res call({
- List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError
+ List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError, PureCastDevice? autoReconnectDevice
 });
 
 
@@ -595,12 +595,13 @@ class _$CastDiscoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,Object? autoReconnectDevice = freezed,}) {
   return _then(CastDiscoveryState(
 devices: null == devices ? _self.devices : devices // ignore: cast_nullable_to_non_nullable
 as List<PureCastDevice>,discoveryStatus: null == discoveryStatus ? _self.discoveryStatus : discoveryStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,discoveryError: freezed == discoveryError ? _self.discoveryError : discoveryError // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,autoReconnectDevice: freezed == autoReconnectDevice ? _self.autoReconnectDevice : autoReconnectDevice // ignore: cast_nullable_to_non_nullable
+as PureCastDevice?,
   ));
 }
 
@@ -685,10 +686,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState() when $default != null:
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
   return orElse();
 
 }
@@ -706,10 +707,10 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)  $default,) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState():
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -726,10 +727,10 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)?  $default,) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState() when $default != null:
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
   return null;
 
 }
@@ -741,7 +742,7 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _
 
 
 class _CastDiscoveryState implements CastDiscoveryState {
-  const _CastDiscoveryState({ List<PureCastDevice> devices = const [], this.discoveryStatus = StateStatus.initial, this.discoveryError}): _devices = devices;
+  const _CastDiscoveryState({ List<PureCastDevice> devices = const [], this.discoveryStatus = StateStatus.initial, this.discoveryError, this.autoReconnectDevice}): _devices = devices;
   
 
  final  List<PureCastDevice> _devices;
@@ -753,6 +754,7 @@ class _CastDiscoveryState implements CastDiscoveryState {
 
 @override@JsonKey() final  StateStatus discoveryStatus;
 @override final  String? discoveryError;
+@override final  PureCastDevice? autoReconnectDevice;
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
@@ -764,16 +766,16 @@ _$CastDiscoveryStateCopyWith<_CastDiscoveryState> get copyWith => __$CastDiscove
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other._devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other._devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError);
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError,autoReconnectDevice);
 
 @override
 String toString() {
-  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError)';
+  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
 }
 
 
@@ -784,7 +786,7 @@ abstract mixin class _$CastDiscoveryStateCopyWith<$Res> implements $CastDiscover
   factory _$CastDiscoveryStateCopyWith(_CastDiscoveryState value, $Res Function(_CastDiscoveryState) _then) = __$CastDiscoveryStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError
+ List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError, PureCastDevice? autoReconnectDevice
 });
 
 
@@ -801,12 +803,13 @@ class __$CastDiscoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,Object? autoReconnectDevice = freezed,}) {
   return _then(_CastDiscoveryState(
 devices: null == devices ? _self._devices : devices // ignore: cast_nullable_to_non_nullable
 as List<PureCastDevice>,discoveryStatus: null == discoveryStatus ? _self.discoveryStatus : discoveryStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,discoveryError: freezed == discoveryError ? _self.discoveryError : discoveryError // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,autoReconnectDevice: freezed == autoReconnectDevice ? _self.autoReconnectDevice : autoReconnectDevice // ignore: cast_nullable_to_non_nullable
+as PureCastDevice?,
   ));
 }
 

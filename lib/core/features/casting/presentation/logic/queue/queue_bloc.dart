@@ -50,7 +50,13 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           .toList();
 
       final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
-      emit(state.copyWith(items: items, status: status));
+      emit(
+        state.copyWith(
+          items: items,
+          currentIndex: items.isEmpty ? 0 : state.currentIndex,
+          status: status,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
@@ -63,7 +69,17 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     try {
       final updatedItems = List<PureCastMedia>.from(state.items)
         ..add(event.media);
-      emit(state.copyWith(items: updatedItems, status: StateStatus.loaded));
+
+      // If the queue was empty, start playing from the first item.
+      final newIndex = state.items.isEmpty ? 0 : state.currentIndex;
+
+      emit(
+        state.copyWith(
+          items: updatedItems,
+          currentIndex: newIndex,
+          status: StateStatus.loaded,
+        ),
+      );
       await _persistQueue(updatedItems);
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
@@ -78,10 +94,23 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       final updatedItems = state.items
           .where((i) => i.uri != event.mediaUri)
           .toList();
+
+      // Adjust currentIndex if it's now out of bounds or points to a removed item.
+      int newIndex = state.currentIndex;
+      if (newIndex >= updatedItems.length) {
+        newIndex = updatedItems.isEmpty ? 0 : updatedItems.length - 1;
+      }
+
       final status = updatedItems.isEmpty
           ? StateStatus.empty
           : StateStatus.loaded;
-      emit(state.copyWith(items: updatedItems, status: status));
+      emit(
+        state.copyWith(
+          items: updatedItems,
+          currentIndex: newIndex,
+          status: status,
+        ),
+      );
       await _persistQueue(updatedItems);
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
@@ -156,9 +185,29 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) async {
     emit(state.copyWith(status: StateStatus.loading, error: null));
     try {
-      final items = await _mediaRepository.pickFiles();
-      final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
-      emit(state.copyWith(items: items, status: status));
+      final pickedItems = await _mediaRepository.pickFiles();
+      // User cancelled or picker returned nothing — keep existing queue intact.
+      if (pickedItems.isEmpty) {
+        emit(state.copyWith(status: StateStatus.loaded, error: null));
+        return;
+      }
+
+      // Add picked files to the existing queue instead of replacing it.
+      final updatedItems = List<PureCastMedia>.from(state.items)
+        ..addAll(pickedItems);
+
+      // If the queue was previously empty, start at the first item.
+      final newIndex = state.items.isEmpty ? 0 : state.currentIndex;
+
+      emit(
+        state.copyWith(
+          items: updatedItems,
+          currentIndex: newIndex,
+          status: StateStatus.loaded,
+          error: null,
+        ),
+      );
+      await _persistQueue(updatedItems);
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }

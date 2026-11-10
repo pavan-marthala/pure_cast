@@ -21,7 +21,7 @@ mixin _$CastSessionEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionEvent);
 }
 
 
@@ -30,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastSessionEvent()';
+    return 'CastSessionEvent()';
 }
 
 
@@ -56,7 +56,7 @@ extension CastSessionEventPatterns on CastSessionEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ConnectDeviceEvent value)?  connectDevice,TResult Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult Function( LoadMediaEvent value)?  loadMedia,TResult Function( PlayMediaEvent value)?  playMedia,TResult Function( PauseMediaEvent value)?  pauseMedia,TResult Function( StopMediaEvent value)?  stopMedia,TResult Function( SeekMediaEvent value)?  seekMedia,TResult Function( SetVolumeEvent value)?  setVolume,TResult Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult Function( PositionUpdatedEvent value)?  positionUpdated,TResult Function( DurationUpdatedEvent value)?  durationUpdated,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ConnectDeviceEvent value)?  connectDevice,TResult Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult Function( LoadMediaEvent value)?  loadMedia,TResult Function( PlayMediaEvent value)?  playMedia,TResult Function( PauseMediaEvent value)?  pauseMedia,TResult Function( StopMediaEvent value)?  stopMedia,TResult Function( SeekMediaEvent value)?  seekMedia,TResult Function( SetVolumeEvent value)?  setVolume,TResult Function( SetSubtitleEvent value)?  setSubtitle,TResult Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult Function( PositionUpdatedEvent value)?  positionUpdated,TResult Function( DurationUpdatedEvent value)?  durationUpdated,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
@@ -67,7 +67,8 @@ return playMedia(_that);case PauseMediaEvent() when pauseMedia != null:
 return pauseMedia(_that);case StopMediaEvent() when stopMedia != null:
 return stopMedia(_that);case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that);case SetVolumeEvent() when setVolume != null:
-return setVolume(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setVolume(_that);case SetSubtitleEvent() when setSubtitle != null:
+return setSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that);case _:
@@ -88,7 +89,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ConnectDeviceEvent value)  connectDevice,required TResult Function( DisconnectDeviceEvent value)  disconnectDevice,required TResult Function( LoadMediaEvent value)  loadMedia,required TResult Function( PlayMediaEvent value)  playMedia,required TResult Function( PauseMediaEvent value)  pauseMedia,required TResult Function( StopMediaEvent value)  stopMedia,required TResult Function( SeekMediaEvent value)  seekMedia,required TResult Function( SetVolumeEvent value)  setVolume,required TResult Function( SessionStateChangedEvent value)  sessionStateChanged,required TResult Function( PositionUpdatedEvent value)  positionUpdated,required TResult Function( DurationUpdatedEvent value)  durationUpdated,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ConnectDeviceEvent value)  connectDevice,required TResult Function( DisconnectDeviceEvent value)  disconnectDevice,required TResult Function( LoadMediaEvent value)  loadMedia,required TResult Function( PlayMediaEvent value)  playMedia,required TResult Function( PauseMediaEvent value)  pauseMedia,required TResult Function( StopMediaEvent value)  stopMedia,required TResult Function( SeekMediaEvent value)  seekMedia,required TResult Function( SetVolumeEvent value)  setVolume,required TResult Function( SetSubtitleEvent value)  setSubtitle,required TResult Function( SessionStateChangedEvent value)  sessionStateChanged,required TResult Function( PositionUpdatedEvent value)  positionUpdated,required TResult Function( DurationUpdatedEvent value)  durationUpdated,}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent():
@@ -99,7 +100,8 @@ return playMedia(_that);case PauseMediaEvent():
 return pauseMedia(_that);case StopMediaEvent():
 return stopMedia(_that);case SeekMediaEvent():
 return seekMedia(_that);case SetVolumeEvent():
-return setVolume(_that);case SessionStateChangedEvent():
+return setVolume(_that);case SetSubtitleEvent():
+return setSubtitle(_that);case SessionStateChangedEvent():
 return sessionStateChanged(_that);case PositionUpdatedEvent():
 return positionUpdated(_that);case DurationUpdatedEvent():
 return durationUpdated(_that);case _:
@@ -119,7 +121,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ConnectDeviceEvent value)?  connectDevice,TResult? Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult? Function( LoadMediaEvent value)?  loadMedia,TResult? Function( PlayMediaEvent value)?  playMedia,TResult? Function( PauseMediaEvent value)?  pauseMedia,TResult? Function( StopMediaEvent value)?  stopMedia,TResult? Function( SeekMediaEvent value)?  seekMedia,TResult? Function( SetVolumeEvent value)?  setVolume,TResult? Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult? Function( PositionUpdatedEvent value)?  positionUpdated,TResult? Function( DurationUpdatedEvent value)?  durationUpdated,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ConnectDeviceEvent value)?  connectDevice,TResult? Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult? Function( LoadMediaEvent value)?  loadMedia,TResult? Function( PlayMediaEvent value)?  playMedia,TResult? Function( PauseMediaEvent value)?  pauseMedia,TResult? Function( StopMediaEvent value)?  stopMedia,TResult? Function( SeekMediaEvent value)?  seekMedia,TResult? Function( SetVolumeEvent value)?  setVolume,TResult? Function( SetSubtitleEvent value)?  setSubtitle,TResult? Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult? Function( PositionUpdatedEvent value)?  positionUpdated,TResult? Function( DurationUpdatedEvent value)?  durationUpdated,}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
@@ -130,7 +132,8 @@ return playMedia(_that);case PauseMediaEvent() when pauseMedia != null:
 return pauseMedia(_that);case StopMediaEvent() when stopMedia != null:
 return stopMedia(_that);case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that);case SetVolumeEvent() when setVolume != null:
-return setVolume(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setVolume(_that);case SetSubtitleEvent() when setSubtitle != null:
+return setSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that);case _:
@@ -150,7 +153,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PureCastDevice device)?  connectDevice,TResult Function()?  disconnectDevice,TResult Function( PureCastMedia media)?  loadMedia,TResult Function()?  playMedia,TResult Function()?  pauseMedia,TResult Function()?  stopMedia,TResult Function( Duration position)?  seekMedia,TResult Function( double volume)?  setVolume,TResult Function( PureCastSessionState newState)?  sessionStateChanged,TResult Function( Duration position)?  positionUpdated,TResult Function( Duration duration)?  durationUpdated,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PureCastDevice device)?  connectDevice,TResult Function()?  disconnectDevice,TResult Function( PureCastMedia media)?  loadMedia,TResult Function()?  playMedia,TResult Function()?  pauseMedia,TResult Function()?  stopMedia,TResult Function( Duration position)?  seekMedia,TResult Function( double volume)?  setVolume,TResult Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult Function( PureCastSessionState newState)?  sessionStateChanged,TResult Function( Duration position)?  positionUpdated,TResult Function( Duration duration)?  durationUpdated,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
 return connectDevice(_that.device);case DisconnectDeviceEvent() when disconnectDevice != null:
@@ -160,7 +163,8 @@ return playMedia();case PauseMediaEvent() when pauseMedia != null:
 return pauseMedia();case StopMediaEvent() when stopMedia != null:
 return stopMedia();case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that.position);case SetVolumeEvent() when setVolume != null:
-return setVolume(_that.volume);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setVolume(_that.volume);case SetSubtitleEvent() when setSubtitle != null:
+return setSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that.position);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that.duration);case _:
@@ -181,7 +185,7 @@ return durationUpdated(_that.duration);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PureCastDevice device)  connectDevice,required TResult Function()  disconnectDevice,required TResult Function( PureCastMedia media)  loadMedia,required TResult Function()  playMedia,required TResult Function()  pauseMedia,required TResult Function()  stopMedia,required TResult Function( Duration position)  seekMedia,required TResult Function( double volume)  setVolume,required TResult Function( PureCastSessionState newState)  sessionStateChanged,required TResult Function( Duration position)  positionUpdated,required TResult Function( Duration duration)  durationUpdated,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PureCastDevice device)  connectDevice,required TResult Function()  disconnectDevice,required TResult Function( PureCastMedia media)  loadMedia,required TResult Function()  playMedia,required TResult Function()  pauseMedia,required TResult Function()  stopMedia,required TResult Function( Duration position)  seekMedia,required TResult Function( double volume)  setVolume,required TResult Function( PureCastSubtitleTrack? subtitle)  setSubtitle,required TResult Function( PureCastSessionState newState)  sessionStateChanged,required TResult Function( Duration position)  positionUpdated,required TResult Function( Duration duration)  durationUpdated,}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent():
 return connectDevice(_that.device);case DisconnectDeviceEvent():
@@ -191,7 +195,8 @@ return playMedia();case PauseMediaEvent():
 return pauseMedia();case StopMediaEvent():
 return stopMedia();case SeekMediaEvent():
 return seekMedia(_that.position);case SetVolumeEvent():
-return setVolume(_that.volume);case SessionStateChangedEvent():
+return setVolume(_that.volume);case SetSubtitleEvent():
+return setSubtitle(_that.subtitle);case SessionStateChangedEvent():
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent():
 return positionUpdated(_that.position);case DurationUpdatedEvent():
 return durationUpdated(_that.duration);case _:
@@ -211,7 +216,7 @@ return durationUpdated(_that.duration);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PureCastDevice device)?  connectDevice,TResult? Function()?  disconnectDevice,TResult? Function( PureCastMedia media)?  loadMedia,TResult? Function()?  playMedia,TResult? Function()?  pauseMedia,TResult? Function()?  stopMedia,TResult? Function( Duration position)?  seekMedia,TResult? Function( double volume)?  setVolume,TResult? Function( PureCastSessionState newState)?  sessionStateChanged,TResult? Function( Duration position)?  positionUpdated,TResult? Function( Duration duration)?  durationUpdated,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PureCastDevice device)?  connectDevice,TResult? Function()?  disconnectDevice,TResult? Function( PureCastMedia media)?  loadMedia,TResult? Function()?  playMedia,TResult? Function()?  pauseMedia,TResult? Function()?  stopMedia,TResult? Function( Duration position)?  seekMedia,TResult? Function( double volume)?  setVolume,TResult? Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult? Function( PureCastSessionState newState)?  sessionStateChanged,TResult? Function( Duration position)?  positionUpdated,TResult? Function( Duration duration)?  durationUpdated,}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
 return connectDevice(_that.device);case DisconnectDeviceEvent() when disconnectDevice != null:
@@ -221,7 +226,8 @@ return playMedia();case PauseMediaEvent() when pauseMedia != null:
 return pauseMedia();case StopMediaEvent() when stopMedia != null:
 return stopMedia();case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that.position);case SetVolumeEvent() when setVolume != null:
-return setVolume(_that.volume);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setVolume(_that.volume);case SetSubtitleEvent() when setSubtitle != null:
+return setSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that.position);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that.duration);case _:
@@ -251,16 +257,18 @@ $ConnectDeviceEventCopyWith<ConnectDeviceEvent> get copyWith => _$ConnectDeviceE
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ConnectDeviceEvent&&(identical(other.device, device) || other.device == device));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ConnectDeviceEvent&&(identical(other.device, device) || other.device == device));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,device);
+int get hashCode {
+    return Object.hash(runtimeType,device);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.connectDevice(device: $device)';
+    return 'CastSessionEvent.connectDevice(device: $device)';
 }
 
 
@@ -312,7 +320,7 @@ class DisconnectDeviceEvent implements CastSessionEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DisconnectDeviceEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is DisconnectDeviceEvent);
 }
 
 
@@ -321,7 +329,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastSessionEvent.disconnectDevice()';
+    return 'CastSessionEvent.disconnectDevice()';
 }
 
 
@@ -349,16 +357,18 @@ $LoadMediaEventCopyWith<LoadMediaEvent> get copyWith => _$LoadMediaEventCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadMediaEvent&&(identical(other.media, media) || other.media == media));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadMediaEvent&&(identical(other.media, media) || other.media == media));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,media);
+int get hashCode {
+    return Object.hash(runtimeType,media);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.loadMedia(media: $media)';
+    return 'CastSessionEvent.loadMedia(media: $media)';
 }
 
 
@@ -410,7 +420,7 @@ class PlayMediaEvent implements CastSessionEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PlayMediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PlayMediaEvent);
 }
 
 
@@ -419,7 +429,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastSessionEvent.playMedia()';
+    return 'CastSessionEvent.playMedia()';
 }
 
 
@@ -442,7 +452,7 @@ class PauseMediaEvent implements CastSessionEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PauseMediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PauseMediaEvent);
 }
 
 
@@ -451,7 +461,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastSessionEvent.pauseMedia()';
+    return 'CastSessionEvent.pauseMedia()';
 }
 
 
@@ -474,7 +484,7 @@ class StopMediaEvent implements CastSessionEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is StopMediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is StopMediaEvent);
 }
 
 
@@ -483,7 +493,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastSessionEvent.stopMedia()';
+    return 'CastSessionEvent.stopMedia()';
 }
 
 
@@ -511,16 +521,18 @@ $SeekMediaEventCopyWith<SeekMediaEvent> get copyWith => _$SeekMediaEventCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SeekMediaEvent&&(identical(other.position, position) || other.position == position));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SeekMediaEvent&&(identical(other.position, position) || other.position == position));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,position);
+int get hashCode {
+    return Object.hash(runtimeType,position);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.seekMedia(position: $position)';
+    return 'CastSessionEvent.seekMedia(position: $position)';
 }
 
 
@@ -577,16 +589,18 @@ $SetVolumeEventCopyWith<SetVolumeEvent> get copyWith => _$SetVolumeEventCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SetVolumeEvent&&(identical(other.volume, volume) || other.volume == volume));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SetVolumeEvent&&(identical(other.volume, volume) || other.volume == volume));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,volume);
+int get hashCode {
+    return Object.hash(runtimeType,volume);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.setVolume(volume: $volume)';
+    return 'CastSessionEvent.setVolume(volume: $volume)';
 }
 
 
@@ -627,6 +641,74 @@ as double,
 /// @nodoc
 
 
+class SetSubtitleEvent implements CastSessionEvent {
+  const SetSubtitleEvent(this.subtitle);
+  
+
+ final  PureCastSubtitleTrack? subtitle;
+
+/// Create a copy of CastSessionEvent
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$SetSubtitleEventCopyWith<SetSubtitleEvent> get copyWith => _$SetSubtitleEventCopyWithImpl<SetSubtitleEvent>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SetSubtitleEvent&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,subtitle);
+}
+
+@override
+String toString() {
+    return 'CastSessionEvent.setSubtitle(subtitle: $subtitle)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $SetSubtitleEventCopyWith<$Res> implements $CastSessionEventCopyWith<$Res> {
+  factory $SetSubtitleEventCopyWith(SetSubtitleEvent value, $Res Function(SetSubtitleEvent) _then) = _$SetSubtitleEventCopyWithImpl;
+@useResult
+$Res call({
+ PureCastSubtitleTrack? subtitle
+});
+
+
+
+
+}
+/// @nodoc
+class _$SetSubtitleEventCopyWithImpl<$Res>
+    implements $SetSubtitleEventCopyWith<$Res> {
+  _$SetSubtitleEventCopyWithImpl(this._self, this._then);
+
+  final SetSubtitleEvent _self;
+  final $Res Function(SetSubtitleEvent) _then;
+
+/// Create a copy of CastSessionEvent
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? subtitle = freezed,}) {
+  return _then(SetSubtitleEvent(
+freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
+as PureCastSubtitleTrack?,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
 class SessionStateChangedEvent implements CastSessionEvent {
   const SessionStateChangedEvent(this.newState);
   
@@ -643,16 +725,18 @@ $SessionStateChangedEventCopyWith<SessionStateChangedEvent> get copyWith => _$Se
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionStateChangedEvent&&(identical(other.newState, newState) || other.newState == newState));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SessionStateChangedEvent&&(identical(other.newState, newState) || other.newState == newState));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,newState);
+int get hashCode {
+    return Object.hash(runtimeType,newState);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.sessionStateChanged(newState: $newState)';
+    return 'CastSessionEvent.sessionStateChanged(newState: $newState)';
 }
 
 
@@ -709,16 +793,18 @@ $PositionUpdatedEventCopyWith<PositionUpdatedEvent> get copyWith => _$PositionUp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PositionUpdatedEvent&&(identical(other.position, position) || other.position == position));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PositionUpdatedEvent&&(identical(other.position, position) || other.position == position));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,position);
+int get hashCode {
+    return Object.hash(runtimeType,position);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.positionUpdated(position: $position)';
+    return 'CastSessionEvent.positionUpdated(position: $position)';
 }
 
 
@@ -775,16 +861,18 @@ $DurationUpdatedEventCopyWith<DurationUpdatedEvent> get copyWith => _$DurationUp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DurationUpdatedEvent&&(identical(other.duration, duration) || other.duration == duration));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is DurationUpdatedEvent&&(identical(other.duration, duration) || other.duration == duration));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,duration);
+int get hashCode {
+    return Object.hash(runtimeType,duration);
+}
 
 @override
 String toString() {
-  return 'CastSessionEvent.durationUpdated(duration: $duration)';
+    return 'CastSessionEvent.durationUpdated(duration: $duration)';
 }
 
 
@@ -825,7 +913,7 @@ as Duration,
 /// @nodoc
 mixin _$CastSessionState {
 
- PureCastSessionState get sessionState; PureCastDevice? get activeDevice; PureCastMedia? get activeMedia; StateStatus get connectionStatus; String? get connectionError; StateStatus get playbackStatus; String? get playbackError; Duration get position; Duration get duration; double get volume;
+ PureCastSessionState get sessionState; PureCastDevice? get activeDevice; PureCastMedia? get activeMedia; PureCastSubtitleTrack? get activeSubtitle; StateStatus get connectionStatus; String? get connectionError; StateStatus get playbackStatus; String? get playbackError; Duration get position; Duration get duration; double get volume;
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -836,16 +924,21 @@ $CastSessionStateCopyWith<CastSessionState> get copyWith => _$CastSessionStateCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionState&&(identical(other.sessionState, sessionState) || other.sessionState == sessionState)&&(identical(other.activeDevice, activeDevice) || other.activeDevice == activeDevice)&&(identical(other.activeMedia, activeMedia) || other.activeMedia == activeMedia)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.connectionError, connectionError) || other.connectionError == connectionError)&&(identical(other.playbackStatus, playbackStatus) || other.playbackStatus == playbackStatus)&&(identical(other.playbackError, playbackError) || other.playbackError == playbackError)&&(identical(other.position, position) || other.position == position)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.volume, volume) || other.volume == volume));
+  final _this = this as CastSessionState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionState&&(identical(other.sessionState, _this.sessionState) || other.sessionState == _this.sessionState)&&(identical(other.activeDevice, _this.activeDevice) || other.activeDevice == _this.activeDevice)&&(identical(other.activeMedia, _this.activeMedia) || other.activeMedia == _this.activeMedia)&&(identical(other.activeSubtitle, _this.activeSubtitle) || other.activeSubtitle == _this.activeSubtitle)&&(identical(other.connectionStatus, _this.connectionStatus) || other.connectionStatus == _this.connectionStatus)&&(identical(other.connectionError, _this.connectionError) || other.connectionError == _this.connectionError)&&(identical(other.playbackStatus, _this.playbackStatus) || other.playbackStatus == _this.playbackStatus)&&(identical(other.playbackError, _this.playbackError) || other.playbackError == _this.playbackError)&&(identical(other.position, _this.position) || other.position == _this.position)&&(identical(other.duration, _this.duration) || other.duration == _this.duration)&&(identical(other.volume, _this.volume) || other.volume == _this.volume));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sessionState,activeDevice,activeMedia,connectionStatus,connectionError,playbackStatus,playbackError,position,duration,volume);
+int get hashCode {
+  final _this = this as CastSessionState;
+  return Object.hash(runtimeType,_this.sessionState,_this.activeDevice,_this.activeMedia,_this.activeSubtitle,_this.connectionStatus,_this.connectionError,_this.playbackStatus,_this.playbackError,_this.position,_this.duration,_this.volume);
+}
 
 @override
 String toString() {
-  return 'CastSessionState(sessionState: $sessionState, activeDevice: $activeDevice, activeMedia: $activeMedia, connectionStatus: $connectionStatus, connectionError: $connectionError, playbackStatus: $playbackStatus, playbackError: $playbackError, position: $position, duration: $duration, volume: $volume)';
+  final _this = this as CastSessionState;
+  return 'CastSessionState(sessionState: ${_this.sessionState}, activeDevice: ${_this.activeDevice}, activeMedia: ${_this.activeMedia}, activeSubtitle: ${_this.activeSubtitle}, connectionStatus: ${_this.connectionStatus}, connectionError: ${_this.connectionError}, playbackStatus: ${_this.playbackStatus}, playbackError: ${_this.playbackError}, position: ${_this.position}, duration: ${_this.duration}, volume: ${_this.volume})';
 }
 
 
@@ -856,7 +949,7 @@ abstract mixin class $CastSessionStateCopyWith<$Res>  {
   factory $CastSessionStateCopyWith(CastSessionState value, $Res Function(CastSessionState) _then) = _$CastSessionStateCopyWithImpl;
 @useResult
 $Res call({
- PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, Duration duration, double volume
+ PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, Duration duration, double volume
 });
 
 
@@ -873,12 +966,13 @@ class _$CastSessionStateCopyWithImpl<$Res>
 
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? duration = null,Object? volume = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? duration = null,Object? volume = null,}) {
   return _then(CastSessionState(
 sessionState: null == sessionState ? _self.sessionState : sessionState // ignore: cast_nullable_to_non_nullable
 as PureCastSessionState,activeDevice: freezed == activeDevice ? _self.activeDevice : activeDevice // ignore: cast_nullable_to_non_nullable
 as PureCastDevice?,activeMedia: freezed == activeMedia ? _self.activeMedia : activeMedia // ignore: cast_nullable_to_non_nullable
-as PureCastMedia?,connectionStatus: null == connectionStatus ? _self.connectionStatus : connectionStatus // ignore: cast_nullable_to_non_nullable
+as PureCastMedia?,activeSubtitle: freezed == activeSubtitle ? _self.activeSubtitle : activeSubtitle // ignore: cast_nullable_to_non_nullable
+as PureCastSubtitleTrack?,connectionStatus: null == connectionStatus ? _self.connectionStatus : connectionStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,connectionError: freezed == connectionError ? _self.connectionError : connectionError // ignore: cast_nullable_to_non_nullable
 as String?,playbackStatus: null == playbackStatus ? _self.playbackStatus : playbackStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,playbackError: freezed == playbackError ? _self.playbackError : playbackError // ignore: cast_nullable_to_non_nullable
@@ -970,10 +1064,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CastSessionState() when $default != null:
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
   return orElse();
 
 }
@@ -991,10 +1085,10 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.co
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)  $default,) {final _that = this;
 switch (_that) {
 case _CastSessionState():
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1011,10 +1105,10 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.co
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  Duration duration,  double volume)?  $default,) {final _that = this;
 switch (_that) {
 case _CastSessionState() when $default != null:
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.duration,_that.volume);case _:
   return null;
 
 }
@@ -1026,12 +1120,13 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.co
 
 
 class _CastSessionState extends CastSessionState {
-  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.connectionStatus = StateStatus.initial, this.connectionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.duration = Duration.zero, this.volume = 1.0}): super._();
+  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.activeSubtitle = null, this.connectionStatus = StateStatus.initial, this.connectionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.duration = Duration.zero, this.volume = 1.0}): super._();
   
 
 @override@JsonKey() final  PureCastSessionState sessionState;
 @override final  PureCastDevice? activeDevice;
 @override final  PureCastMedia? activeMedia;
+@override@JsonKey() final  PureCastSubtitleTrack? activeSubtitle;
 @override@JsonKey() final  StateStatus connectionStatus;
 @override final  String? connectionError;
 @override@JsonKey() final  StateStatus playbackStatus;
@@ -1050,16 +1145,18 @@ _$CastSessionStateCopyWith<_CastSessionState> get copyWith => __$CastSessionStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastSessionState&&(identical(other.sessionState, sessionState) || other.sessionState == sessionState)&&(identical(other.activeDevice, activeDevice) || other.activeDevice == activeDevice)&&(identical(other.activeMedia, activeMedia) || other.activeMedia == activeMedia)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.connectionError, connectionError) || other.connectionError == connectionError)&&(identical(other.playbackStatus, playbackStatus) || other.playbackStatus == playbackStatus)&&(identical(other.playbackError, playbackError) || other.playbackError == playbackError)&&(identical(other.position, position) || other.position == position)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.volume, volume) || other.volume == volume));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastSessionState&&(identical(other.sessionState, sessionState) || other.sessionState == sessionState)&&(identical(other.activeDevice, activeDevice) || other.activeDevice == activeDevice)&&(identical(other.activeMedia, activeMedia) || other.activeMedia == activeMedia)&&(identical(other.activeSubtitle, activeSubtitle) || other.activeSubtitle == activeSubtitle)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.connectionError, connectionError) || other.connectionError == connectionError)&&(identical(other.playbackStatus, playbackStatus) || other.playbackStatus == playbackStatus)&&(identical(other.playbackError, playbackError) || other.playbackError == playbackError)&&(identical(other.position, position) || other.position == position)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.volume, volume) || other.volume == volume));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,sessionState,activeDevice,activeMedia,connectionStatus,connectionError,playbackStatus,playbackError,position,duration,volume);
+int get hashCode {
+    return Object.hash(runtimeType,sessionState,activeDevice,activeMedia,activeSubtitle,connectionStatus,connectionError,playbackStatus,playbackError,position,duration,volume);
+}
 
 @override
 String toString() {
-  return 'CastSessionState(sessionState: $sessionState, activeDevice: $activeDevice, activeMedia: $activeMedia, connectionStatus: $connectionStatus, connectionError: $connectionError, playbackStatus: $playbackStatus, playbackError: $playbackError, position: $position, duration: $duration, volume: $volume)';
+    return 'CastSessionState(sessionState: $sessionState, activeDevice: $activeDevice, activeMedia: $activeMedia, activeSubtitle: $activeSubtitle, connectionStatus: $connectionStatus, connectionError: $connectionError, playbackStatus: $playbackStatus, playbackError: $playbackError, position: $position, duration: $duration, volume: $volume)';
 }
 
 
@@ -1070,7 +1167,7 @@ abstract mixin class _$CastSessionStateCopyWith<$Res> implements $CastSessionSta
   factory _$CastSessionStateCopyWith(_CastSessionState value, $Res Function(_CastSessionState) _then) = __$CastSessionStateCopyWithImpl;
 @override @useResult
 $Res call({
- PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, Duration duration, double volume
+ PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, Duration duration, double volume
 });
 
 
@@ -1087,12 +1184,13 @@ class __$CastSessionStateCopyWithImpl<$Res>
 
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? duration = null,Object? volume = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? duration = null,Object? volume = null,}) {
   return _then(_CastSessionState(
 sessionState: null == sessionState ? _self.sessionState : sessionState // ignore: cast_nullable_to_non_nullable
 as PureCastSessionState,activeDevice: freezed == activeDevice ? _self.activeDevice : activeDevice // ignore: cast_nullable_to_non_nullable
 as PureCastDevice?,activeMedia: freezed == activeMedia ? _self.activeMedia : activeMedia // ignore: cast_nullable_to_non_nullable
-as PureCastMedia?,connectionStatus: null == connectionStatus ? _self.connectionStatus : connectionStatus // ignore: cast_nullable_to_non_nullable
+as PureCastMedia?,activeSubtitle: freezed == activeSubtitle ? _self.activeSubtitle : activeSubtitle // ignore: cast_nullable_to_non_nullable
+as PureCastSubtitleTrack?,connectionStatus: null == connectionStatus ? _self.connectionStatus : connectionStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,connectionError: freezed == connectionError ? _self.connectionError : connectionError // ignore: cast_nullable_to_non_nullable
 as String?,playbackStatus: null == playbackStatus ? _self.playbackStatus : playbackStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,playbackError: freezed == playbackError ? _self.playbackError : playbackError // ignore: cast_nullable_to_non_nullable

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
+import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
@@ -48,7 +50,15 @@ class RecentlyPlayedBloc extends Bloc<RecentlyPlayedEvent, RecentlyPlayedState> 
 
   Future<void> _fetchHistory(Emitter<RecentlyPlayedState> emit) async {
     try {
-      final historyRecords = await _historyRepository.getRecentHistory(limit: 50);
+      final historyRecords = await _historyRepository
+          .getRecentHistory(limit: 50)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        emit(state.copyWith(
+          status: StateStatus.error,
+          error: 'Recently played timed out',
+        ));
+        return const <PlaybackHistoryTableData>[];
+      });
       final mediaList = historyRecords.map((item) {
         return PureCastMedia(
           uri: item.mediaUri,

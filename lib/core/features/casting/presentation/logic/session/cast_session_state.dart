@@ -8,6 +8,7 @@ abstract class CastSessionState with _$CastSessionState {
     PureCastSessionState sessionState,
     PureCastDevice? activeDevice,
     PureCastMedia? activeMedia,
+    @Default(null) PureCastSubtitleTrack? activeSubtitle,
     @Default(StateStatus.initial) StateStatus connectionStatus,
     String? connectionError,
     @Default(StateStatus.initial) StateStatus playbackStatus,

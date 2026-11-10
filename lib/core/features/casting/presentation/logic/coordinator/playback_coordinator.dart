@@ -53,32 +53,58 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
         sessionState.sessionState != PureCastSessionState.disconnected &&
         sessionState.sessionState != PureCastSessionState.completed;
 
+    // Track the queue index. On the very first Next/Previous click,
+    // _lastHandledQueueIndex is null, so we can't compare. Instead,
+    // we detect that the index has changed from the previously tracked
+    // value and load the media at the new index.
+    final prevIndex = _lastHandledQueueIndex;
+    final indexChanged = prevIndex != null && prevIndex != currentIndex;
+
     // Case 1: First item added, or item added when there is NO active playback
     if (!hasActivePlayback && items.isNotEmpty) {
-      // If a new media item was appended to an existing queue while playback was inactive,
-      // load the newly added media item (or current index if valid).
-      final targetIndex = (items.length > 1 && currentIndex == 0) ? items.length - 1 : currentIndex;
+      int targetIndex = currentIndex;
+
+      // If currentIndex is out of bounds, load the last item.
+      if (currentIndex < 0 || currentIndex >= items.length) {
+        targetIndex = items.length - 1;
+      }
+      // If currentIndex points to the previously playing media (now stopped/
+      // completed) and a new item was added, load the most recent one.
+      else if (sessionState.activeMedia != null &&
+          currentIndex >= 0 &&
+          currentIndex < items.length &&
+          items[currentIndex].uri == sessionState.activeMedia!.uri) {
+        targetIndex = items.length - 1;
+      }
+      // If nothing is playing (activeMedia cleared after disconnect) and there
+      // are multiple items, a new item was likely just added — load it.
+      else if (sessionState.activeMedia == null && items.length > 1) {
+        targetIndex = items.length - 1;
+      }
+
       if (targetIndex >= 0 && targetIndex < items.length) {
-        log("Loading media (no active playback) index $targetIndex", name: "Playback Coordinator");
-        if (targetIndex != currentIndex && _queueBloc != null) {
-          _queueBloc!.add(SetCurrentIndexEvent(targetIndex));
-        }
+        log("Loading media (no active playback) index $targetIndex",
+            name: "Playback Coordinator");
+        _lastHandledQueueIndex = targetIndex;
         _loadMediaAtCurrentIndex(items[targetIndex]);
         return;
       }
     }
 
     // Case 2: Explicit queue index advance (Next/Previous/Manual Index change)
-    if (_lastHandledQueueIndex != null &&
-        _lastHandledQueueIndex != currentIndex) {
+    if (indexChanged && currentIndex >= 0 && currentIndex < items.length) {
+      log("Queue index changed to $currentIndex", name: "Playback Coordinator");
       _lastHandledQueueIndex = currentIndex;
-      if (currentIndex >= 0 && currentIndex < items.length) {
-        log("Queue index changed to $currentIndex", name: "Playback Coordinator");
-        _loadMediaAtCurrentIndex(items[currentIndex]);
-        return;
-      }
+      _loadMediaAtCurrentIndex(items[currentIndex]);
+      return;
     }
-    _lastHandledQueueIndex = currentIndex;
+
+    // Always update the tracked index so subsequent clicks are detected.
+    // On first click (_lastHandledQueueIndex == null), set it so the
+    // second click will be detected as a change.
+    if (prevIndex == null) {
+      _lastHandledQueueIndex = currentIndex;
+    }
   }
 
   void _onSessionStateChanged(CastSessionState sessionState) async {

@@ -2092,7 +2092,19 @@ class $$LastCastedDeviceTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $LastCastedDeviceTableTable,
+                    LastCastedDeviceTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LastCastedDeviceTableTable,
+                    LastCastedDeviceTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -2387,7 +2399,18 @@ class $$PlaybackQueueTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$PlaybackQueueTableTable, PlaybackQueueTableData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $PlaybackQueueTableTable,
+                    PlaybackQueueTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -2708,7 +2731,19 @@ class $$PlaybackHistoryTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $PlaybackHistoryTableTable,
+                    PlaybackHistoryTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $PlaybackHistoryTableTable,
+                    PlaybackHistoryTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -2905,7 +2940,19 @@ class $$UserPreferencesTableTableTableManager
                 autoPlayNext: autoPlayNext,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $UserPreferencesTableTable,
+                    UserPreferencesTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $UserPreferencesTableTable,
+                    UserPreferencesTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),

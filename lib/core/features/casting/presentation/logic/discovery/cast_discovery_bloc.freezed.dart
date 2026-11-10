@@ -21,7 +21,7 @@ mixin _$CastDiscoveryEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryEvent);
 }
 
 
@@ -30,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent()';
+    return 'CastDiscoveryEvent()';
 }
 
 
@@ -229,16 +229,18 @@ $StartDiscoveryEventCopyWith<StartDiscoveryEvent> get copyWith => _$StartDiscove
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is StartDiscoveryEvent&&const DeepCollectionEquality().equals(other._protocols, _protocols));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is StartDiscoveryEvent&&const DeepCollectionEquality().equals(other.protocols, _protocols));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_protocols));
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_protocols));
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.startDiscovery(protocols: $protocols)';
+    return 'CastDiscoveryEvent.startDiscovery(protocols: $protocols)';
 }
 
 
@@ -290,7 +292,7 @@ class StopDiscoveryEvent implements CastDiscoveryEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is StopDiscoveryEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is StopDiscoveryEvent);
 }
 
 
@@ -299,7 +301,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.stopDiscovery()';
+    return 'CastDiscoveryEvent.stopDiscovery()';
 }
 
 
@@ -322,7 +324,7 @@ class RefreshDiscoveryEvent implements CastDiscoveryEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RefreshDiscoveryEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RefreshDiscoveryEvent);
 }
 
 
@@ -331,7 +333,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.refreshDiscovery()';
+    return 'CastDiscoveryEvent.refreshDiscovery()';
 }
 
 
@@ -365,16 +367,18 @@ $DevicesUpdatedEventCopyWith<DevicesUpdatedEvent> get copyWith => _$DevicesUpdat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DevicesUpdatedEvent&&const DeepCollectionEquality().equals(other._devices, _devices));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is DevicesUpdatedEvent&&const DeepCollectionEquality().equals(other.devices, _devices));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices));
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices));
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.devicesUpdated(devices: $devices)';
+    return 'CastDiscoveryEvent.devicesUpdated(devices: $devices)';
 }
 
 
@@ -431,16 +435,18 @@ $DiscoveryErrorEventCopyWith<DiscoveryErrorEvent> get copyWith => _$DiscoveryErr
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DiscoveryErrorEvent&&(identical(other.message, message) || other.message == message));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is DiscoveryErrorEvent&&(identical(other.message, message) || other.message == message));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,message);
+int get hashCode {
+    return Object.hash(runtimeType,message);
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.discoveryError(message: $message)';
+    return 'CastDiscoveryEvent.discoveryError(message: $message)';
 }
 
 
@@ -497,16 +503,18 @@ $AutoReconnectMatchFoundEventCopyWith<AutoReconnectMatchFoundEvent> get copyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutoReconnectMatchFoundEvent&&(identical(other.device, device) || other.device == device));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is AutoReconnectMatchFoundEvent&&(identical(other.device, device) || other.device == device));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,device);
+int get hashCode {
+    return Object.hash(runtimeType,device);
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryEvent.autoReconnectMatchFound(device: $device)';
+    return 'CastDiscoveryEvent.autoReconnectMatchFound(device: $device)';
 }
 
 
@@ -558,16 +566,21 @@ $CastDiscoveryStateCopyWith<CastDiscoveryState> get copyWith => _$CastDiscoveryS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
+  final _this = this as CastDiscoveryState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _this.devices)&&(identical(other.discoveryStatus, _this.discoveryStatus) || other.discoveryStatus == _this.discoveryStatus)&&(identical(other.discoveryError, _this.discoveryError) || other.discoveryError == _this.discoveryError)&&(identical(other.autoReconnectDevice, _this.autoReconnectDevice) || other.autoReconnectDevice == _this.autoReconnectDevice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(devices),discoveryStatus,discoveryError,autoReconnectDevice);
+int get hashCode {
+  final _this = this as CastDiscoveryState;
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.devices),_this.discoveryStatus,_this.discoveryError,_this.autoReconnectDevice);
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
+  final _this = this as CastDiscoveryState;
+  return 'CastDiscoveryState(devices: ${_this.devices}, discoveryStatus: ${_this.discoveryStatus}, discoveryError: ${_this.discoveryError}, autoReconnectDevice: ${_this.autoReconnectDevice})';
 }
 
 
@@ -766,16 +779,18 @@ _$CastDiscoveryStateCopyWith<_CastDiscoveryState> get copyWith => __$CastDiscove
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other._devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError,autoReconnectDevice);
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError,autoReconnectDevice);
+}
 
 @override
 String toString() {
-  return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
+    return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
 }
 
 

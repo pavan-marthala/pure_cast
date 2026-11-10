@@ -21,7 +21,7 @@ mixin _$QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueEvent);
 }
 
 
@@ -30,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent()';
+    return 'QueueEvent()';
 }
 
 
@@ -234,7 +234,7 @@ class LoadQueueEvent implements QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadQueueEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadQueueEvent);
 }
 
 
@@ -243,7 +243,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent.loadQueue()';
+    return 'QueueEvent.loadQueue()';
 }
 
 
@@ -271,16 +271,18 @@ $AddToQueueEventCopyWith<AddToQueueEvent> get copyWith => _$AddToQueueEventCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AddToQueueEvent&&(identical(other.media, media) || other.media == media));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is AddToQueueEvent&&(identical(other.media, media) || other.media == media));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,media);
+int get hashCode {
+    return Object.hash(runtimeType,media);
+}
 
 @override
 String toString() {
-  return 'QueueEvent.addToQueue(media: $media)';
+    return 'QueueEvent.addToQueue(media: $media)';
 }
 
 
@@ -337,16 +339,18 @@ $RemoveFromQueueEventCopyWith<RemoveFromQueueEvent> get copyWith => _$RemoveFrom
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RemoveFromQueueEvent&&(identical(other.mediaUri, mediaUri) || other.mediaUri == mediaUri));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RemoveFromQueueEvent&&(identical(other.mediaUri, mediaUri) || other.mediaUri == mediaUri));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,mediaUri);
+int get hashCode {
+    return Object.hash(runtimeType,mediaUri);
+}
 
 @override
 String toString() {
-  return 'QueueEvent.removeFromQueue(mediaUri: $mediaUri)';
+    return 'QueueEvent.removeFromQueue(mediaUri: $mediaUri)';
 }
 
 
@@ -404,16 +408,18 @@ $ReorderQueueEventCopyWith<ReorderQueueEvent> get copyWith => _$ReorderQueueEven
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ReorderQueueEvent&&(identical(other.oldIndex, oldIndex) || other.oldIndex == oldIndex)&&(identical(other.newIndex, newIndex) || other.newIndex == newIndex));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ReorderQueueEvent&&(identical(other.oldIndex, oldIndex) || other.oldIndex == oldIndex)&&(identical(other.newIndex, newIndex) || other.newIndex == newIndex));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,oldIndex,newIndex);
+int get hashCode {
+    return Object.hash(runtimeType,oldIndex,newIndex);
+}
 
 @override
 String toString() {
-  return 'QueueEvent.reorderQueue(oldIndex: $oldIndex, newIndex: $newIndex)';
+    return 'QueueEvent.reorderQueue(oldIndex: $oldIndex, newIndex: $newIndex)';
 }
 
 
@@ -466,7 +472,7 @@ class ClearQueueEvent implements QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClearQueueEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ClearQueueEvent);
 }
 
 
@@ -475,7 +481,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent.clearQueue()';
+    return 'QueueEvent.clearQueue()';
 }
 
 
@@ -498,7 +504,7 @@ class NextQueueItemEvent implements QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is NextQueueItemEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is NextQueueItemEvent);
 }
 
 
@@ -507,7 +513,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent.nextQueueItem()';
+    return 'QueueEvent.nextQueueItem()';
 }
 
 
@@ -530,7 +536,7 @@ class PreviousQueueItemEvent implements QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PreviousQueueItemEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PreviousQueueItemEvent);
 }
 
 
@@ -539,7 +545,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent.previousQueueItem()';
+    return 'QueueEvent.previousQueueItem()';
 }
 
 
@@ -567,16 +573,18 @@ $SetCurrentIndexEventCopyWith<SetCurrentIndexEvent> get copyWith => _$SetCurrent
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is SetCurrentIndexEvent&&(identical(other.index, index) || other.index == index));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is SetCurrentIndexEvent&&(identical(other.index, index) || other.index == index));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,index);
+int get hashCode {
+    return Object.hash(runtimeType,index);
+}
 
 @override
 String toString() {
-  return 'QueueEvent.setCurrentIndex(index: $index)';
+    return 'QueueEvent.setCurrentIndex(index: $index)';
 }
 
 
@@ -628,7 +636,7 @@ class PicFilesEvent implements QueueEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PicFilesEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PicFilesEvent);
 }
 
 
@@ -637,7 +645,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'QueueEvent.pickFiles()';
+    return 'QueueEvent.pickFiles()';
 }
 
 
@@ -660,16 +668,21 @@ $QueueStateCopyWith<QueueState> get copyWith => _$QueueStateCopyWithImpl<QueueSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
+  final _this = this as QueueState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.currentIndex, _this.currentIndex) || other.currentIndex == _this.currentIndex)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(items),currentIndex,status,error);
+int get hashCode {
+  final _this = this as QueueState;
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.items),_this.currentIndex,_this.status,_this.error);
+}
 
 @override
 String toString() {
-  return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error)';
+  final _this = this as QueueState;
+  return 'QueueState(items: ${_this.items}, currentIndex: ${_this.currentIndex}, status: ${_this.status}, error: ${_this.error})';
 }
 
 
@@ -868,16 +881,18 @@ _$QueueStateCopyWith<_QueueState> get copyWith => __$QueueStateCopyWithImpl<_Que
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other._items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error);
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error);
+}
 
 @override
 String toString() {
-  return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error)';
+    return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error)';
 }
 
 

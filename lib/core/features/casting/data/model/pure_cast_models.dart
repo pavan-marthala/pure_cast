@@ -127,12 +127,14 @@ class PureCastSubtitleTrack {
   final String label;
   final String language;
   final String url;
+  final String format;
 
   const PureCastSubtitleTrack({
     required this.id,
     required this.label,
     required this.language,
     required this.url,
+    this.format = 'vtt',
   });
 
   @override
@@ -142,10 +144,11 @@ class PureCastSubtitleTrack {
           id == other.id &&
           label == other.label &&
           language == other.language &&
-          url == other.url;
+          url == other.url &&
+          format == other.format;
 
   @override
-  int get hashCode => Object.hash(id, label, language, url);
+  int get hashCode => Object.hash(id, label, language, url, format);
 }
 
 /// Media item domain model.
@@ -181,9 +184,27 @@ class PureCastMedia {
           duration == other.duration &&
           isLocalFile == other.isLocalFile;
 
-  @override
-  int get hashCode =>
-      Object.hash(uri, type, title, thumbnailUrl, duration, isLocalFile);
+  PureCastMedia copyWith({
+    String? uri,
+    PureCastMediaType? type,
+    String? title,
+    String? thumbnailUrl,
+    Uint8List? thumbnailBytes,
+    Duration? duration,
+    bool? isLocalFile,
+    List<PureCastSubtitleTrack>? subtitles,
+  }) {
+    return PureCastMedia(
+      uri: uri ?? this.uri,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      thumbnailBytes: thumbnailBytes ?? this.thumbnailBytes,
+      duration: duration ?? this.duration,
+      isLocalFile: isLocalFile ?? this.isLocalFile,
+      subtitles: subtitles ?? this.subtitles,
+    );
+  }
 
   @override
   String toString() {

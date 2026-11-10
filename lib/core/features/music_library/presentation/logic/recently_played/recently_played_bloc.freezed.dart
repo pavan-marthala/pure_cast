@@ -21,7 +21,7 @@ mixin _$RecentlyPlayedEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RecentlyPlayedEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RecentlyPlayedEvent);
 }
 
 
@@ -30,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'RecentlyPlayedEvent()';
+    return 'RecentlyPlayedEvent()';
 }
 
 
@@ -198,7 +198,7 @@ class LoadRecentlyPlayedEvent implements RecentlyPlayedEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadRecentlyPlayedEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadRecentlyPlayedEvent);
 }
 
 
@@ -207,7 +207,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'RecentlyPlayedEvent.load()';
+    return 'RecentlyPlayedEvent.load()';
 }
 
 
@@ -230,7 +230,7 @@ class RefreshRecentlyPlayedEvent implements RecentlyPlayedEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RefreshRecentlyPlayedEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RefreshRecentlyPlayedEvent);
 }
 
 
@@ -239,7 +239,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'RecentlyPlayedEvent.refresh()';
+    return 'RecentlyPlayedEvent.refresh()';
 }
 
 
@@ -267,16 +267,18 @@ $RemoveRecentlyPlayedEventCopyWith<RemoveRecentlyPlayedEvent> get copyWith => _$
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RemoveRecentlyPlayedEvent&&(identical(other.mediaUri, mediaUri) || other.mediaUri == mediaUri));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RemoveRecentlyPlayedEvent&&(identical(other.mediaUri, mediaUri) || other.mediaUri == mediaUri));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,mediaUri);
+int get hashCode {
+    return Object.hash(runtimeType,mediaUri);
+}
 
 @override
 String toString() {
-  return 'RecentlyPlayedEvent.remove(mediaUri: $mediaUri)';
+    return 'RecentlyPlayedEvent.remove(mediaUri: $mediaUri)';
 }
 
 
@@ -328,16 +330,21 @@ $RecentlyPlayedStateCopyWith<RecentlyPlayedState> get copyWith => _$RecentlyPlay
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RecentlyPlayedState&&const DeepCollectionEquality().equals(other.media, media)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
+  final _this = this as RecentlyPlayedState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RecentlyPlayedState&&const DeepCollectionEquality().equals(other.media, _this.media)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(media),status,error);
+int get hashCode {
+  final _this = this as RecentlyPlayedState;
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.media),_this.status,_this.error);
+}
 
 @override
 String toString() {
-  return 'RecentlyPlayedState(media: $media, status: $status, error: $error)';
+  final _this = this as RecentlyPlayedState;
+  return 'RecentlyPlayedState(media: ${_this.media}, status: ${_this.status}, error: ${_this.error})';
 }
 
 
@@ -534,16 +541,18 @@ _$RecentlyPlayedStateCopyWith<_RecentlyPlayedState> get copyWith => __$RecentlyP
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RecentlyPlayedState&&const DeepCollectionEquality().equals(other._media, _media)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _RecentlyPlayedState&&const DeepCollectionEquality().equals(other.media, _media)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_media),status,error);
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_media),status,error);
+}
 
 @override
 String toString() {
-  return 'RecentlyPlayedState(media: $media, status: $status, error: $error)';
+    return 'RecentlyPlayedState(media: $media, status: $status, error: $error)';
 }
 
 

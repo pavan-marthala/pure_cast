@@ -23,6 +23,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   StreamSubscription<PureCastSessionState>? _stateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
+  bool _isLoadingMedia = false;
 
   CastSessionBloc(this._castService, this._historyRepo, this._db)
     : super(const CastSessionState()) {
@@ -34,10 +35,10 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     on<StopMediaEvent>(_onStopMedia);
     on<SeekMediaEvent>(_onSeekMedia);
     on<SetVolumeEvent>(_onSetVolume);
+    on<SetSubtitleEvent>(_onSetSubtitle);
     on<SessionStateChangedEvent>(_onSessionStateChanged);
     on<PositionUpdatedEvent>(_onPositionUpdated);
     on<DurationUpdatedEvent>(_onDurationUpdated);
-
     _listenToStreams();
   }
 
@@ -95,6 +96,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   ) async {
     try {
       await _castService.disconnect();
+      _isLoadingMedia = false;
       emit(const CastSessionState());
     } catch (e) {
       emit(state.copyWith(connectionError: e.toString()));
@@ -105,6 +107,17 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     LoadMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    // Skip if we're already loading this exact media (prevents duplicate
+    // loadMedia() calls from coordinator + connect handler racing together).
+    if (_isLoadingMedia && state.activeMedia?.uri == event.media.uri) {
+      log(
+        "Already loading ${event.media.title} — skipping duplicate",
+        name: "Cast Session Bloc",
+      );
+      return;
+    }
+    _isLoadingMedia = true;
+
     emit(
       state.copyWith(
         playbackStatus: StateStatus.loading,
@@ -116,14 +129,34 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     if (state.activeDevice == null) {
       log("No active device connected, retaining media as pending");
       emit(state.copyWith(playbackStatus: StateStatus.initial));
+      _isLoadingMedia = false;
       return;
     }
 
     try {
+      log(
+        "Loading media on device: ${state.activeDevice?.name}",
+        name: "Cast Session Bloc",
+      );
       await _castService.loadMedia(event.media);
       emit(state.copyWith(playbackStatus: StateStatus.loaded));
-      if (state.activeDevice != null) {
+
+      // dart_cast LOAD already sets autoplay: true — the receiver should
+      // start playing automatically. Only send PLAY if the session isn't
+      // already playing (avoids redundant commands that can fail on a
+      // session still settling after LOAD).
+      if (state.activeDevice != null &&
+          _castService.currentState != PureCastSessionState.playing) {
+        log(
+          "Media loaded successfully, sending PLAY",
+          name: "Cast Session Bloc",
+        );
         add(PlayMediaEvent());
+      } else {
+        log(
+          "Media loaded and receiver is already playing — skipping PLAY",
+          name: "Cast Session Bloc",
+        );
       }
     } catch (e) {
       log(
@@ -144,6 +177,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           playbackError: e.toString(),
         ),
       );
+    } finally {
+      _isLoadingMedia = false;
     }
   }
 
@@ -204,11 +239,32 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     }
   }
 
+  Future<void> _onSetSubtitle(
+    SetSubtitleEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    try {
+      await _castService.setSubtitle(event.subtitle);
+      emit(state.copyWith(activeSubtitle: event.subtitle));
+    } catch (e) {
+      emit(state.copyWith(playbackError: e.toString()));
+    }
+  }
+
   void _onSessionStateChanged(
     SessionStateChangedEvent event,
     Emitter<CastSessionState> emit,
   ) {
     if (event.newState == PureCastSessionState.disconnected) {
+      // Don't clear activeDevice if we're in the middle of connecting.
+      // dart_cast auto-disconnects the previous session during connect()
+      // handshake, which emits disconnected on the stream. Clearing activeDevice
+      // there would break the connect flow on Android where the receiver
+      // shows connected but the BLoC state says disconnected.
+      if (state.connectionStatus == StateStatus.loading) {
+        emit(state.copyWith(sessionState: event.newState));
+        return;
+      }
       emit(const CastSessionState());
       return;
     }
@@ -247,6 +303,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
   @override
   Future<void> close() {
+    _isLoadingMedia = false;
     _stateSubscription?.cancel();
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();

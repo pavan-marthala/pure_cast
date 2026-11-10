@@ -21,7 +21,7 @@ mixin _$MediaEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaEvent);
 }
 
 
@@ -30,7 +30,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'MediaEvent()';
+    return 'MediaEvent()';
 }
 
 
@@ -198,7 +198,7 @@ class RequestPermissionMediaEvent implements MediaEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RequestPermissionMediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RequestPermissionMediaEvent);
 }
 
 
@@ -207,7 +207,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'MediaEvent.requestPermission()';
+    return 'MediaEvent.requestPermission()';
 }
 
 
@@ -235,16 +235,18 @@ $LoadMediaItemsEventCopyWith<LoadMediaItemsEvent> get copyWith => _$LoadMediaIte
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadMediaItemsEvent&&(identical(other.filterType, filterType) || other.filterType == filterType));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadMediaItemsEvent&&(identical(other.filterType, filterType) || other.filterType == filterType));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,filterType);
+int get hashCode {
+    return Object.hash(runtimeType,filterType);
+}
 
 @override
 String toString() {
-  return 'MediaEvent.loadMediaItems(filterType: $filterType)';
+    return 'MediaEvent.loadMediaItems(filterType: $filterType)';
 }
 
 
@@ -296,7 +298,7 @@ class LoadNextPageMediaEvent implements MediaEvent {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadNextPageMediaEvent);
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is LoadNextPageMediaEvent);
 }
 
 
@@ -305,7 +307,7 @@ int get hashCode => runtimeType.hashCode;
 
 @override
 String toString() {
-  return 'MediaEvent.loadNextPage()';
+    return 'MediaEvent.loadNextPage()';
 }
 
 
@@ -328,16 +330,21 @@ $MediaStateCopyWith<MediaState> get copyWith => _$MediaStateCopyWithImpl<MediaSt
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaState&&const DeepCollectionEquality().equals(other.mediaItems, mediaItems)&&(identical(other.status, status) || other.status == status)&&(identical(other.hasPermission, hasPermission) || other.hasPermission == hasPermission)&&(identical(other.selectedFilter, selectedFilter) || other.selectedFilter == selectedFilter)&&(identical(other.page, page) || other.page == page)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.error, error) || other.error == error));
+  final _this = this as MediaState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _this.mediaItems)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.hasPermission, _this.hasPermission) || other.hasPermission == _this.hasPermission)&&(identical(other.selectedFilter, _this.selectedFilter) || other.selectedFilter == _this.selectedFilter)&&(identical(other.page, _this.page) || other.page == _this.page)&&(identical(other.hasMore, _this.hasMore) || other.hasMore == _this.hasMore)&&(identical(other.error, _this.error) || other.error == _this.error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(mediaItems),status,hasPermission,selectedFilter,page,hasMore,error);
+int get hashCode {
+  final _this = this as MediaState;
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.mediaItems),_this.status,_this.hasPermission,_this.selectedFilter,_this.page,_this.hasMore,_this.error);
+}
 
 @override
 String toString() {
-  return 'MediaState(mediaItems: $mediaItems, status: $status, hasPermission: $hasPermission, selectedFilter: $selectedFilter, page: $page, hasMore: $hasMore, error: $error)';
+  final _this = this as MediaState;
+  return 'MediaState(mediaItems: ${_this.mediaItems}, status: ${_this.status}, hasPermission: ${_this.hasPermission}, selectedFilter: ${_this.selectedFilter}, page: ${_this.page}, hasMore: ${_this.hasMore}, error: ${_this.error})';
 }
 
 
@@ -542,16 +549,18 @@ _$MediaStateCopyWith<_MediaState> get copyWith => __$MediaStateCopyWithImpl<_Med
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _MediaState&&const DeepCollectionEquality().equals(other._mediaItems, _mediaItems)&&(identical(other.status, status) || other.status == status)&&(identical(other.hasPermission, hasPermission) || other.hasPermission == hasPermission)&&(identical(other.selectedFilter, selectedFilter) || other.selectedFilter == selectedFilter)&&(identical(other.page, page) || other.page == page)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _mediaItems)&&(identical(other.status, status) || other.status == status)&&(identical(other.hasPermission, hasPermission) || other.hasPermission == hasPermission)&&(identical(other.selectedFilter, selectedFilter) || other.selectedFilter == selectedFilter)&&(identical(other.page, page) || other.page == page)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_mediaItems),status,hasPermission,selectedFilter,page,hasMore,error);
+int get hashCode {
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_mediaItems),status,hasPermission,selectedFilter,page,hasMore,error);
+}
 
 @override
 String toString() {
-  return 'MediaState(mediaItems: $mediaItems, status: $status, hasPermission: $hasPermission, selectedFilter: $selectedFilter, page: $page, hasMore: $hasMore, error: $error)';
+    return 'MediaState(mediaItems: $mediaItems, status: $status, hasPermission: $hasPermission, selectedFilter: $selectedFilter, page: $page, hasMore: $hasMore, error: $error)';
 }
 
 

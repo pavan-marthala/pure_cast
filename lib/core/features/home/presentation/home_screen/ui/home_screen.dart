@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/music_library_screen.dart';
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/recently_played_section.dart';
@@ -36,6 +37,12 @@ class HomeScreen extends StatelessWidget {
               DeviceManagerScreen.show(context);
             },
             icon: Icon(Icons.tv, color: colors.textSecondary),
+          ),
+          IconButton(
+            onPressed: () {
+              QueueManagerScreen.show(context);
+            },
+            icon: Icon(Icons.queue_music),
           ),
           IconButton(
             onPressed: () {},

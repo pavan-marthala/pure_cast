@@ -91,6 +91,9 @@ class FakeCastService implements ICastService {
   Future<void> setVolume(double volume) async {}
 
   @override
+  Future<void> setSubtitle(PureCastSubtitleTrack? subtitle) async {}
+
+  @override
   Stream<PureCastSessionState> get sessionStateStream => sessionStateController.stream;
 
   @override

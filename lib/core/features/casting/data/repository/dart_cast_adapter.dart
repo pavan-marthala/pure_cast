@@ -14,6 +14,9 @@ class DartCastAdapter implements ICastService {
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration>? _durationSub;
 
+  // Subtitle track ID mapping keyed by subtitle URL, per active session.
+  final Map<String, int> _subtitleTrackIds = <String, int>{};
+
   final StreamController<PureCastSessionState> _sessionStateController =
       StreamController<PureCastSessionState>.broadcast();
   final StreamController<Duration> _positionController =
@@ -100,6 +103,20 @@ class DartCastAdapter implements ICastService {
     try {
       final dartMedia = _mapMediaToDartCast(media);
       await session.loadMedia(dartMedia);
+
+      // dart_cast may return from loadMedia() once the receiver acknowledges
+      // the LOAD, but the session might still be idle/disconnected if the
+      // receiver rejected the media (e.g., unsupported format, unreachable
+      // proxy URL). Guard against calling play() on a dead session.
+      final state = session.state;
+      if (state == dart_cast.SessionState.idle ||
+          state == dart_cast.SessionState.disconnected) {
+        throw PureCastException(
+          'Receiver rejected media: ${media.title} (session state: $state)',
+        );
+      }
+    } on PureCastException {
+      rethrow;
     } catch (e) {
       throw PureCastException('Failed to load media: ${media.title}', e);
     }
@@ -110,6 +127,8 @@ class DartCastAdapter implements ICastService {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
     try {
+      // If the receiver is already playing (e.g., autoplay from LOAD), skip.
+      if (session.state == dart_cast.SessionState.playing) return;
       await session.play();
     } catch (e) {
       throw PureCastException('Failed to send play command', e);
@@ -121,6 +140,11 @@ class DartCastAdapter implements ICastService {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
     try {
+      if (session.state == dart_cast.SessionState.paused ||
+          session.state == dart_cast.SessionState.idle ||
+          session.state == dart_cast.SessionState.disconnected) {
+        return;
+      }
       await session.pause();
     } catch (e) {
       throw PureCastException('Failed to send pause command', e);
@@ -132,6 +156,10 @@ class DartCastAdapter implements ICastService {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
     try {
+      if (session.state == dart_cast.SessionState.idle ||
+          session.state == dart_cast.SessionState.disconnected) {
+        return;
+      }
       await session.stop();
     } catch (e) {
       throw PureCastException('Failed to send stop command', e);
@@ -143,6 +171,10 @@ class DartCastAdapter implements ICastService {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
     try {
+      if (session.state == dart_cast.SessionState.idle ||
+          session.state == dart_cast.SessionState.disconnected) {
+        throw const PureCastException('No active media session to seek');
+      }
       await session.seek(position);
     } catch (e) {
       throw PureCastException('Failed to seek', e);
@@ -158,6 +190,20 @@ class DartCastAdapter implements ICastService {
       await session.setVolume(clamped);
     } catch (e) {
       throw PureCastException('Failed to set volume', e);
+    }
+  }
+
+  @override
+  Future<void> setSubtitle(PureCastSubtitleTrack? subtitle) async {
+    final session = _castService.activeSession;
+    if (session == null) throw const PureCastException('No active session');
+    try {
+      final dartSubtitle = subtitle != null
+          ? _mapSubtitleToDartCast(subtitle)
+          : null;
+      await session.setSubtitle(dartSubtitle);
+    } catch (e) {
+      throw PureCastException('Failed to set subtitle', e);
     }
   }
 
@@ -183,6 +229,7 @@ class DartCastAdapter implements ICastService {
     _sessionStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _subtitleTrackIds.clear();
     _sessionStateController.close();
     _positionController.close();
     _durationController.close();
@@ -302,7 +349,7 @@ class DartCastAdapter implements ICastService {
             url: s.url,
             label: s.label,
             language: s.language,
-            format: 'vtt',
+            format: s.format,
           ),
         )
         .toList();
@@ -341,5 +388,14 @@ class DartCastAdapter implements ICastService {
       case PureCastMediaType.audio:
         return dart_cast.CastMediaType.mp4;
     }
+  }
+
+  static dart_cast.CastSubtitle _mapSubtitleToDartCast(PureCastSubtitleTrack s) {
+    return dart_cast.CastSubtitle(
+      url: s.url,
+      label: s.label,
+      language: s.language,
+      format: s.format,
+    );
   }
 }

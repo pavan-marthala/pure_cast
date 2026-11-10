@@ -20,6 +20,8 @@ abstract class LocalMediaDataSource {
 
 @LazySingleton(as: LocalMediaDataSource)
 class PhotoManagerMediaSource implements LocalMediaDataSource {
+  PhotoManagerMediaSource();
+
   @override
   Future<bool> requestPermission() async {
     final PermissionState state = await PhotoManager.requestPermissionExtend();
@@ -52,38 +54,43 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
     final List<PureCastMedia> mediaItems = [];
 
     for (final asset in assets) {
-      final file = await asset.file;
-      if (file == null) continue;
-
-      final PureCastMediaType mediaType;
-      if (asset.type == AssetType.video) {
-        mediaType = PureCastMediaType.video;
-      } else if (asset.type == AssetType.audio) {
-        mediaType = PureCastMediaType.audio;
-      } else {
-        mediaType = PureCastMediaType.video;
-      }
-
-      Uint8List? thumbBytes;
       try {
-        thumbBytes = await asset.thumbnailData;
-      } catch (_) {
-        thumbBytes = null;
-      }
+        final file = await asset.file;
+        if (file == null) continue;
 
-      mediaItems.add(
-        PureCastMedia(
-          uri: file.path,
-          type: mediaType,
-          title: asset.title ?? file.path.split('/').last,
-          thumbnailUrl: null,
-          thumbnailBytes: thumbBytes,
-          duration: asset.duration > 0
-              ? Duration(seconds: asset.duration)
-              : null,
-          isLocalFile: true,
-        ),
-      );
+        final PureCastMediaType mediaType;
+        if (asset.type == AssetType.video) {
+          mediaType = PureCastMediaType.video;
+        } else if (asset.type == AssetType.audio) {
+          mediaType = PureCastMediaType.audio;
+        } else {
+          mediaType = PureCastMediaType.video;
+        }
+
+        Uint8List? thumbBytes;
+        try {
+          thumbBytes = await asset.thumbnailData;
+        } catch (_) {
+          thumbBytes = null;
+        }
+
+        mediaItems.add(
+          PureCastMedia(
+            uri: file.path,
+            type: mediaType,
+            title: asset.title ?? file.path.split('/').last,
+            thumbnailUrl: null,
+            thumbnailBytes: thumbBytes,
+            duration: asset.duration > 0
+                ? Duration(seconds: asset.duration)
+                : null,
+            isLocalFile: true,
+            subtitles: const [],
+          ),
+        );
+      } catch (_) {
+        continue;
+      }
     }
 
     return mediaItems;
@@ -121,7 +128,6 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
         } else if (['mp3', 'aac', 'wav', 'flac', 'm4a', 'ogg'].contains(ext)) {
           mediaType = PureCastMediaType.audio;
         } else {
-          // Unsupported / unknown file type — skip
           continue;
         }
 
@@ -156,6 +162,7 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
             thumbnailBytes: thumbBytes,
             duration: duration,
             isLocalFile: true,
+            subtitles: const [],
           ),
         );
       }

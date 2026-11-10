@@ -32,6 +32,9 @@ abstract class ICastService {
   /// Sets volume level (0.0 to 1.0).
   Future<void> setVolume(double volume);
 
+  /// Sets the active subtitle track (null to disable subtitles).
+  Future<void> setSubtitle(PureCastSubtitleTrack? subtitle);
+
   /// Stream of session state changes.
   Stream<PureCastSessionState> get sessionStateStream;
 

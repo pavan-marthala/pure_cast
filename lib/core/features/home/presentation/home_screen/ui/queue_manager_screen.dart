@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
 
@@ -29,103 +31,165 @@ class _QueueManagerScreenState extends State<QueueManagerScreen> {
     final colors = context.appColors;
     final typo = context.appTypography;
     return BlocBuilder<QueueBloc, QueueState>(
-      builder: (context, state) {
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets,
-          child: SafeArea(
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: .start,
-                  children: [
-                    Text(
-                      "Queue",
-                      style: typo.titleMedium.copyWith(fontSize: 18),
+      builder: (context, queueState) {
+        return BlocBuilder<CastSessionBloc, CastSessionState>(
+          builder: (context, sessionState) {
+            return Padding(
+              padding: MediaQuery.of(context).viewInsets,
+              child: SafeArea(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    Text("${state.items.length} items"),
-                    SizedBox(height: 20),
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        itemBuilder: (context, index) {
-                          final queue = state.items[index];
-                          final isPlaying = state.currentIndex == index;
-                          return GestureDetector(
-                            onTap: () {},
-                            child: Row(
-                              spacing: 12,
-                              children: [
-                                if (queue.thumbnailBytes == null)
-                                  Container(
-                                    padding: .all(8),
-                                    decoration: BoxDecoration(
-                                      color: colors.surfaceDark,
-                                      borderRadius: .circular(8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: .start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: .start,
+                                children: [
+                                  Text(
+                                    "Queue",
+                                    style: typo.titleMedium.copyWith(
+                                      fontSize: 18,
                                     ),
-                                    child: Icon(
-                                      queue.type == .video
-                                          ? Icons.videocam_outlined
-                                          : Icons.audiotrack,
-                                      size: 20,
-                                      color: colors.textSecondary,
+                                  ),
+
+                                  Text("${queueState.items.length} items"),
+                                ],
+                              ),
+                            ),
+
+                            IconButton(
+                              onPressed: () {
+                                context.read<QueueBloc>().add(
+                                  ClearQueueEvent(),
+                                );
+                              },
+                              icon: Icon(
+                                Icons.playlist_remove,
+                                color: colors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 20),
+                        Flexible(
+                          child: ListView.separated(
+                            // shrinkWrap: true,
+                            // physics: NeverScrollableScrollPhysics(),
+                            itemBuilder: (context, index) {
+                              final queue = queueState.items[index];
+                              final isPlaying =
+                                  queueState.currentIndex == index &&
+                                  sessionState.activeMedia?.uri == queue.uri &&
+                                  sessionState.sessionState !=
+                                      PureCastSessionState.disconnected &&
+                                  sessionState.sessionState !=
+                                      PureCastSessionState.completed;
+                              return GestureDetector(
+                                onTap: () {
+                                  context.read<QueueBloc>().add(
+                                    SetCurrentIndexEvent(index),
+                                  );
+                                  context.read<CastSessionBloc>().add(
+                                    LoadMediaEvent(queue),
+                                  );
+                                },
+                                child: Row(
+                                  spacing: 12,
+                                  children: [
+                                    if (queue.thumbnailBytes == null)
+                                      Container(
+                                        padding: .all(8),
+                                        decoration: BoxDecoration(
+                                          color: colors.surfaceDark,
+                                          borderRadius: .circular(8),
+                                        ),
+                                        child: Icon(
+                                          queue.type == .video
+                                              ? Icons.videocam_outlined
+                                              : Icons.audiotrack,
+                                          size: 20,
+                                          color: colors.textSecondary,
+                                        ),
+                                      )
+                                    else
+                                      Image.memory(
+                                        queue.thumbnailBytes!,
+                                        width: 68,
+                                        height: 68,
+                                        alignment: Alignment.center,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: .start,
+                                        children: [
+                                          Text(
+                                            queue.title,
+                                            style: typo.titleSmall.copyWith(
+                                              color: isPlaying
+                                                  ? colors.primary
+                                                  : null,
+                                            ),
+                                          ),
+                                          Text(
+                                            formatDuration(
+                                              queue.duration ?? Duration(),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  )
-                                else
-                                  Image.memory(queue.thumbnailBytes!),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: .start,
-                                    children: [
+                                    if (isPlaying) ...[
                                       Text(
-                                        queue.title,
-                                        style: typo.titleSmall.copyWith(
-                                          color: isPlaying
-                                              ? colors.primary
-                                              : null,
+                                        "Now",
+                                        style: typo.labelSmall.copyWith(
+                                          color: colors.primary,
                                         ),
                                       ),
-                                      Text(
-                                        formatDuration(
-                                          queue.duration ?? Duration(),
+                                    ] else ...[
+                                      IconButton(
+                                        onPressed: () {
+                                          context.read<QueueBloc>().add(
+                                            RemoveFromQueueEvent(queue.uri),
+                                          );
+                                        },
+                                        icon: Icon(
+                                          Icons.delete_outline,
+                                          color: colors.textSecondary,
                                         ),
                                       ),
                                     ],
-                                  ),
+                                  ],
                                 ),
-                                if (isPlaying) ...[
-                                  Text(
-                                    "Now",
-                                    style: typo.labelSmall.copyWith(
-                                      color: colors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              );
+                            },
+                            separatorBuilder: (context, index) => Divider(
+                              height: 16,
+                              color: colors.borderLight,
+                              thickness: 1.5,
                             ),
-                          );
-                        },
-                        separatorBuilder: (context, index) => Divider(
-                          height: 16,
-                          color: colors.borderLight,
-                          thickness: 1.5,
+                            itemCount: queueState.items.length,
+                          ),
                         ),
-                        itemCount: state.items.length,
-                      ),
+                        SizedBox(height: 20),
+                      ],
                     ),
-                    SizedBox(height: 20),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

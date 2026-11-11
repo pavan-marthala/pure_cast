@@ -59,7 +59,8 @@ dependencies:
   intl: ^0.20.3
   permission_handler: ^13.0.2
   dio: ^5.11.1
-  dart_cast: ^0.7.4
+  dart_cast:
+    path: packages/dart_cast
   ffmpeg_kit_flutter_new_min: ^3.6.8
   flutter_background_service: ^5.1.0
   drift: ^2.35.3

@@ -1,0 +1,82 @@
+/// FFmpeg command builders for prepared casting.
+class CastFfmpegCommands {
+  static List<String> remuxAudio({
+    required String input,
+    required String outputDir,
+    required int audioStreamIndex,
+  }) =>
+      [
+        '-nostdin',
+        '-i', input,
+        '-map', '0:v:0',
+        '-map', '0:a:$audioStreamIndex',
+        '-c:v', 'copy',
+        '-c:a', 'aac',
+        '-ac', '2',
+        '-b:a', '192k',
+        '-f', 'hls',
+        '-hls_time', '6',
+        '-hls_playlist_type', 'event',
+        '-hls_flags', 'independent_segments',
+        '-hls_segment_filename', '$outputDir/seg_%05d.ts',
+        '$outputDir/index.m3u8',
+      ];
+
+  static List<String> remuxContainer({
+    required String input,
+    required String outputDir,
+    required int audioStreamIndex,
+  }) =>
+      [
+        '-nostdin',
+        '-fflags', '+genpts',
+        '-i', input,
+        '-map', '0:v:0',
+        '-map', '0:a:$audioStreamIndex',
+        '-c', 'copy',
+        '-avoid_negative_ts', 'make_zero',
+        '-f', 'hls',
+        '-hls_time', '6',
+        '-hls_playlist_type', 'event',
+        '-hls_flags', 'independent_segments',
+        '-hls_segment_filename', '$outputDir/seg_%05d.ts',
+        '$outputDir/index.m3u8',
+      ];
+
+  static List<String> transcodeVideo({
+    required String input,
+    required String outputDir,
+    required int audioStreamIndex,
+    required String videoEncoder,
+  }) {
+    final args = <String>[
+      '-nostdin',
+      '-i', input,
+      '-map', '0:v:0',
+      '-map', '0:a:$audioStreamIndex',
+      '-c:v', videoEncoder,
+      '-pix_fmt', 'yuv420p',
+      '-vf', "scale=-2:'min(1080,ih)'",
+      '-b:v', '5M',
+      '-maxrate', '6M',
+      '-bufsize', '10M',
+      '-g', '48',
+      '-sc_threshold', '0',
+    ];
+    if (videoEncoder == 'libx264') {
+      args.addAll(['-preset', 'veryfast']);
+    }
+    args.addAll([
+      '-c:a', 'aac',
+      '-ac', '2',
+      '-b:a', '192k',
+      '-f', 'hls',
+      '-hls_time', '6',
+      '-hls_playlist_type', 'event',
+      '-hls_flags', 'independent_segments',
+      '-hls_segment_filename', '$outputDir/seg_%05d.ts',
+      '$outputDir/index.m3u8',
+    ]);
+    return args;
+  }
+}

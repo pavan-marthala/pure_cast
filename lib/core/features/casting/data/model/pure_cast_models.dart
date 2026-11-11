@@ -177,6 +177,7 @@ class PureCastMedia {
   final Duration? duration;
   final bool isLocalFile;
   final List<PureCastSubtitleTrack> subtitles;
+  final PureCastSubtitleTrack? defaultSubtitle;
 
   const PureCastMedia({
     required this.uri,
@@ -187,6 +188,7 @@ class PureCastMedia {
     this.duration,
     this.isLocalFile = false,
     this.subtitles = const [],
+    this.defaultSubtitle,
   });
 
   @override
@@ -209,6 +211,7 @@ class PureCastMedia {
     Duration? duration,
     bool? isLocalFile,
     List<PureCastSubtitleTrack>? subtitles,
+    PureCastSubtitleTrack? defaultSubtitle,
   }) {
     return PureCastMedia(
       uri: uri ?? this.uri,
@@ -219,6 +222,7 @@ class PureCastMedia {
       duration: duration ?? this.duration,
       isLocalFile: isLocalFile ?? this.isLocalFile,
       subtitles: subtitles ?? this.subtitles,
+      defaultSubtitle: defaultSubtitle ?? this.defaultSubtitle,
     );
   }
 

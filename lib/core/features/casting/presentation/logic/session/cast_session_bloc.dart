@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/database/app_database.dart';
@@ -277,8 +278,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           }
 
           if (matchingStream != null) {
-            // Extract (or reuse cached) subtitle
-            final result = await extractionService.extractSubtitle(
+            // Extract (or reuse cached) cast-ready VTT subtitle
+            final result = await extractionService.extractCastSubtitle(
               sourcePath: media.uri,
               stream: matchingStream,
             );
@@ -294,12 +295,53 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
             final extractedPath = result.outputPath!;
 
-            // Update the subtitle URL to point to the extracted file
-            subtitle = subtitle.copyWith(url: extractedPath);
+            // Update the subtitle URL to point to the extracted VTT file
+            subtitle = subtitle.copyWith(url: extractedPath, format: 'vtt');
           }
         }
       }
-      print("Setting subtitle: ${subtitle?.url ?? 'None'}");
+
+      // If a device is connected, make sure the subtitle track is declared in
+      // the loaded media before activating it. Reload at the current position.
+      final media = state.activeMedia;
+      if (subtitle != null && state.activeDevice != null && media != null) {
+        debugPrint('[SUBDBG] reloading media with subtitles:');
+        final updatedSubtitles = [...media.subtitles];
+        final idx = updatedSubtitles.indexWhere((s) => s.id == subtitle!.id);
+        if (idx >= 0) {
+          updatedSubtitles[idx] = subtitle;
+        } else {
+          updatedSubtitles.add(subtitle);
+        }
+        for (final t in updatedSubtitles) {
+          debugPrint('[SUBDBG]   track id=${t.id} url=${t.url}');
+        }
+        final updatedMedia = media.copyWith(subtitles: updatedSubtitles, defaultSubtitle: subtitle);
+        try {
+          debugPrint('[SUBDBG] loadMedia start');
+          await _castService.loadMedia(updatedMedia);
+          debugPrint('[SUBDBG] loadMedia done');
+          emit(state.copyWith(activeMedia: updatedMedia));
+        } catch (e) {
+          // Fall through; setSubtitle may still work if track was declared.
+        }
+      }
+
+      // [SUBDBG] diagnostics
+      if (subtitle != null) {
+        try {
+          final f = File(subtitle.url);
+          final size = await f.length();
+          final lines = await f.readAsLines();
+          debugPrint('[SUBDBG] final subtitle url=${subtitle.url} size=$size');
+          for (final l in lines.take(5)) {
+            debugPrint('[SUBDBG]   VTT> $l');
+          }
+        } catch (e) {
+          debugPrint('[SUBDBG] could not read subtitle file: $e');
+        }
+      }
+      debugPrint('[SUBDBG] calling setSubtitle with url=${subtitle?.url}');
       await _castService.setSubtitle(subtitle);
       emit(state.copyWith(activeSubtitle: subtitle));
     } catch (e) {
@@ -358,8 +400,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         return;
       }
 
-      // Extract (or reuse cached) subtitle
-      final result = await extractionService.extractSubtitle(
+      // Extract (or reuse cached) cast-ready VTT subtitle
+      final result = await extractionService.extractCastSubtitle(
         sourcePath: sourcePath,
         stream: matchingStream,
       );
@@ -378,7 +420,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       // Update the subtitle track with the extracted file path
       final updatedSubtitle = event.subtitle.copyWith(
         url: extractedPath,
-        format: event.subtitle.format,
+        format: 'vtt',
       );
 
       // Update the media's subtitle list with the extracted track

@@ -39,6 +39,7 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
           listener: (context, sessionState) {
             if (sessionState.connectionError != null &&
                 sessionState.connectionStatus == StateStatus.error) {
+                  
               showErrorToast(message: sessionState.connectionError!);
             }
           },

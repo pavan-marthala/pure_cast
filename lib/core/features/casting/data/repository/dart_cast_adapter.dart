@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
@@ -75,6 +77,7 @@ class DartCastAdapter implements ICastService {
 
       _subscribeToSession(session);
     } catch (e) {
+      print("Error connecting to device ${device.name}: $e");
       throw PureCastException('Failed to connect to ${device.name}', e);
     }
   }
@@ -201,10 +204,11 @@ class DartCastAdapter implements ICastService {
       final dartSubtitle = subtitle != null
           ? _mapSubtitleToDartCast(subtitle)
           : null;
-      print('Setting subtitle: ${dartSubtitle?.url ?? 'None'}');
+      log('PureCast: setSubtitle -> ${dartSubtitle?.url ?? 'None'}');
       await session.setSubtitle(dartSubtitle);
+      log('PureCast: setSubtitle completed');
     } catch (e) {
-      print('Error setting subtitle: $e');
+      log('PureCast: setSubtitle error: $e');
       throw PureCastException('Failed to set subtitle', e);
     }
   }
@@ -355,6 +359,7 @@ class DartCastAdapter implements ICastService {
         imageUrl: m.thumbnailUrl,
         duration: m.duration,
         subtitles: subtitles,
+        defaultSubtitle: m.defaultSubtitle != null ? _mapSubtitleToDartCast(m.defaultSubtitle!) : null,
       );
     } else {
       return dart_cast.CastMedia(
@@ -364,6 +369,7 @@ class DartCastAdapter implements ICastService {
         imageUrl: m.thumbnailUrl,
         duration: m.duration,
         subtitles: subtitles,
+        defaultSubtitle: m.defaultSubtitle != null ? _mapSubtitleToDartCast(m.defaultSubtitle!) : null,
       );
     }
   }
@@ -391,11 +397,12 @@ class DartCastAdapter implements ICastService {
     // (registerMedia). Local file paths must be prefixed with 'file://' so
     // they are served through the local HTTP proxy correctly.
     final url = s.url.startsWith('/') ? 'file://${s.url}' : s.url;
+    debugPrint('[SUBDBG] _mapSubtitleToDartCast url=$url format=vtt label=${s.label}');
     return dart_cast.CastSubtitle(
       url: url,
-      label: s.label,
-      language: s.language,
-      format: s.format,
+      label: s.label.isNotEmpty ? s.label : s.language,
+      language: s.language.isNotEmpty ? s.language : 'und',
+      format: 'vtt',
     );
   }
 }

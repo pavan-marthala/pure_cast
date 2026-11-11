@@ -166,6 +166,7 @@ class CurrentlyPlayingBG extends StatelessWidget {
         gradient: context.appGradients.surface,
         image: sessionState.activeMedia?.thumbnailBytes != null
             ? DecorationImage(
+                fit: .contain,
                 image: MemoryImage(sessionState.activeMedia!.thumbnailBytes!),
               )
             : null,

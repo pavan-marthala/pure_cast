@@ -449,6 +449,88 @@ class SubtitleExtractionService {
     }
   }
 
+  /// Extracts a cast-ready WebVTT subtitle for a stream.
+  ///
+  /// Produces a `.vtt` file usable by the Default Media Receiver.
+  /// Image-based codecs (PGS, VobSub, DVB) are not convertible and fail.
+  Future<SubtitleExtractionResult> extractCastSubtitle({
+    required String sourcePath,
+    required SubtitleStreamInfo stream,
+  }) async {
+    if (_disposed) {
+      return SubtitleExtractionResult.failure(
+          stream, const SubtitleExtractionError(message: 'Service disposed'));
+    }
+    if (stream.isImageBased) {
+      return SubtitleExtractionResult.failure(
+          stream,
+          const SubtitleExtractionError(
+              message: 'Image-based subtitles can\'t be cast'));
+    }
+
+    final dir = await _getExtractionCacheDir();
+    final outPath = '${dir.path}/${_keyPrefix(sourcePath)}_${stream.streamIndex}_cast.vtt';
+    final outFile = File(outPath);
+    if (await outFile.exists() && await outFile.length() > 0) {
+      return SubtitleExtractionResult.success(stream, outPath);
+    }
+
+    final input = await _resolveInputPath(sourcePath);
+    if (input == null) {
+      return SubtitleExtractionResult.failure(
+          stream, const SubtitleExtractionError(message: 'Cannot resolve source'));
+    }
+
+    final key = '$sourcePath:${stream.streamIndex}:cast';
+    if (!_activeExtractions.add(key)) {
+      return SubtitleExtractionResult.failure(
+          stream, const SubtitleExtractionError(message: 'Already in progress'));
+    }
+
+    final tmpPath = '$outPath.part.vtt';
+    try {
+      final args = [
+        '-y', '-hide_banner', '-nostdin',
+        '-i', input,
+        '-map', '0:${stream.streamIndex}',
+        '-vn', '-an', '-dn',
+        '-c:s', 'webvtt',
+        tmpPath,
+      ];
+
+      final session = await FFmpegKit.executeWithArguments(args);
+      final rc = await session.getReturnCode();
+
+      if (!ReturnCode.isSuccess(rc)) {
+        final logs = await session.getAllLogsAsString();
+        return SubtitleExtractionResult.failure(
+          stream,
+          SubtitleExtractionError(
+            message: ReturnCode.isCancel(rc) ? 'Cancelled' : 'FFmpeg failed',
+            ffmpegLogs: logs,
+            returnCode: rc?.getValue(),
+          ),
+        );
+      }
+
+      final tmp = File(tmpPath);
+      if (!await tmp.exists() || await tmp.length() == 0) {
+        return SubtitleExtractionResult.failure(
+            stream, const SubtitleExtractionError(message: 'Empty output'));
+      }
+
+      await tmp.rename(outPath);
+      return SubtitleExtractionResult.success(stream, outPath);
+    } catch (e) {
+      return SubtitleExtractionResult.failure(
+          stream, SubtitleExtractionError(message: 'Exception: $e'));
+    } finally {
+      _activeExtractions.remove(key);
+      final tmp = File(tmpPath);
+      if (await tmp.exists()) await tmp.delete();
+    }
+  }
+
   Future<void> dispose() async {
     _disposed = true;
     _activeExtractions.clear();

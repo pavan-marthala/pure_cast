@@ -143,7 +143,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         "Loading media on device: ${state.activeDevice?.name}",
         name: "Cast Session Bloc",
       );
+      if (event.media.isLocalFile) {
+        emit(state.copyWith(preparing: true, prepareError: null));
+      }
       await _castService.loadMedia(event.media);
+      if (event.media.isLocalFile) {
+        emit(state.copyWith(preparing: false));
+      }
       emit(state.copyWith(playbackStatus: StateStatus.loaded));
 
       // dart_cast LOAD already sets autoplay: true — the receiver should
@@ -319,7 +325,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         final updatedMedia = media.copyWith(subtitles: updatedSubtitles, defaultSubtitle: subtitle);
         try {
           debugPrint('[SUBDBG] loadMedia start');
+          if (updatedMedia.isLocalFile) {
+            emit(state.copyWith(preparing: true, prepareError: null));
+          }
           await _castService.loadMedia(updatedMedia);
+          if (updatedMedia.isLocalFile) {
+            emit(state.copyWith(preparing: false));
+          }
           debugPrint('[SUBDBG] loadMedia done');
           emit(state.copyWith(activeMedia: updatedMedia));
         } catch (e) {
@@ -441,7 +453,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
       // If device is connected, reload media with updated subtitles, then set subtitle
       if (state.activeDevice != null) {
+        if (updatedMedia.isLocalFile) {
+          emit(state.copyWith(preparing: true, prepareError: null));
+        }
         await _castService.loadMedia(updatedMedia);
+        if (updatedMedia.isLocalFile) {
+          emit(state.copyWith(preparing: false));
+        }
         emit(state.copyWith(activeMedia: updatedMedia));
         await _castService.setSubtitle(updatedSubtitle);
         emit(state.copyWith(activeSubtitle: updatedSubtitle));

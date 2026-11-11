@@ -76,6 +76,9 @@ class FakeCastService implements ICastService {
   }
 
   @override
+  Future<void> loadLocalFile(String path, {int audioStreamIndex = 0, PureCastSubtitleTrack? subtitle, List<PureCastSubtitleTrack>? subtitles}) async {}
+
+  @override
   Future<void> play() async {}
 
   @override

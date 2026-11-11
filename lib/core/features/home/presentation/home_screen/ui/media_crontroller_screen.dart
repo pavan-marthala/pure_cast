@@ -114,6 +114,8 @@ class Body extends StatelessWidget {
         PureCastSubtitleTrack?,
         Duration,
         Duration,
+        bool,
+        String?,
       )
     >(
       selector: (state) {
@@ -123,10 +125,28 @@ class Body extends StatelessWidget {
           state.activeSubtitle,
           state.position,
           state.duration,
+          state.preparing,
+          state.prepareError,
         );
       },
       builder: (context, state) {
-        final (media, device, subtitle, position, duration) = state;
+        final (
+          media,
+          device,
+          subtitle,
+          position,
+          duration,
+          preparing,
+          prepareError,
+        ) = state;
+        if (preparing) {
+          return const SliverToBoxAdapter(
+            child: Center(child: Text('Preparing video for Chromecast...')),
+          );
+        }
+        if (prepareError != null) {
+          return SliverToBoxAdapter(child: Center(child: Text(prepareError!)));
+        }
         return SliverPadding(
           padding: .symmetric(horizontal: 16),
           sliver: SliverToBoxAdapter(

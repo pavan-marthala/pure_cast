@@ -98,6 +98,18 @@ class DartCastAdapter implements ICastService {
 
   @override
   Future<void> loadMedia(PureCastMedia media) async {
+    if (media.isLocalFile) {
+      try {
+        return await loadLocalFile(media.uri, subtitles: media.subtitles);
+      } catch (e) {
+        // Fallback: try direct load
+        final session = _castService.activeSession;
+        if (session == null) rethrow;
+        final dartMedia = _mapMediaToDartCast(media);
+        await session.loadMedia(dartMedia);
+        return;
+      }
+    }
     final session = _castService.activeSession;
     if (session == null) {
       throw const PureCastException('No active cast session');
@@ -122,6 +134,40 @@ class DartCastAdapter implements ICastService {
       rethrow;
     } catch (e) {
       throw PureCastException('Failed to load media: ${media.title}', e);
+    }
+  }
+
+  @override
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    PureCastSubtitleTrack? subtitle,
+    List<PureCastSubtitleTrack>? subtitles,
+  }) async {
+    final session = _castService.activeSession;
+    if (session == null) throw const PureCastException('No active cast session');
+    try {
+      final effectiveSubtitle = subtitle ?? (subtitles != null && subtitles.isNotEmpty ? subtitles.first : null);
+      final dartSubtitle = effectiveSubtitle != null ? _mapSubtitleToDartCast(effectiveSubtitle) : null;
+      if (session is dart_cast.ChromecastSession) {
+        await session.loadLocalFile(
+          path,
+          audioStreamIndex: audioStreamIndex,
+          caps: const dart_cast.CastDeviceCaps(hasH264Encoder: false),
+          subtitle: dartSubtitle,
+        );
+      } else {
+        // DLNA / others: direct load
+        await loadMedia(PureCastMedia(
+          uri: path,
+          type: PureCastMediaType.video,
+          title: '',
+          isLocalFile: true,
+          subtitles: subtitle != null ? [subtitle] : const [],
+        ));
+      }
+    } catch (e) {
+      throw PureCastException('Failed to load local file: $path — ${e.toString()}', e);
     }
   }
 

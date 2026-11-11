@@ -4,12 +4,21 @@
 /// heartbeat keep-alive, media proxy, and playback state synchronisation.
 library;
 
+import 'package:flutter/foundation.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
 import '../../core/cast_device.dart';
 import '../../core/cast_exceptions.dart';
 import '../../core/cast_media.dart';
+import '../../core/media_probe.dart';
+import '../../core/cast_decision.dart';
+import '../../core/cast_prepare_session.dart';
+import '../../core/cast_ffmpeg_commands.dart';
+import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_min/media_information.dart';
+import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
 import '../../core/cast_session.dart';
 import '../../core/media_proxy.dart';
 import '../../core/media_transformer.dart';
@@ -298,7 +307,12 @@ class ChromecastSession extends CastSession {
   // ---------------------------------------------------------------------------
 
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(
+    CastMedia media, {
+    String? contentType,
+    String? streamType,
+    Duration? duration,
+  }) async {
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
     }
@@ -316,6 +330,120 @@ class ChromecastSession extends CastSession {
     } finally {
       _isLoadingMedia = false;
     }
+  }
+
+  /// Loads a local file, probing and preparing it first.
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    CastDeviceCaps caps = const CastDeviceCaps(),
+    CastSubtitle? subtitle,
+    void Function(CastPrepareSession?)? onPrepareStarted,
+    void Function()? onPrepareFinished,
+  }) async {
+    // Probe (with fallback)
+    String input = path;
+    if (input.startsWith('content://')) {
+      final saf = await FFmpegKitConfig.getSafParameterForRead(input);
+      if (saf != null) input = saf;
+    } else if (input.startsWith('file://')) {
+      input = Uri.parse(input).toFilePath();
+    }
+    MediaProbe? probe;
+    late CastPlan plan;
+    try {
+      final session = await FFprobeKit.getMediaInformation(input).timeout(const Duration(seconds: 8));
+      final info = session.getMediaInformation();
+      probe = MediaProbe.fromJson(_mediaInfoToJson(info));
+      plan = decide(probe!, caps);
+      debugPrint('[PREPDBG] plan=${plan.runtimeType} reason=${_planReason(plan)}');
+      debugPrint('[PREPDBG] probe container=${probe!.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a)=>'${a.codec}/${a.channels}').join(',')}');
+    } catch (e) {
+      debugPrint('[HLSDBG] probe failed/timeout: $e; falling back to direct load');
+      await loadMedia(CastMedia.file(filePath: path, type: CastMediaType.mp4, subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+      return;
+    }
+    final audioIdx = audioStreamIndex == 0 ? _defaultAudioIndex(probe.audio) : audioStreamIndex;
+
+    if (plan is DirectPlan) {
+      await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+      return;
+    }
+    if (plan is UnsupportedPlan) {
+      throw Exception('Unsupported: ${plan.reason}');
+    }
+
+    // remux/transcode -> prepare
+    List<String> Function(String) builder;
+    if (plan is RemuxAudioPlan) {
+      builder = (out) => CastFfmpegCommands.remuxAudio(input: path, outputDir: out, audioStreamIndex: audioIdx);
+    } else if (plan is RemuxContainerPlan) {
+      builder = (out) => CastFfmpegCommands.remuxContainer(input: path, outputDir: out, audioStreamIndex: audioIdx);
+    } else if (plan is TranscodeVideoPlan) {
+      if (caps.hasH264Encoder) {
+        builder = (out) => CastFfmpegCommands.transcodeVideo(input: path, outputDir: out, audioStreamIndex: audioIdx, videoEncoder: 'libx264');
+      } else if (caps.hasH264Mediacodec) {
+        builder = (out) => CastFfmpegCommands.transcodeVideoMediacodec(input: path, outputDir: out, audioStreamIndex: audioIdx);
+      } else {
+        throw Exception('Unsupported: no H.264 encoder');
+      }
+    } else {
+      throw Exception('Unknown plan');
+    }
+
+    final args = builder('/tmp/__OUTDIR__');
+    debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
+    final prepare = await CastPrepareSession.start(inputPath: path, buildArgs: builder);
+    onPrepareStarted?.call(prepare);
+    // wait for ready
+    await prepare.stateStream.firstWhere((s) => s == PrepareState.ready || s == PrepareState.failed);
+    onPrepareFinished?.call();
+    if (prepare.state != PrepareState.ready) {
+      try {
+        debugPrint('[PREPDBG] dir contents: ${prepare.tempDir.listSync().map((f)=>f.path.split('/').last).join(', ')}');
+      } catch (_) {}
+      debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
+      throw Exception('Prepare failed: ${prepare.error}');
+    }
+    final hlsUrl = _proxy.registerHlsDirectory(prepare.sessionId, prepare.tempDir.path);
+    // load via proxy url through loadMedia? loadMedia expects CastMedia. Use a remote media with hls url.
+    await loadMedia(CastMedia(url: hlsUrl, type: CastMediaType.hls, subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle), contentType: 'application/x-mpegURL', duration: probe.durationSeconds != null ? Duration(milliseconds: (probe.durationSeconds! * 1000).round()) : null);
+  }
+
+  String _planReason(CastPlan p) => p is DirectPlan ? 'direct' : p is RemuxAudioPlan ? 'remuxAudio' : p is RemuxContainerPlan ? 'remuxContainer' : p is TranscodeVideoPlan ? 'transcodeVideo' : p is UnsupportedPlan ? 'unsupported: ${p.reason}' : 'unknown';
+
+  int _defaultAudioIndex(List<AudioStream> audio) {
+    for (var i = 0; i < audio.length; i++) {
+      if (audio[i].isDefault) return i;
+    }
+    return 0;
+  }
+
+  Map<String, dynamic> _mediaInfoToJson(MediaInformation? info) {
+    if (info == null) return const {};
+    // Build a minimal JSON map compatible with MediaProbe.fromJson
+    final streams = <Map<String, dynamic>>[];
+    for (final s in info.getStreams()) {
+      final tags = s.getTags();
+      streams.add({
+        'codec_type': s.getType(),
+        'codec_name': s.getCodec(),
+        'profile': null,
+        'level': s.getNumberProperty('level'),
+        'pix_fmt': s.getStringProperty('pix_fmt'),
+        'width': s.getWidth(),
+        'height': s.getHeight(),
+        'r_frame_rate': s.getAverageFrameRate(),
+        'index': s.getIndex(),
+        'channels': null,
+        'tags': tags,
+        'disposition': {'default': 0},
+      });
+    }
+    return {
+      'format': {'format_name': info.getFormat(), 'duration': info.getDuration()},
+      'streams': streams,
+    };
   }
 
   Future<void> _loadMediaInternal(CastMedia media) async {

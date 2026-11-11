@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:dart_cast/dart_cast.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -28,6 +30,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // await dotenv.load(fileName: "app_config.env");
   await configureDependencies();
+  await CastPrepareSession.cleanupLeftovers();
+  if (kDebugMode) {
+    CastFfmpegDiagnostics.dumpCapabilities();
+  }
   if (PlatformChecker.isAndroid() || PlatformChecker.isIOS()) {
     _initBackgroundService();
   }

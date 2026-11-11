@@ -452,3 +452,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and PR gu
 ## License
 
 MIT -- see [LICENSE](LICENSE) for details.
+
+## Prepared casting (direct + remux)
+
+This fork can probe a local file and, when needed, remux it to HLS for
+Chromecast playback. Video transcode is deferred.
+
+Limitations: no audio track switching UI, no device-verified playback table yet.

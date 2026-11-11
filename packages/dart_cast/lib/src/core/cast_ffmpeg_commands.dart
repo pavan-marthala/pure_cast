@@ -79,4 +79,31 @@ class CastFfmpegCommands {
     ]);
     return args;
   }
+  static List<String> transcodeVideoMediacodec({
+    required String input,
+    required String outputDir,
+    required int audioStreamIndex,
+  }) =>
+      [
+        '-nostdin',
+        '-i', input,
+        '-map', '0:v:0',
+        '-map', '0:a:$audioStreamIndex',
+        '-c:v', 'h264_mediacodec',
+        '-b:v', '5M',
+        '-pix_fmt', 'nv12',
+        '-vf', "scale=-2:'min(1080,ih)'",
+        '-g', '48',
+        '-c:a', 'aac',
+        '-ac', '2',
+        '-b:a', '192k',
+        '-f', 'hls',
+        '-hls_time', '6',
+        '-hls_playlist_type', 'event',
+        '-hls_flags', 'independent_segments',
+        '-hls_segment_filename', '$outputDir/seg_%05d.ts',
+        '$outputDir/index.m3u8',
+      ];
 }
+
+// extension

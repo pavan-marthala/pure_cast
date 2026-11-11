@@ -14,6 +14,10 @@ abstract class CastSessionState with _$CastSessionState {
     @Default(StateStatus.initial) StateStatus playbackStatus,
     String? playbackError,
     @Default(Duration.zero) Duration position,
+    @Default(false) bool preparing,
+    String? castPlan,
+    String? castPlanReason,
+    String? prepareError,
     @Default(Duration.zero) Duration duration,
     @Default(1.0) double volume,
   }) = _CastSessionState;

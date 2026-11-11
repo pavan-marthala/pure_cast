@@ -1,4 +1,5 @@
 import 'media_probe.dart';
+import 'cast_media.dart';
 sealed class CastPlan {}
 
 class DirectPlan extends CastPlan {
@@ -32,10 +33,12 @@ class UnsupportedPlan extends CastPlan {
 class CastDeviceCaps {
   final bool supportsHevc;
   final bool hasH264Encoder;
+  final bool hasH264Mediacodec;
   final String? modelName;
   const CastDeviceCaps({
     this.supportsHevc = false,
     this.hasH264Encoder = false,
+    this.hasH264Mediacodec = false,
     this.modelName,
   });
 }
@@ -48,6 +51,20 @@ class CastCompat {
   static const incompatibleAudio = {'dts', 'truehd', 'eac3', 'flac', 'vorbis', 'opus'};
   static const directContainers = {'mp4', 'webm', 'mkv', 'mov', 'matroska', 'mov,mp4,m4a,3gp,3g2,mj2'};
   static const remuxContainers = {'avi', 'ts', 'm2ts', 'wmv', 'flv'};
+
+  static CastMediaType mediaTypeForContainer(String container) {
+    final c = container.split(',').first.trim().toLowerCase();
+    switch (c) {
+      case 'matroska':
+      case 'mkv':
+        return CastMediaType.mkv;
+      case 'webm':
+      case 'mp4':
+      case 'mov':
+      default:
+        return CastMediaType.mp4;
+    }
+  }
 }
 
 CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {

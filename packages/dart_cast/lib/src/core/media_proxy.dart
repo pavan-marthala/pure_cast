@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:flutter/foundation.dart';import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -65,6 +65,7 @@ class MediaProxy {
   HlsStreamHandler? _hlsStreamHandler;
   String? _baseUrl;
   final Map<String, _ProxyRoute> _routes = {};
+  final Map<String, String> _hlsDirs = {};
   final Map<String, _SyntheticContent> _syntheticContent = {};
   final Random _random = Random.secure();
 
@@ -193,6 +194,17 @@ class MediaProxy {
       url: filePath,
     );
     return '$_baseUrl/file/$token$ext';
+  }
+
+  /// Registers a directory containing an HLS playlist (index.m3u8 + segments).
+  String registerHlsDirectory(String sessionId, String dirPath) {
+    _hlsDirs[sessionId] = dirPath;
+    return '$_baseUrl/hls/$sessionId/index.m3u8';
+  }
+
+  /// Unregisters an HLS directory.
+  void unregisterHlsDirectory(String sessionId) {
+    _hlsDirs.remove(sessionId);
   }
 
   /// Registers a caller-supplied [MediaSource] for serving.
@@ -811,6 +823,12 @@ class MediaProxy {
       if (path.startsWith('/synthetic/')) {
         final token = path.substring('/synthetic/'.length);
         await _handleSyntheticRequest(request, token);
+        return;
+      }
+
+      // Route: /hls/<sessionId>/<file> — prepared HLS serving
+      if (path.startsWith('/hls/')) {
+        await _handleHlsDirectoryRequest(request);
         return;
       }
 
@@ -1534,6 +1552,57 @@ class MediaProxy {
     } finally {
       await socket.close();
     }
+  }
+
+  Future<void> _handleHlsDirectoryRequest(HttpRequest request) async {
+    final path = request.uri.path;
+    // /hls/<sessionId>/<file>
+    final rest = path.substring('/hls/'.length);
+    final parts = rest.split('/');
+    if (parts.length < 2) {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+    final sessionId = parts[0];
+    final fileName = parts.sublist(1).join('/');
+    // reject traversal
+    if (fileName.contains('..') || fileName.startsWith('/') || sessionId.contains('..')) {
+      request.response.statusCode = HttpStatus.forbidden;
+      await request.response.close();
+      return;
+    }
+    final dirPath = _hlsDirs[sessionId];
+    if (dirPath == null) {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+    final file = File('$dirPath/$fileName');
+    // poll up to 5s
+    var waited = 0;
+    while (!await file.exists() && waited < 5000) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      waited += 200;
+    }
+    final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
+    if (!await file.exists()) {
+      debugPrint('[HLSDBG] $path 404 $remoteIp');
+      request.response.statusCode = HttpStatus.notFound;
+      _addCorsHeaders(request.response, request.headers.value('Origin'));
+      await request.response.close();
+      return;
+    }
+    final isPlaylist = fileName.endsWith('.m3u8');
+    final ct = isPlaylist ? 'application/x-mpegURL' : 'video/mp2t';
+    _addCorsHeaders(request.response, request.headers.value('Origin'));
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.parse(ct);
+    final bytes = await file.readAsBytes();
+    request.response.contentLength = bytes.length;
+    if (request.method != 'HEAD') request.response.add(bytes);
+    await request.response.close();
+    debugPrint('[HLSDBG] $path 200 $remoteIp');
   }
 
   bool _isSubtitleFile(String path) {

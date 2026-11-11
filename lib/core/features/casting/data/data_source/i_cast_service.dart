@@ -17,6 +17,14 @@ abstract class ICastService {
   /// Loads media onto the connected receiver device.
   Future<void> loadMedia(PureCastMedia media);
 
+  /// Loads a local file, probing/preparing it for Chromecast when needed.
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    PureCastSubtitleTrack? subtitle,
+    List<PureCastSubtitleTrack>? subtitles,
+  });
+
   /// Starts or resumes media playback.
   Future<void> play();
 

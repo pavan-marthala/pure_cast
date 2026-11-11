@@ -8,7 +8,7 @@ import 'package:pure_cast/core/features/music_library/presentation/logic/media/m
 import 'package:pure_cast/core/theme/app_theme.dart';
 
 class MusicLibraryScreen extends StatefulWidget {
-  const MusicLibraryScreen({super.key, required this.filterType});
+  const new({super.key, required this.filterType});
 
   final RequestType filterType;
 
@@ -92,14 +92,42 @@ class MediaWidget extends StatelessWidget {
                   )
                 : null,
           ),
-          Text(
-            media.title,
-            style: context.appTypography.titleSmall,
-            maxLines: 1,
-            overflow: .ellipsis,
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  separateFileNameAndExtension(media.title).$1,
+                  style: context.appTypography.titleSmall,
+                  maxLines: 1,
+                  overflow: .ellipsis,
+                ),
+              ),
+              Text(
+                ".${separateFileNameAndExtension(media.title).$2}",
+                style: context.appTypography.titleSmall,
+                maxLines: 1,
+                overflow: .ellipsis,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+(String name, String extension) separateFileNameAndExtension(String fileName) {
+  // Trim extra spaces and find the last dot or space
+  final trimmed = fileName.trim();
+  final lastSeparatorIndex = trimmed.lastIndexOf(RegExp(r'[.\s]'));
+
+  // If no separator is found, or it's a hidden file like ".gitignore"
+  if (lastSeparatorIndex <= 0) {
+    return (trimmed, '');
+  }
+
+  final name = trimmed.substring(0, lastSeparatorIndex);
+  final extension = trimmed.substring(lastSeparatorIndex + 1);
+
+  return (name, extension);
 }

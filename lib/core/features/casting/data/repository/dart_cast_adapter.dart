@@ -201,8 +201,10 @@ class DartCastAdapter implements ICastService {
       final dartSubtitle = subtitle != null
           ? _mapSubtitleToDartCast(subtitle)
           : null;
+      print('Setting subtitle: ${dartSubtitle?.url ?? 'None'}');
       await session.setSubtitle(dartSubtitle);
     } catch (e) {
+      print('Error setting subtitle: $e');
       throw PureCastException('Failed to set subtitle', e);
     }
   }
@@ -343,16 +345,7 @@ class DartCastAdapter implements ICastService {
 
   static dart_cast.CastMedia _mapMediaToDartCast(PureCastMedia m) {
     final mediaType = _mapMediaTypeToDartCast(m.type);
-    final subtitles = m.subtitles
-        .map(
-          (s) => dart_cast.CastSubtitle(
-            url: s.url,
-            label: s.label,
-            language: s.language,
-            format: s.format,
-          ),
-        )
-        .toList();
+    final subtitles = m.subtitles.map(_mapSubtitleToDartCast).toList();
 
     if (m.isLocalFile) {
       return dart_cast.CastMedia.file(
@@ -390,9 +383,16 @@ class DartCastAdapter implements ICastService {
     }
   }
 
-  static dart_cast.CastSubtitle _mapSubtitleToDartCast(PureCastSubtitleTrack s) {
+  static dart_cast.CastSubtitle _mapSubtitleToDartCast(
+    PureCastSubtitleTrack s,
+  ) {
+    // dart_cast's registerSubtitle() checks for 'file://' prefix to decide
+    // whether to serve the file locally (registerFile) or proxy it remotely
+    // (registerMedia). Local file paths must be prefixed with 'file://' so
+    // they are served through the local HTTP proxy correctly.
+    final url = s.url.startsWith('/') ? 'file://${s.url}' : s.url;
     return dart_cast.CastSubtitle(
-      url: s.url,
+      url: url,
       label: s.label,
       language: s.language,
       format: s.format,

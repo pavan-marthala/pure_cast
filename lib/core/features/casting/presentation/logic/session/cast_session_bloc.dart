@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:io';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +10,8 @@ import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_extraction_service.dart';
+import 'package:pure_cast/core/DI/injection.dart';
 
 part 'cast_session_event.dart';
 part 'cast_session_state.dart';
@@ -36,6 +39,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     on<SeekMediaEvent>(_onSeekMedia);
     on<SetVolumeEvent>(_onSetVolume);
     on<SetSubtitleEvent>(_onSetSubtitle);
+    on<ExtractAndSetSubtitleEvent>(_onExtractAndSetSubtitle);
     on<SessionStateChangedEvent>(_onSessionStateChanged);
     on<PositionUpdatedEvent>(_onPositionUpdated);
     on<DurationUpdatedEvent>(_onDurationUpdated);
@@ -244,8 +248,169 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     Emitter<CastSessionState> emit,
   ) async {
     try {
-      await _castService.setSubtitle(event.subtitle);
-      emit(state.copyWith(activeSubtitle: event.subtitle));
+      var subtitle = event.subtitle;
+
+      // If subtitle needs extraction (url points to media file, not extracted file),
+      // extract it first before sending to the casting layer.
+      if (subtitle != null && !_isExtractedSubtitle(subtitle)) {
+        final extractionService = getIt<SubtitleExtractionService>();
+        final media = state.activeMedia;
+        if (media != null && media.isLocalFile) {
+          final file = File(media.uri);
+          final fileSize = await file.length();
+          final lastModified = await file.lastModified();
+
+          final probeResult = await extractionService.probeAndCacheSubtitles(
+            filePath: media.uri,
+            fileSize: fileSize,
+            lastModified: lastModified,
+          );
+
+          // Find the matching stream by ID (format: "mediaUri:streamIndex")
+          SubtitleStreamInfo? matchingStream;
+          final streamIndexStr = subtitle.id.split(':').last;
+          for (final stream in probeResult.streams) {
+            if (stream.streamIndex.toString() == streamIndexStr) {
+              matchingStream = stream;
+              break;
+            }
+          }
+
+          if (matchingStream != null) {
+            // Extract (or reuse cached) subtitle
+            final result = await extractionService.extractSubtitle(
+              sourcePath: media.uri,
+              stream: matchingStream,
+            );
+
+            if (!result.isSuccess) {
+              emit(
+                state.copyWith(
+                  playbackError: result.error?.message ?? 'Extraction failed',
+                ),
+              );
+              return;
+            }
+
+            final extractedPath = result.outputPath!;
+
+            // Update the subtitle URL to point to the extracted file
+            subtitle = subtitle.copyWith(url: extractedPath);
+          }
+        }
+      }
+      print("Setting subtitle: ${subtitle?.url ?? 'None'}");
+      await _castService.setSubtitle(subtitle);
+      emit(state.copyWith(activeSubtitle: subtitle));
+    } catch (e) {
+      emit(state.copyWith(playbackError: e.toString()));
+    }
+  }
+
+  bool _isExtractedSubtitle(PureCastSubtitleTrack subtitle) {
+    // Check if the URL points to an extracted subtitle file (not the media file)
+    return subtitle.url.contains('pure_cast_subtitles') ||
+        subtitle.url.contains('pure_cast_subtitle_cache') ||
+        subtitle.url.endsWith('.srt') ||
+        subtitle.url.endsWith('.vtt') ||
+        subtitle.url.endsWith('.ass') ||
+        subtitle.url.endsWith('.ssa') ||
+        subtitle.url.endsWith('.sub') ||
+        subtitle.url.endsWith('.sup');
+  }
+
+  Future<void> _onExtractAndSetSubtitle(
+    ExtractAndSetSubtitleEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final media = state.activeMedia;
+    if (media == null) return;
+
+    try {
+      final extractionService = getIt<SubtitleExtractionService>();
+      final sourcePath = media.uri;
+
+      final file = File(sourcePath);
+      final fileSize = await file.length();
+      final lastModified = await file.lastModified();
+
+      // Probe to get the stream info
+      final probeResult = await extractionService.probeAndCacheSubtitles(
+        filePath: sourcePath,
+        fileSize: fileSize,
+        lastModified: lastModified,
+      );
+
+      // Find the matching stream
+      SubtitleStreamInfo? matchingStream;
+      for (final stream in probeResult.streams) {
+        if (stream.streamIndex.toString() ==
+            event.subtitle.id.split(':').last) {
+          matchingStream = stream;
+          break;
+        }
+      }
+
+      if (matchingStream == null) {
+        emit(
+          state.copyWith(playbackError: 'Subtitle stream not found in video'),
+        );
+        return;
+      }
+
+      // Extract (or reuse cached) subtitle
+      final result = await extractionService.extractSubtitle(
+        sourcePath: sourcePath,
+        stream: matchingStream,
+      );
+
+      if (!result.isSuccess) {
+        emit(
+          state.copyWith(
+            playbackError: result.error?.message ?? 'Extraction failed',
+          ),
+        );
+        return;
+      }
+
+      final extractedPath = result.outputPath!;
+
+      // Update the subtitle track with the extracted file path
+      final updatedSubtitle = event.subtitle.copyWith(
+        url: extractedPath,
+        format: event.subtitle.format,
+      );
+
+      // Update the media's subtitle list with the extracted track
+      final subtitleId = event.subtitle.id;
+      final updatedSubtitles = media.subtitles.map((s) {
+        if (s.id == subtitleId) {
+          return updatedSubtitle;
+        }
+        return s;
+      }).toList();
+
+      // If not already in list, add it
+      if (!updatedSubtitles.any((s) => s.id == subtitleId)) {
+        updatedSubtitles.add(updatedSubtitle);
+      }
+
+      final updatedMedia = media.copyWith(subtitles: updatedSubtitles);
+
+      // If device is connected, reload media with updated subtitles, then set subtitle
+      if (state.activeDevice != null) {
+        await _castService.loadMedia(updatedMedia);
+        emit(state.copyWith(activeMedia: updatedMedia));
+        await _castService.setSubtitle(updatedSubtitle);
+        emit(state.copyWith(activeSubtitle: updatedSubtitle));
+      } else {
+        emit(
+          state.copyWith(
+            activeMedia: updatedMedia,
+            activeSubtitle: updatedSubtitle,
+          ),
+        );
+      }
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
     }

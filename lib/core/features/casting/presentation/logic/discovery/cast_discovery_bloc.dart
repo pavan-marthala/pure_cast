@@ -118,6 +118,7 @@ class CastDiscoveryBloc extends Bloc<CastDiscoveryEvent, CastDiscoveryState> {
     DiscoveryErrorEvent event,
     Emitter<CastDiscoveryState> emit,
   ) {
+    print('Discovery Error: ${event.message}');
     emit(
       state.copyWith(
         discoveryStatus: StateStatus.error,

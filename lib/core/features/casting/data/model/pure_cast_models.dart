@@ -137,6 +137,22 @@ class PureCastSubtitleTrack {
     this.format = 'vtt',
   });
 
+  PureCastSubtitleTrack copyWith({
+    String? id,
+    String? label,
+    String? language,
+    String? url,
+    String? format,
+  }) {
+    return PureCastSubtitleTrack(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      language: language ?? this.language,
+      url: url ?? this.url,
+      format: format ?? this.format,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

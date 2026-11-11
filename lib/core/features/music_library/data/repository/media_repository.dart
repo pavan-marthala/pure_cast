@@ -9,8 +9,8 @@ abstract class MediaRepository {
   Future<bool> checkAndRequestPermission();
   Future<List<PureCastMedia>> getLocalMedia({
     RequestType type = RequestType.common,
-    int page = 0,
-    int size = 50,
+    required int page,
+    required int size,
   });
   Future<File?> getMediaFile(String assetId);
   Future<List<PureCastMedia>> pickFiles();
@@ -30,8 +30,8 @@ class MediaRepositoryImpl implements MediaRepository {
   @override
   Future<List<PureCastMedia>> getLocalMedia({
     RequestType type = RequestType.common,
-    int page = 0,
-    int size = 50,
+    required int page,
+    required int size,
   }) async {
     return _localMediaSource.fetchLocalMedia(
       type: type,

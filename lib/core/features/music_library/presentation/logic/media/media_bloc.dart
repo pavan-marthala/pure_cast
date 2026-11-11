@@ -30,16 +30,15 @@ class MediaBloc extends Bloc<MediaEvent, MediaState> {
       if (granted) {
         add(const LoadMediaItemsEvent());
       } else {
-        emit(state.copyWith(
-          status: StateStatus.error,
-          error: 'Permission denied to access local media library',
-        ));
+        emit(
+          state.copyWith(
+            status: StateStatus.error,
+            error: 'Permission denied to access local media library',
+          ),
+        );
       }
     } catch (e) {
-      emit(state.copyWith(
-        status: StateStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
   }
 
@@ -47,21 +46,25 @@ class MediaBloc extends Bloc<MediaEvent, MediaState> {
     LoadMediaItemsEvent event,
     Emitter<MediaState> emit,
   ) async {
-    emit(state.copyWith(
-      status: StateStatus.loading,
-      error: null,
-      selectedFilter: event.filterType,
-      page: 0,
-    ));
+    emit(
+      state.copyWith(
+        status: StateStatus.loading,
+        error: null,
+        selectedFilter: event.filterType,
+        page: 0,
+      ),
+    );
 
     try {
       final granted = await _mediaRepository.checkAndRequestPermission();
       if (!granted) {
-        emit(state.copyWith(
-          hasPermission: false,
-          status: StateStatus.error,
-          error: 'Permission to access media library not granted',
-        ));
+        emit(
+          state.copyWith(
+            hasPermission: false,
+            status: StateStatus.error,
+            error: 'Permission to access media library not granted',
+          ),
+        );
         return;
       }
 
@@ -72,18 +75,17 @@ class MediaBloc extends Bloc<MediaEvent, MediaState> {
       );
 
       final status = items.isEmpty ? StateStatus.empty : StateStatus.loaded;
-      emit(state.copyWith(
-        hasPermission: true,
-        mediaItems: items,
-        status: status,
-        page: 0,
-        hasMore: items.length == 50,
-      ));
+      emit(
+        state.copyWith(
+          hasPermission: true,
+          mediaItems: items,
+          status: status,
+          page: 0,
+          hasMore: items.length == 50,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        status: StateStatus.error,
-        error: e.toString(),
-      ));
+      emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
   }
 
@@ -102,11 +104,13 @@ class MediaBloc extends Bloc<MediaEvent, MediaState> {
       );
 
       final updatedList = List.of(state.mediaItems)..addAll(newItems);
-      emit(state.copyWith(
-        mediaItems: updatedList,
-        page: nextPage,
-        hasMore: newItems.length == 50,
-      ));
+      emit(
+        state.copyWith(
+          mediaItems: updatedList,
+          page: nextPage,
+          hasMore: newItems.length == 50,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
     }

@@ -56,7 +56,7 @@ extension CastSessionEventPatterns on CastSessionEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ConnectDeviceEvent value)?  connectDevice,TResult Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult Function( LoadMediaEvent value)?  loadMedia,TResult Function( PlayMediaEvent value)?  playMedia,TResult Function( PauseMediaEvent value)?  pauseMedia,TResult Function( StopMediaEvent value)?  stopMedia,TResult Function( SeekMediaEvent value)?  seekMedia,TResult Function( SetVolumeEvent value)?  setVolume,TResult Function( SetSubtitleEvent value)?  setSubtitle,TResult Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult Function( PositionUpdatedEvent value)?  positionUpdated,TResult Function( DurationUpdatedEvent value)?  durationUpdated,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( ConnectDeviceEvent value)?  connectDevice,TResult Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult Function( LoadMediaEvent value)?  loadMedia,TResult Function( PlayMediaEvent value)?  playMedia,TResult Function( PauseMediaEvent value)?  pauseMedia,TResult Function( StopMediaEvent value)?  stopMedia,TResult Function( SeekMediaEvent value)?  seekMedia,TResult Function( SetVolumeEvent value)?  setVolume,TResult Function( SetSubtitleEvent value)?  setSubtitle,TResult Function( ExtractAndSetSubtitleEvent value)?  extractAndSetSubtitle,TResult Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult Function( PositionUpdatedEvent value)?  positionUpdated,TResult Function( DurationUpdatedEvent value)?  durationUpdated,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
@@ -68,7 +68,8 @@ return pauseMedia(_that);case StopMediaEvent() when stopMedia != null:
 return stopMedia(_that);case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that);case SetVolumeEvent() when setVolume != null:
 return setVolume(_that);case SetSubtitleEvent() when setSubtitle != null:
-return setSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setSubtitle(_that);case ExtractAndSetSubtitleEvent() when extractAndSetSubtitle != null:
+return extractAndSetSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that);case _:
@@ -89,7 +90,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ConnectDeviceEvent value)  connectDevice,required TResult Function( DisconnectDeviceEvent value)  disconnectDevice,required TResult Function( LoadMediaEvent value)  loadMedia,required TResult Function( PlayMediaEvent value)  playMedia,required TResult Function( PauseMediaEvent value)  pauseMedia,required TResult Function( StopMediaEvent value)  stopMedia,required TResult Function( SeekMediaEvent value)  seekMedia,required TResult Function( SetVolumeEvent value)  setVolume,required TResult Function( SetSubtitleEvent value)  setSubtitle,required TResult Function( SessionStateChangedEvent value)  sessionStateChanged,required TResult Function( PositionUpdatedEvent value)  positionUpdated,required TResult Function( DurationUpdatedEvent value)  durationUpdated,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( ConnectDeviceEvent value)  connectDevice,required TResult Function( DisconnectDeviceEvent value)  disconnectDevice,required TResult Function( LoadMediaEvent value)  loadMedia,required TResult Function( PlayMediaEvent value)  playMedia,required TResult Function( PauseMediaEvent value)  pauseMedia,required TResult Function( StopMediaEvent value)  stopMedia,required TResult Function( SeekMediaEvent value)  seekMedia,required TResult Function( SetVolumeEvent value)  setVolume,required TResult Function( SetSubtitleEvent value)  setSubtitle,required TResult Function( ExtractAndSetSubtitleEvent value)  extractAndSetSubtitle,required TResult Function( SessionStateChangedEvent value)  sessionStateChanged,required TResult Function( PositionUpdatedEvent value)  positionUpdated,required TResult Function( DurationUpdatedEvent value)  durationUpdated,}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent():
@@ -101,7 +102,8 @@ return pauseMedia(_that);case StopMediaEvent():
 return stopMedia(_that);case SeekMediaEvent():
 return seekMedia(_that);case SetVolumeEvent():
 return setVolume(_that);case SetSubtitleEvent():
-return setSubtitle(_that);case SessionStateChangedEvent():
+return setSubtitle(_that);case ExtractAndSetSubtitleEvent():
+return extractAndSetSubtitle(_that);case SessionStateChangedEvent():
 return sessionStateChanged(_that);case PositionUpdatedEvent():
 return positionUpdated(_that);case DurationUpdatedEvent():
 return durationUpdated(_that);case _:
@@ -121,7 +123,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ConnectDeviceEvent value)?  connectDevice,TResult? Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult? Function( LoadMediaEvent value)?  loadMedia,TResult? Function( PlayMediaEvent value)?  playMedia,TResult? Function( PauseMediaEvent value)?  pauseMedia,TResult? Function( StopMediaEvent value)?  stopMedia,TResult? Function( SeekMediaEvent value)?  seekMedia,TResult? Function( SetVolumeEvent value)?  setVolume,TResult? Function( SetSubtitleEvent value)?  setSubtitle,TResult? Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult? Function( PositionUpdatedEvent value)?  positionUpdated,TResult? Function( DurationUpdatedEvent value)?  durationUpdated,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( ConnectDeviceEvent value)?  connectDevice,TResult? Function( DisconnectDeviceEvent value)?  disconnectDevice,TResult? Function( LoadMediaEvent value)?  loadMedia,TResult? Function( PlayMediaEvent value)?  playMedia,TResult? Function( PauseMediaEvent value)?  pauseMedia,TResult? Function( StopMediaEvent value)?  stopMedia,TResult? Function( SeekMediaEvent value)?  seekMedia,TResult? Function( SetVolumeEvent value)?  setVolume,TResult? Function( SetSubtitleEvent value)?  setSubtitle,TResult? Function( ExtractAndSetSubtitleEvent value)?  extractAndSetSubtitle,TResult? Function( SessionStateChangedEvent value)?  sessionStateChanged,TResult? Function( PositionUpdatedEvent value)?  positionUpdated,TResult? Function( DurationUpdatedEvent value)?  durationUpdated,}){
 final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
@@ -133,7 +135,8 @@ return pauseMedia(_that);case StopMediaEvent() when stopMedia != null:
 return stopMedia(_that);case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that);case SetVolumeEvent() when setVolume != null:
 return setVolume(_that);case SetSubtitleEvent() when setSubtitle != null:
-return setSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setSubtitle(_that);case ExtractAndSetSubtitleEvent() when extractAndSetSubtitle != null:
+return extractAndSetSubtitle(_that);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that);case _:
@@ -153,7 +156,7 @@ return durationUpdated(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PureCastDevice device)?  connectDevice,TResult Function()?  disconnectDevice,TResult Function( PureCastMedia media)?  loadMedia,TResult Function()?  playMedia,TResult Function()?  pauseMedia,TResult Function()?  stopMedia,TResult Function( Duration position)?  seekMedia,TResult Function( double volume)?  setVolume,TResult Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult Function( PureCastSessionState newState)?  sessionStateChanged,TResult Function( Duration position)?  positionUpdated,TResult Function( Duration duration)?  durationUpdated,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( PureCastDevice device)?  connectDevice,TResult Function()?  disconnectDevice,TResult Function( PureCastMedia media)?  loadMedia,TResult Function()?  playMedia,TResult Function()?  pauseMedia,TResult Function()?  stopMedia,TResult Function( Duration position)?  seekMedia,TResult Function( double volume)?  setVolume,TResult Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult Function( PureCastSubtitleTrack subtitle)?  extractAndSetSubtitle,TResult Function( PureCastSessionState newState)?  sessionStateChanged,TResult Function( Duration position)?  positionUpdated,TResult Function( Duration duration)?  durationUpdated,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
 return connectDevice(_that.device);case DisconnectDeviceEvent() when disconnectDevice != null:
@@ -164,7 +167,8 @@ return pauseMedia();case StopMediaEvent() when stopMedia != null:
 return stopMedia();case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that.position);case SetVolumeEvent() when setVolume != null:
 return setVolume(_that.volume);case SetSubtitleEvent() when setSubtitle != null:
-return setSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setSubtitle(_that.subtitle);case ExtractAndSetSubtitleEvent() when extractAndSetSubtitle != null:
+return extractAndSetSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that.position);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that.duration);case _:
@@ -185,7 +189,7 @@ return durationUpdated(_that.duration);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PureCastDevice device)  connectDevice,required TResult Function()  disconnectDevice,required TResult Function( PureCastMedia media)  loadMedia,required TResult Function()  playMedia,required TResult Function()  pauseMedia,required TResult Function()  stopMedia,required TResult Function( Duration position)  seekMedia,required TResult Function( double volume)  setVolume,required TResult Function( PureCastSubtitleTrack? subtitle)  setSubtitle,required TResult Function( PureCastSessionState newState)  sessionStateChanged,required TResult Function( Duration position)  positionUpdated,required TResult Function( Duration duration)  durationUpdated,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( PureCastDevice device)  connectDevice,required TResult Function()  disconnectDevice,required TResult Function( PureCastMedia media)  loadMedia,required TResult Function()  playMedia,required TResult Function()  pauseMedia,required TResult Function()  stopMedia,required TResult Function( Duration position)  seekMedia,required TResult Function( double volume)  setVolume,required TResult Function( PureCastSubtitleTrack? subtitle)  setSubtitle,required TResult Function( PureCastSubtitleTrack subtitle)  extractAndSetSubtitle,required TResult Function( PureCastSessionState newState)  sessionStateChanged,required TResult Function( Duration position)  positionUpdated,required TResult Function( Duration duration)  durationUpdated,}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent():
 return connectDevice(_that.device);case DisconnectDeviceEvent():
@@ -196,7 +200,8 @@ return pauseMedia();case StopMediaEvent():
 return stopMedia();case SeekMediaEvent():
 return seekMedia(_that.position);case SetVolumeEvent():
 return setVolume(_that.volume);case SetSubtitleEvent():
-return setSubtitle(_that.subtitle);case SessionStateChangedEvent():
+return setSubtitle(_that.subtitle);case ExtractAndSetSubtitleEvent():
+return extractAndSetSubtitle(_that.subtitle);case SessionStateChangedEvent():
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent():
 return positionUpdated(_that.position);case DurationUpdatedEvent():
 return durationUpdated(_that.duration);case _:
@@ -216,7 +221,7 @@ return durationUpdated(_that.duration);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PureCastDevice device)?  connectDevice,TResult? Function()?  disconnectDevice,TResult? Function( PureCastMedia media)?  loadMedia,TResult? Function()?  playMedia,TResult? Function()?  pauseMedia,TResult? Function()?  stopMedia,TResult? Function( Duration position)?  seekMedia,TResult? Function( double volume)?  setVolume,TResult? Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult? Function( PureCastSessionState newState)?  sessionStateChanged,TResult? Function( Duration position)?  positionUpdated,TResult? Function( Duration duration)?  durationUpdated,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( PureCastDevice device)?  connectDevice,TResult? Function()?  disconnectDevice,TResult? Function( PureCastMedia media)?  loadMedia,TResult? Function()?  playMedia,TResult? Function()?  pauseMedia,TResult? Function()?  stopMedia,TResult? Function( Duration position)?  seekMedia,TResult? Function( double volume)?  setVolume,TResult? Function( PureCastSubtitleTrack? subtitle)?  setSubtitle,TResult? Function( PureCastSubtitleTrack subtitle)?  extractAndSetSubtitle,TResult? Function( PureCastSessionState newState)?  sessionStateChanged,TResult? Function( Duration position)?  positionUpdated,TResult? Function( Duration duration)?  durationUpdated,}) {final _that = this;
 switch (_that) {
 case ConnectDeviceEvent() when connectDevice != null:
 return connectDevice(_that.device);case DisconnectDeviceEvent() when disconnectDevice != null:
@@ -227,7 +232,8 @@ return pauseMedia();case StopMediaEvent() when stopMedia != null:
 return stopMedia();case SeekMediaEvent() when seekMedia != null:
 return seekMedia(_that.position);case SetVolumeEvent() when setVolume != null:
 return setVolume(_that.volume);case SetSubtitleEvent() when setSubtitle != null:
-return setSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
+return setSubtitle(_that.subtitle);case ExtractAndSetSubtitleEvent() when extractAndSetSubtitle != null:
+return extractAndSetSubtitle(_that.subtitle);case SessionStateChangedEvent() when sessionStateChanged != null:
 return sessionStateChanged(_that.newState);case PositionUpdatedEvent() when positionUpdated != null:
 return positionUpdated(_that.position);case DurationUpdatedEvent() when durationUpdated != null:
 return durationUpdated(_that.duration);case _:
@@ -700,6 +706,74 @@ class _$SetSubtitleEventCopyWithImpl<$Res>
   return _then(SetSubtitleEvent(
 freezed == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
 as PureCastSubtitleTrack?,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class ExtractAndSetSubtitleEvent implements CastSessionEvent {
+  const ExtractAndSetSubtitleEvent(this.subtitle);
+  
+
+ final  PureCastSubtitleTrack subtitle;
+
+/// Create a copy of CastSessionEvent
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ExtractAndSetSubtitleEventCopyWith<ExtractAndSetSubtitleEvent> get copyWith => _$ExtractAndSetSubtitleEventCopyWithImpl<ExtractAndSetSubtitleEvent>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is ExtractAndSetSubtitleEvent&&(identical(other.subtitle, subtitle) || other.subtitle == subtitle));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,subtitle);
+}
+
+@override
+String toString() {
+    return 'CastSessionEvent.extractAndSetSubtitle(subtitle: $subtitle)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ExtractAndSetSubtitleEventCopyWith<$Res> implements $CastSessionEventCopyWith<$Res> {
+  factory $ExtractAndSetSubtitleEventCopyWith(ExtractAndSetSubtitleEvent value, $Res Function(ExtractAndSetSubtitleEvent) _then) = _$ExtractAndSetSubtitleEventCopyWithImpl;
+@useResult
+$Res call({
+ PureCastSubtitleTrack subtitle
+});
+
+
+
+
+}
+/// @nodoc
+class _$ExtractAndSetSubtitleEventCopyWithImpl<$Res>
+    implements $ExtractAndSetSubtitleEventCopyWith<$Res> {
+  _$ExtractAndSetSubtitleEventCopyWithImpl(this._self, this._then);
+
+  final ExtractAndSetSubtitleEvent _self;
+  final $Res Function(ExtractAndSetSubtitleEvent) _then;
+
+/// Create a copy of CastSessionEvent
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? subtitle = null,}) {
+  return _then(ExtractAndSetSubtitleEvent(
+null == subtitle ? _self.subtitle : subtitle // ignore: cast_nullable_to_non_nullable
+as PureCastSubtitleTrack,
   ));
 }
 

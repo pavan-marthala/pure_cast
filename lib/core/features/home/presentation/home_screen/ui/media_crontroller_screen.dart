@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/subtitle/subtitle_extraction_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
@@ -27,6 +30,31 @@ class MediaControllerScreen extends StatefulWidget {
 }
 
 class _MediaControllerScreenState extends State<MediaControllerScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sessionBloc = context.read<CastSessionBloc>();
+      final media = sessionBloc.state.activeMedia;
+      if (media != null && media.isLocalFile) {
+        final file = File(media.uri);
+        file.length().then((fileSize) {
+          file.lastModified().then((lastModified) {
+            if (!mounted) return;
+            context.read<SubtitleExtractionBloc>().add(
+              SubtitleExtractionEvent.inspectSubtitles(
+                filePath: media.uri,
+                fileSize: fileSize,
+                lastModified: lastModified,
+              ),
+            );
+          });
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(slivers: [Header(), Body()]);
@@ -164,10 +192,27 @@ class Body extends StatelessWidget {
                   Divider(),
                   GestureDetector(
                     onTap: () {
+                      final extractionState = context
+                          .read<SubtitleExtractionBloc>()
+                          .state;
+                      final discoveredSubtitles = extractionState.streams.map((
+                        stream,
+                      ) {
+                        return PureCastSubtitleTrack(
+                          id: '${media!.uri}:${stream.streamIndex}',
+                          label: stream.displayLabel,
+                          language: stream.language ?? '',
+                          url: media.uri,
+                          format: stream.codecName.toLowerCase(),
+                        );
+                      }).toList();
+                      print(extractionState);
                       SubtitleSwitcher.show(
                         context,
                         activeSubtitle: subtitle,
-                        subtitles: media?.subtitles ?? [],
+                        subtitles: discoveredSubtitles.isNotEmpty
+                            ? discoveredSubtitles
+                            : (media?.subtitles ?? []),
                       );
                     },
                     child: Padding(

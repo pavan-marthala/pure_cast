@@ -10,9 +10,9 @@ import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart
 abstract class LocalMediaDataSource {
   Future<bool> requestPermission();
   Future<List<PureCastMedia>> fetchLocalMedia({
-    RequestType type = RequestType.common,
-    int page = 0,
-    int size = 50,
+    required RequestType type,
+    required int page,
+    required int size,
   });
   Future<File?> getAssetFile(String assetId);
   Future<List<PureCastMedia>> pickFiles();
@@ -42,6 +42,11 @@ class PhotoManagerMediaSource implements LocalMediaDataSource {
     final List<AssetPathEntity> albums = await PhotoManager.getAssetPathList(
       type: type,
       onlyAll: true,
+      filterOption: FilterOptionGroup(
+        orders: [
+          const OrderOption(type: OrderOptionType.createDate, asc: false,),
+        ],
+      ),
     );
     if (albums.isEmpty) return [];
 

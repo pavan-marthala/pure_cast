@@ -14,6 +14,9 @@ abstract class CastSessionEvent with _$CastSessionEvent {
   const factory CastSessionEvent.setVolume(double volume) = SetVolumeEvent;
   const factory CastSessionEvent.setSubtitle(PureCastSubtitleTrack? subtitle) =
       SetSubtitleEvent;
+  const factory CastSessionEvent.extractAndSetSubtitle(
+    PureCastSubtitleTrack subtitle,
+  ) = ExtractAndSetSubtitleEvent;
   const factory CastSessionEvent.sessionStateChanged(
     PureCastSessionState newState,
   ) = SessionStateChangedEvent;

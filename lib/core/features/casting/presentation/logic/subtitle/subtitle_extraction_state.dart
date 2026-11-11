@@ -5,7 +5,11 @@ enum SubtitleExtractionStatus {
   inspecting,
   noSubtitles,
   subtitlesDetected,
+  extracting,
+  extracted,
+  partialFailure,
   error,
+  cancelled,
 }
 
 @freezed
@@ -17,5 +21,7 @@ abstract class SubtitleExtractionState with _$SubtitleExtractionState {
     String? currentFilePath,
     String? error,
     @Default([]) List<SubtitleStreamInfo> streams,
+    SubtitleExtractionResult? lastResult,
+    @Default([]) List<SubtitleExtractionResult> extractionResults,
   }) = _SubtitleExtractionState;
 }

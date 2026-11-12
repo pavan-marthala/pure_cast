@@ -82,3 +82,8 @@ class PrepareFailedException extends CastException {
 class UnsupportedMediaException extends CastException {
   UnsupportedMediaException(super.message, [super.cause]);
 }
+
+/// Thrown when media probing (FFprobe) fails or times out.
+class ProbeFailedException extends CastException {
+  ProbeFailedException(super.message, [super.cause]);
+}

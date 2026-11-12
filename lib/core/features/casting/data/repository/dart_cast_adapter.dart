@@ -104,21 +104,20 @@ class DartCastAdapter implements ICastService {
       try {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
       } catch (e) {
-        // Surface prepare failures and unsupported reasons without fallback.
-        if (e is dart_cast.UnsupportedMediaException ||
-            e is dart_cast.PrepareFailedException) {
-          throw PureCastException(e.toString(), e);
+        // Only fall back to direct load for probe failures.
+        if (e is dart_cast.ProbeFailedException) {
+          final session = _castService.activeSession;
+          if (session == null) rethrow;
+          try {
+            final dartMedia = _mapMediaToDartCast(media);
+            await session.loadMedia(dartMedia);
+            return;
+          } catch (e2) {
+            throw PureCastException('Failed to load media: ${media.title}', e2);
+          }
         }
-        // Fallback: try direct load (probe failures only)
-        final session = _castService.activeSession;
-        if (session == null) rethrow;
-        try {
-          final dartMedia = _mapMediaToDartCast(media);
-          await session.loadMedia(dartMedia);
-          return;
-        } catch (e2) {
-          throw PureCastException('This Chromecast can\'t play this video', e2);
-        }
+        // Surface all other errors without fallback.
+        throw PureCastException(e.toString(), e);
       }
     }
     final session = _castService.activeSession;

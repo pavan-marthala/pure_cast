@@ -375,18 +375,8 @@ class ChromecastSession extends CastSession {
         '[PREPDBG] probe container=${probe!.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a) => '${a.codec}/${a.channels}').join(',')}',
       );
     } catch (e) {
-      debugPrint(
-        '[HLSDBG] probe failed/timeout: $e; falling back to direct load',
-      );
-      await loadMedia(
-        CastMedia.file(
-          filePath: path,
-          type: CastMediaType.mp4,
-          subtitles: subtitle != null ? [subtitle] : const [],
-          defaultSubtitle: subtitle,
-        ),
-      );
-      return;
+      debugPrint('[HLSDBG] probe failed/timeout: $e');
+      throw ProbeFailedException('Probe failed: $e', e);
     }
     final audioIdx =
         audioStreamIndex == 0

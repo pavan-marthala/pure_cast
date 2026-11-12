@@ -1,7 +1,10 @@
+import 'package:dotlottie_flutter/dotlottie_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
@@ -9,6 +12,7 @@ import 'package:pure_cast/core/features/music_library/presentation/music_library
 import 'package:pure_cast/core/features/music_library/presentation/music_library_screen/ui/recently_played_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/check_platforms.dart';
+import 'package:pure_cast/core/utils/state_status.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -39,11 +43,34 @@ class HomeScreen extends StatelessWidget {
               onPressed: () => context.push('/cast-debug'),
               icon: Icon(Icons.bug_report),
             ),
-          IconButton(
-            onPressed: () {
-              DeviceManagerScreen.show(context);
+          BlocSelector<CastSessionBloc, CastSessionState, StateStatus>(
+            selector: (state) {
+              return state.connectionStatus;
             },
-            icon: Icon(Icons.tv),
+            builder: (context, isLoading) {
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  DeviceManagerScreen.show(context);
+                },
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IgnorePointer(
+                      child: DotLottieView(
+                        source: "lottie/cast.lottie",
+                        sourceType: 'asset',
+                        width: 30,
+                        height: 30,
+                        loop: true,
+                        autoplay: isLoading == .loading,
+                      ),
+                    ),
+                    Container(width: 30, height: 30, color: Colors.transparent),
+                  ],
+                ),
+              );
+            },
           ),
           IconButton(
             onPressed: () {

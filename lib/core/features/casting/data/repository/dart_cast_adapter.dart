@@ -167,6 +167,11 @@ class DartCastAdapter implements ICastService {
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
     String? forcePlan,
+    bool waitForFinish = false,
+    bool includeDuration = false,
+    String streamType = 'BUFFERED',
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
   }) async {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active cast session');
@@ -181,6 +186,11 @@ class DartCastAdapter implements ICastService {
           caps: await _detectCaps(),
           forcePlan: forcePlan,
           subtitle: dartSubtitle,
+          waitForFinish: waitForFinish,
+          includeDuration: includeDuration,
+          streamType: streamType,
+          hlsSegmentFormat: hlsSegmentFormat,
+          hlsVideoSegmentFormat: hlsVideoSegmentFormat,
           memoryLookup: (receiverId, codecKey) =>
               ReceiverCodecMemory.lookup(receiverId, codecKey),
           memoryRecord: (receiverId, codecKey, directOk) =>
@@ -295,6 +305,21 @@ class DartCastAdapter implements ICastService {
       log('PureCast: setSubtitle error: $e');
       throw PureCastException('Failed to set subtitle', e);
     }
+  }
+
+  @override
+  Future<String> getDebugMediaStatus() async {
+    final session = _castService.activeSession;
+    if (session == null) return 'no session';
+    final buf = StringBuffer();
+    buf.writeln('sessionState=${session.state}');
+    buf.writeln('position=${session.position}');
+    buf.writeln('duration=${session.duration}');
+    if (session is dart_cast.ChromecastSession) {
+      buf.writeln('mediaSessionId=${session.mediaSessionId}');
+      buf.writeln('idleReason=${session.idleReason ?? "<none>"}');
+    }
+    return buf.toString();
   }
 
   @override

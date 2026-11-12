@@ -24,6 +24,11 @@ abstract class ICastService {
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
     String? forcePlan,
+    bool waitForFinish = false,
+    bool includeDuration = false,
+    String streamType = 'BUFFERED',
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
   });
 
   /// Starts or resumes media playback.
@@ -43,6 +48,10 @@ abstract class ICastService {
 
   /// Sets the active subtitle track (null to disable subtitles).
   Future<void> setSubtitle(PureCastSubtitleTrack? subtitle);
+
+  /// Returns a debug string of the receiver's current media status.
+  /// Only meaningful for Chromecast sessions.
+  Future<String> getDebugMediaStatus();
 
   /// Stream of session state changes.
   Stream<PureCastSessionState> get sessionStateStream;

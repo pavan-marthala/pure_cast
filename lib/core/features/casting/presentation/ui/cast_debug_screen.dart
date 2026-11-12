@@ -26,6 +26,10 @@ class CastDebugScreen extends StatefulWidget {
 class _CastDebugScreenState extends State<CastDebugScreen> {
   final List<String> _log = [];
   bool _experimentalTranscode = false;
+  bool _waitForFinish = false;
+  bool _includeDuration = false;
+  bool _useLive = false;
+  bool _addHlsSegmentFormat = false;
 
   @override
   void initState() {
@@ -109,6 +113,8 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     if (res.isEmpty) return;
     final src = res.first.path;
     if (src == null) return;
+    final variant = 'waitForFinish=$_waitForFinish includeDuration=$_includeDuration streamType=${_useLive ? 'LIVE' : 'BUFFERED'} hlsSegmentFormat=${_addHlsSegmentFormat ? 'TS' : 'null'} hlsVideoSegmentFormat=${_addHlsSegmentFormat ? 'MPEG2_TS' : 'null'}';
+    _logLine('[RXDBG] variant: $variant');
     _logLine('forced plan=$plan src=$src');
     final bloc = context.read<CastSessionBloc>();
     final dev = bloc.state.activeDevice;
@@ -119,8 +125,25 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     _logLine('receiver=${dev.id} ${dev.name}');
     try {
       final service = getIt<ICastService>();
-      await service.loadLocalFile(src, forcePlan: plan);
+      await service.loadLocalFile(
+        src,
+        forcePlan: plan,
+        waitForFinish: _waitForFinish,
+        includeDuration: _includeDuration,
+        streamType: _useLive ? 'LIVE' : 'BUFFERED',
+        hlsSegmentFormat: _addHlsSegmentFormat ? 'TS' : null,
+        hlsVideoSegmentFormat: _addHlsSegmentFormat ? 'MPEG2_TS' : null,
+      );
       _logLine('loadLocalFile completed');
+      // Call play() after load.
+      await service.play();
+      _logLine('play() called');
+      // Log receiver media status for 20 seconds.
+      for (var i = 0; i < 20; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        final status = await service.getDebugMediaStatus();
+        _logLine('[RXDBG] t=${i + 1}s\n$status');
+      }
     } catch (e, st) {
       _logLine('error: $e');
       _logLine(st.toString());
@@ -141,6 +164,27 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               setState(() => _experimentalTranscode = v);
               _logLine('experimental transcode = $v');
             },
+          ),
+          const Text('Experiment switches:', style: TextStyle(fontWeight: FontWeight.bold)),
+          CheckboxListTile(
+            title: const Text('A: Wait for ffmpeg to finish'),
+            value: _waitForFinish,
+            onChanged: (v) => setState(() => _waitForFinish = v ?? false),
+          ),
+          CheckboxListTile(
+            title: const Text('B: Include duration in LOAD'),
+            value: _includeDuration,
+            onChanged: (v) => setState(() => _includeDuration = v ?? false),
+          ),
+          CheckboxListTile(
+            title: const Text('B: Use LIVE streamType'),
+            value: _useLive,
+            onChanged: (v) => setState(() => _useLive = v ?? false),
+          ),
+          CheckboxListTile(
+            title: const Text('C: Add hlsSegmentFormat/hlsVideoSegmentFormat'),
+            value: _addHlsSegmentFormat,
+            onChanged: (v) => setState(() => _addHlsSegmentFormat = v ?? false),
           ),
           Wrap(
             runSpacing: 12,

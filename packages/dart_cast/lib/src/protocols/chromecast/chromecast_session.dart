@@ -79,6 +79,7 @@ class ChromecastSession extends CastSession {
   String? _transportId;
   String? _sessionId; // Used for STOP app via receiver namespace.
   int? _mediaSessionId;
+  String? _idleReason;
 
   /// Fingerprint of the last logged MEDIA_STATUS, used to elide the payload
   /// of unchanged 1 Hz poll answers from the debug log.
@@ -140,6 +141,8 @@ class ChromecastSession extends CastSession {
 
   /// The current receiver session ID, if connected.
   String? get sessionId => _sessionId;
+  int? get mediaSessionId => _mediaSessionId;
+  String? get idleReason => _idleReason;
   Timer? _heartbeatTimer;
   StreamSubscription<dynamic>? _messageSubscription;
 
@@ -314,6 +317,8 @@ class ChromecastSession extends CastSession {
     String? streamType,
     Duration? duration,
     bool bypassTransform = false,
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
   }) async {
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
@@ -328,7 +333,14 @@ class ChromecastSession extends CastSession {
     _isLoadingMedia = true;
 
     try {
-      await _loadMediaInternal(media, bypassTransform: bypassTransform);
+      await _loadMediaInternal(
+        media,
+        bypassTransform: bypassTransform,
+        streamType: streamType,
+        duration: duration,
+        hlsSegmentFormat: hlsSegmentFormat,
+        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
+      );
     } finally {
       _isLoadingMedia = false;
     }
@@ -341,6 +353,11 @@ class ChromecastSession extends CastSession {
     CastDeviceCaps caps = const CastDeviceCaps(),
     CastSubtitle? subtitle,
     String? forcePlan,
+    bool waitForFinish = false,
+    bool includeDuration = false,
+    String streamType = 'BUFFERED',
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
     Future<bool?> Function(String receiverId, String codecKey)? memoryLookup,
     Future<void> Function(String receiverId, String codecKey, bool directOk)?
     memoryRecord,
@@ -590,10 +607,19 @@ class ChromecastSession extends CastSession {
       buildArgs: builder,
     );
     onPrepareStarted?.call(prepare);
-    // wait for ready
-    await prepare.stateStream.firstWhere(
-      (s) => s == PrepareState.ready || s == PrepareState.failed,
-    );
+    if (waitForFinish) {
+      // Wait for ffmpeg to fully complete so the playlist gets #EXT-X-ENDLIST.
+      await prepare.stateStream.firstWhere(
+        (s) => s == PrepareState.ready || s == PrepareState.failed,
+      );
+      // Give ffmpeg time to finish writing all segments and the endlist.
+      await Future.delayed(const Duration(seconds: 2));
+    } else {
+      // wait for ready (first 2 segments)
+      await prepare.stateStream.firstWhere(
+        (s) => s == PrepareState.ready || s == PrepareState.failed,
+      );
+    }
     onPrepareFinished?.call();
     if (prepare.state != PrepareState.ready) {
       try {
@@ -635,10 +661,13 @@ class ChromecastSession extends CastSession {
       ),
       contentType: 'application/x-mpegURL',
       duration:
-          probe.durationSeconds != null
+          includeDuration && probe.durationSeconds != null
               ? Duration(milliseconds: (probe.durationSeconds! * 1000).round())
               : null,
       bypassTransform: true,
+      streamType: streamType,
+      hlsSegmentFormat: hlsSegmentFormat,
+      hlsVideoSegmentFormat: hlsVideoSegmentFormat,
     );
   }
 
@@ -708,6 +737,10 @@ class ChromecastSession extends CastSession {
   Future<void> _loadMediaInternal(
     CastMedia media, {
     bool bypassTransform = false,
+    String? streamType,
+    Duration? duration,
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
   }) async {
     stateMachine.transitionTo(SessionState.loading);
 
@@ -740,6 +773,10 @@ class ChromecastSession extends CastSession {
         proxyUrl: media.url,
         effectiveType: CastMediaType.hls,
         attemptLabel: 'prepared-hls',
+        duration: duration,
+        streamType: streamType ?? 'BUFFERED',
+        hlsSegmentFormat: hlsSegmentFormat,
+        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
       );
       return;
     }
@@ -861,6 +898,10 @@ class ChromecastSession extends CastSession {
     required String proxyUrl,
     required CastMediaType effectiveType,
     required String attemptLabel,
+    Duration? duration,
+    String streamType = 'BUFFERED',
+    String? hlsSegmentFormat,
+    String? hlsVideoSegmentFormat,
   }) async {
     // Extract token to keep across cleanup. The token is consistently
     // the second path segment regardless of route shape:
@@ -924,8 +965,12 @@ class ChromecastSession extends CastSession {
           media.startPosition != null
               ? media.startPosition!.inMilliseconds / 1000.0
               : null,
+      duration: duration != null ? duration.inMilliseconds / 1000.0 : null,
       subtitles: subtitles.isNotEmpty ? subtitles : null,
       activeTrackIds: defaultTrackId != null ? [defaultTrackId] : null,
+      streamType: streamType,
+      hlsSegmentFormat: hlsSegmentFormat,
+      hlsVideoSegmentFormat: hlsVideoSegmentFormat,
     );
 
     final loadRequestId =
@@ -1365,6 +1410,7 @@ class ChromecastSession extends CastSession {
   }
 
   void _updateState(String playerState, String? idleReason) {
+    _idleReason = idleReason;
     final targetState = switch (playerState) {
       'PLAYING' => SessionState.playing,
       'PAUSED' => SessionState.paused,

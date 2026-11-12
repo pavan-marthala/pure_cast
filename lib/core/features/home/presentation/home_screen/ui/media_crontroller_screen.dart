@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
@@ -66,8 +67,6 @@ class Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessionBloc = context.read<CastSessionBloc>();
-    final state = sessionBloc.state;
     return SliverAppBar(
       expandedHeight: 360,
       centerTitle: true,
@@ -90,7 +89,15 @@ class Header extends StatelessWidget {
         builder: (context, constraints) {
           return FlexibleSpaceBar(
             centerTitle: true,
-            background: CurrentlyPlayingBG(sessionState: state),
+            background:
+                BlocSelector<CastSessionBloc, CastSessionState, Uint8List?>(
+                  selector: (state) {
+                    return state.activeMedia?.thumbnailBytes;
+                  },
+                  builder: (context, thumbnailBytes) {
+                    return CurrentlyPlayingBG(thumbnailBytes: thumbnailBytes);
+                  },
+                ),
           );
         },
       ),
@@ -145,7 +152,7 @@ class Body extends StatelessWidget {
           );
         }
         if (prepareError != null) {
-          return SliverToBoxAdapter(child: Center(child: Text(prepareError!)));
+          return SliverToBoxAdapter(child: Center(child: Text(prepareError)));
         }
         return SliverPadding(
           padding: .symmetric(horizontal: 16),

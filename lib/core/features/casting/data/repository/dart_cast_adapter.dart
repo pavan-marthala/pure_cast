@@ -7,6 +7,7 @@ import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
 
 /// Concrete adapter wrapping dart_cast package services.
 class DartCastAdapter implements ICastService {
@@ -102,12 +103,20 @@ class DartCastAdapter implements ICastService {
       try {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
       } catch (e) {
+        final msg = e.toString();
+        if (msg.contains('Unsupported:') || msg.contains("can't play this video")) {
+          throw PureCastException(msg, e);
+        }
         // Fallback: try direct load
         final session = _castService.activeSession;
         if (session == null) rethrow;
-        final dartMedia = _mapMediaToDartCast(media);
-        await session.loadMedia(dartMedia);
-        return;
+        try {
+          final dartMedia = _mapMediaToDartCast(media);
+          await session.loadMedia(dartMedia);
+          return;
+        } catch (e2) {
+          throw PureCastException('This Chromecast can\'t play this video', e2);
+        }
       }
     }
     final session = _castService.activeSession;
@@ -143,6 +152,7 @@ class DartCastAdapter implements ICastService {
     int audioStreamIndex = 0,
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
+    String? forcePlan,
   }) async {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active cast session');
@@ -153,8 +163,14 @@ class DartCastAdapter implements ICastService {
         await session.loadLocalFile(
           path,
           audioStreamIndex: audioStreamIndex,
-          caps: const dart_cast.CastDeviceCaps(hasH264Encoder: false),
+          // Detect FFmpeg capabilities at runtime instead of hardcoding false.
+          caps: await dart_cast.CastFfmpegCapabilities.detect(),
+          forcePlan: forcePlan,
           subtitle: dartSubtitle,
+          memoryLookup: (receiverId, codecKey) =>
+              ReceiverCodecMemory.lookup(receiverId, codecKey),
+          memoryRecord: (receiverId, codecKey, directOk) =>
+              ReceiverCodecMemory.record(receiverId, codecKey, directOk),
         );
       } else {
         // DLNA / others: direct load

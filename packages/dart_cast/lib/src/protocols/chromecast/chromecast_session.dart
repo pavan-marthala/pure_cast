@@ -338,9 +338,14 @@ class ChromecastSession extends CastSession {
     int audioStreamIndex = 0,
     CastDeviceCaps caps = const CastDeviceCaps(),
     CastSubtitle? subtitle,
+    String? forcePlan,
+    Future<bool?> Function(String receiverId, String codecKey)? memoryLookup,
+    Future<void> Function(String receiverId, String codecKey, bool directOk)? memoryRecord,
     void Function(CastPrepareSession?)? onPrepareStarted,
     void Function()? onPrepareFinished,
   }) async {
+    debugPrint('[PREPDBG] receiver=${device.name} id=${device.id}');
+    debugPrint('[PREPDBG] caps: hasH264Encoder=${caps.hasH264Encoder} hasH264Mediacodec=${caps.hasH264Mediacodec} transcodeEnabled=${caps.transcodeEnabled} supportsHevc=${caps.supportsHevc}');
     // Probe (with fallback)
     String input = path;
     if (input.startsWith('content://')) {
@@ -364,18 +369,114 @@ class ChromecastSession extends CastSession {
       return;
     }
     final audioIdx = audioStreamIndex == 0 ? _defaultAudioIndex(probe.audio) : audioStreamIndex;
+    if (forcePlan == 'remuxAudio') plan = RemuxAudioPlan('forced', audioStreamIndex: audioIdx);
+    if (forcePlan == 'remuxContainer') plan = RemuxContainerPlan('forced', audioStreamIndex: audioIdx);
 
-    if (plan is DirectPlan) {
-      await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
-      return;
+    if (plan is DirectPlan || plan is UncertainDirectPlan) {
+      final codec = probe?.video?.codec ?? 'video';
+      final depth = bitDepthOf(probe?.video?.pixFmt);
+      final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
+      final memKey = '${device.id}_${codec}_$depthStr';
+      debugPrint('[PREPDBG] memory lookup key=$memKey');
+      // Check receiver memory before attempting direct playback.
+      bool? memResult;
+      if (memoryLookup != null) {
+        try {
+          memResult = await memoryLookup(device.id, memKey);
+        } catch (_) {
+          memResult = null; // unknown on lookup failure
+        }
+      }
+      debugPrint('[PREPDBG] memory result for $memKey: $memResult');
+      if (memResult == false) {
+        // Known to fail on this receiver — skip direct, go to fallback/transcode.
+        debugPrint('[PREPDBG] memory says directFailed for $memKey; skipping direct attempt');
+        if (plan is UncertainDirectPlan && (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+          // fall through to prepare path
+        } else {
+          throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+        }
+      } else {
+        // Unknown or supported: attempt direct playback.
+        try {
+          await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe!.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+          debugPrint('[PREPDBG] direct load OK for $memKey');
+          // Record positive result.
+          if (memoryRecord != null) {
+            try {
+              await memoryRecord(device.id, memKey, true);
+            } catch (_) {}
+          }
+          return;
+        } catch (e) {
+          debugPrint('[PREPDBG] direct load FAILED for $memKey: $e');
+          // Only record negative on receiver rejection (LOAD_FAILED), not network/timeout/other.
+          final isReceiverRejection = e.toString().contains('LOAD_FAILED') ||
+              e.toString().contains('Receiver rejected') ||
+              e.toString().contains('IDLE/ERROR');
+          if (isReceiverRejection && memoryRecord != null) {
+            try {
+              await memoryRecord(device.id, memKey, false);
+              debugPrint('[PREPDBG] recorded directFailed for $memKey');
+            } catch (_) {}
+          }
+          if (plan is UncertainDirectPlan && (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+            // fall through to prepare path
+          } else {
+            throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+          }
+        }
+      }
     }
     if (plan is UnsupportedPlan) {
+      final codec = probe?.video?.codec ?? 'video';
+      final depth = bitDepthOf(probe?.video?.pixFmt);
+      final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
+      final isAv1 = (probe?.video?.codec.toLowerCase() == 'av1');
+      bool tryDirect = !(isAv1 || depth >= 10);
+      final memKey = '${device.id}_${codec}_$depthStr';
+      if (memoryLookup != null) {
+        try {
+          final memResult = await memoryLookup(device.id, memKey);
+          if (memResult == false) {
+            tryDirect = false;
+            debugPrint('[PREPDBG] memory says directFailed for $memKey; skipping direct');
+          }
+        } catch (_) {}
+      }
+      if (tryDirect) {
+        try {
+          await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe!.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+          if (memoryRecord != null) {
+            try { await memoryRecord(device.id, memKey, true); } catch (_) {}
+          }
+          return;
+        } catch (e) {
+          final isReceiverRejection = e.toString().contains('LOAD_FAILED') ||
+              e.toString().contains('Receiver rejected') ||
+              e.toString().contains('IDLE/ERROR');
+          if (isReceiverRejection && memoryRecord != null) {
+            try { await memoryRecord(device.id, memKey, false); } catch (_) {}
+          }
+          throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+        }
+      }
       throw Exception('Unsupported: ${plan.reason}');
     }
 
     // remux/transcode -> prepare
     List<String> Function(String) builder;
-    if (plan is RemuxAudioPlan) {
+    if (plan is UncertainDirectPlan) {
+      if (caps.hasH264Encoder) {
+        builder = (out) => CastFfmpegCommands.transcodeVideo(input: path, outputDir: out, audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex, videoEncoder: 'libx264');
+      } else if (caps.hasH264Mediacodec) {
+        builder = (out) => CastFfmpegCommands.transcodeVideoMediacodec(input: path, outputDir: out, audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex);
+      } else {
+        final codec = probe?.video?.codec ?? 'video';
+        final depth = (probe?.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
+        throw Exception('This Chromecast can\'t play this video ($codec $depth)');
+      }
+    } else if (plan is RemuxAudioPlan) {
       builder = (out) => CastFfmpegCommands.remuxAudio(input: path, outputDir: out, audioStreamIndex: audioIdx);
     } else if (plan is RemuxContainerPlan) {
       builder = (out) => CastFfmpegCommands.remuxContainer(input: path, outputDir: out, audioStreamIndex: audioIdx);

@@ -23,6 +23,7 @@ abstract class ICastService {
     int audioStreamIndex = 0,
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
+    String? forcePlan,
   });
 
   /// Starts or resumes media playback.

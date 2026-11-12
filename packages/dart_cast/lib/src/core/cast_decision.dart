@@ -7,6 +7,12 @@ class DirectPlan extends CastPlan {
   DirectPlan(this.reason);
 }
 
+class UncertainDirectPlan extends CastPlan {
+  final String reason;
+  final int audioStreamIndex;
+  UncertainDirectPlan(this.reason, {this.audioStreamIndex = 0});
+}
+
 class RemuxAudioPlan extends CastPlan {
   final String reason;
   final int audioStreamIndex;
@@ -34,11 +40,13 @@ class CastDeviceCaps {
   final bool supportsHevc;
   final bool hasH264Encoder;
   final bool hasH264Mediacodec;
+  final bool transcodeEnabled;
   final String? modelName;
   const CastDeviceCaps({
     this.supportsHevc = false,
     this.hasH264Encoder = false,
     this.hasH264Mediacodec = false,
+    this.transcodeEnabled = false,
     this.modelName,
   });
 }
@@ -75,9 +83,13 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   final isH264 = CastCompat.h264Codecs.contains(vCodec);
   final isVp9 = CastCompat.vp9Codecs.contains(vCodec);
   final isHevc = CastCompat.hevcCodecs.contains(vCodec);
+  final is10bit = bitDepthOf(v.pixFmt) >= 10;
+  final isAv1 = vCodec == 'av1';
+  final isHevc8 = isHevc && !is10bit;
   final videoCompatible = (isH264 && (v.level == null || v.level! <= 42)) ||
       isVp9 ||
       (isHevc && caps.supportsHevc);
+  final isUncertain = (isHevc8 || isVp9) && !is10bit;
   AudioStream? audio;
   if (probe.audio.isNotEmpty) {
     final idx = audioIdx < probe.audio.length ? audioIdx : 0;
@@ -87,9 +99,18 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   final audioIncompatible = audio != null && CastCompat.incompatibleAudio.contains(audio.codec.toLowerCase());
   final containerOk = CastCompat.directContainers.contains(probe.container.split(',').first.trim().toLowerCase());
 
-  if (!videoCompatible) {
-    if (!caps.hasH264Encoder) return UnsupportedPlan('video codec ${v.codec} not supported and no H.264 encoder');
+  if (isAv1 || is10bit) {
+    if (!caps.hasH264Encoder && !caps.hasH264Mediacodec) return UnsupportedPlan('no usable H.264 encoder');
+    if (!caps.transcodeEnabled) return UnsupportedPlan('video transcode is disabled');
     return TranscodeVideoPlan('video codec ${v.codec} needs transcode', audioStreamIndex: audioIdx);
+  }
+  if (!videoCompatible) {
+    if (!caps.hasH264Encoder && !caps.hasH264Mediacodec) return UnsupportedPlan('no usable H.264 encoder');
+    if (!caps.transcodeEnabled) return UnsupportedPlan('video transcode is disabled');
+    return TranscodeVideoPlan('video codec ${v.codec} needs transcode', audioStreamIndex: audioIdx);
+  }
+  if (isUncertain) {
+    return UncertainDirectPlan('trying direct play for ${v.codec}', audioStreamIndex: audioIdx);
   }
   if (audioIncompatible) {
     return RemuxAudioPlan('audio codec ${audio!.codec} needs remux to AAC', audioStreamIndex: audioIdx);
@@ -108,4 +129,15 @@ int _defaultAudioIndex(List<AudioStream> audio) {
     if (audio[i].isDefault) return i;
   }
   return 0;
+}
+
+
+int bitDepthOf(String? pixFmt) {
+  if (pixFmt == null) return 8;
+  final p = pixFmt.toLowerCase();
+  if (p.contains('10') || p.contains('p10')) return 10;
+  if (p.contains('12')) return 12;
+  // full-range 8-bit yuvj*
+  if (p.startsWith('yuvj')) return 8;
+  return 8;
 }

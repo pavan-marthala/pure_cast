@@ -17,6 +17,7 @@ import 'package:pure_cast/core/features/music_library/presentation/logic/media/m
 import 'package:pure_cast/core/features/music_library/presentation/logic/recently_played/recently_played_bloc.dart';
 import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/splash_screen.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
+import 'package:pure_cast/core/features/casting/presentation/ui/cast_debug_screen.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
 import 'package:pure_cast/core/utils/check_platforms.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
@@ -33,6 +34,7 @@ void main() async {
   await CastPrepareSession.cleanupLeftovers();
   if (kDebugMode) {
     CastFfmpegDiagnostics.dumpCapabilities();
+    CastFfmpegCapabilities.dumpDiagnostics();
   }
   if (PlatformChecker.isAndroid() || PlatformChecker.isIOS()) {
     _initBackgroundService();
@@ -96,6 +98,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           path: AppRoutes.home,
           builder: (context, state) => const HomeScreen(),
         ),
+        if (kDebugMode)
+          GoRoute(
+            path: AppRoutes.castDebug,
+            builder: (context, state) => const CastDebugScreen(),
+          ),
       ],
     );
 

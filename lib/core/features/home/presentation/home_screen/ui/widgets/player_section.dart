@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
@@ -27,148 +29,158 @@ class CurrentlyPlaying extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessionState = context.watch<CastSessionBloc>().state;
-    final media = sessionState.activeMedia;
     final colors = context.appColors;
     final typo = context.appTypography;
 
-    return GestureDetector(
-      onTap: () {
-        MediaControllerScreen.show(context);
-      },
-      child: ClipRRect(
-        borderRadius: .circular(12),
-        child: SizedBox(
-          height: 260,
-          width: double.infinity,
-          child: Stack(
-            children: [
-              CurrentlyPlayingBG(sessionState: sessionState),
-              Padding(
-                padding: .all(20),
-                child: Column(
-                  crossAxisAlignment: .start,
-                  children: [
-                    Align(
-                      alignment: .centerRight,
-                      child: Container(
-                        padding: .symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: colors.background,
-                          borderRadius: .circular(18),
-                          border: Border.all(color: colors.text4),
+    return BlocBuilder<CastSessionBloc, CastSessionState>(
+      builder: (context, sessionState) {
+        final media = sessionState.activeMedia;
+        return GestureDetector(
+          onTap: () {
+            MediaControllerScreen.show(context);
+          },
+          child: ClipRRect(
+            borderRadius: .circular(12),
+            child: SizedBox(
+              height: 260,
+              width: double.infinity,
+              child: Stack(
+                children: [
+                  CurrentlyPlayingBG(
+                    thumbnailBytes: sessionState.activeMedia?.thumbnailBytes,
+                  ),
+                  Padding(
+                    padding: .all(20),
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      children: [
+                        Align(
+                          alignment: .centerRight,
+                          child: Container(
+                            padding: .symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: .circular(18),
+                              border: Border.all(color: colors.text4),
+                            ),
+                            child: Row(
+                              mainAxisSize: .min,
+                              spacing: 6,
+                              children: [
+                                Icon(
+                                  Icons.cast_sharp,
+                                  color: colors.primary,
+                                  size: 12,
+                                ),
+                                Text(
+                                  sessionState.activeDevice?.name ??
+                                      "Casting Device",
+                                  style: typo.labelSmall.copyWith(
+                                    color: colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: .min,
+                        const Spacer(),
+                        Row(
                           spacing: 6,
                           children: [
-                            Icon(
-                              Icons.cast_sharp,
-                              color: colors.primary,
-                              size: 12,
-                            ),
-                            Text(
-                              sessionState.activeDevice?.name ??
-                                  "Casting Device",
-                              style: typo.labelSmall.copyWith(
-                                color: colors.white,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 10,
+                            if (sessionState.sessionState == .buffering)
+                              SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                ),
+                              ),
+                            if (sessionState.sessionState == .paused)
+                              IconButton(
+                                onPressed: () {
+                                  context.read<CastSessionBloc>().add(
+                                    CastSessionEvent.playMedia(),
+                                  );
+                                },
+                                icon: Icon(Icons.play_arrow),
+                              ),
+                            if (sessionState.sessionState == .playing)
+                              IconButton(
+                                onPressed: () {
+                                  context.read<CastSessionBloc>().add(
+                                    CastSessionEvent.pauseMedia(),
+                                  );
+                                },
+                                icon: Icon(Icons.pause),
+                              ),
+                            Expanded(
+                              child: Text(
+                                media?.title ?? "Unknown Title",
+                                style: typo.titleLarge.copyWith(
+                                  color: colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Row(
-                      spacing: 6,
-                      children: [
-                        if (sessionState.sessionState == .buffering)
-                          SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 1.5),
+                        const SizedBox(height: 16),
+                        LinearProgressIndicator(
+                          value: sessionState.duration.inMilliseconds > 0
+                              ? sessionState.position.inMilliseconds /
+                                    sessionState.duration.inMilliseconds
+                              : 0.0,
+                          backgroundColor: colors.white.withValues(alpha: 0.2),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            colors.white,
                           ),
-                        if (sessionState.sessionState == .paused)
-                          IconButton(
-                            onPressed: () {
-                              context.read<CastSessionBloc>().add(
-                                CastSessionEvent.playMedia(),
-                              );
-                            },
-                            icon: Icon(Icons.play_arrow),
-                          ),
-                        if (sessionState.sessionState == .playing)
-                          IconButton(
-                            onPressed: () {
-                              context.read<CastSessionBloc>().add(
-                                CastSessionEvent.pauseMedia(),
-                              );
-                            },
-                            icon: Icon(Icons.pause),
-                          ),
-                        Expanded(
-                          child: Text(
-                            media?.title ?? "Unknown Title",
-                            style: typo.titleLarge.copyWith(
-                              color: colors.white,
+                          minHeight: 4,
+                          borderRadius: .circular(2),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              formatDuration(sessionState.position),
+                              style: typo.labelSmall.copyWith(
+                                color: colors.white,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            Text(
+                              formatDuration(sessionState.duration),
+                              style: typo.labelSmall.copyWith(
+                                color: colors.white,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: sessionState.duration.inMilliseconds > 0
-                          ? sessionState.position.inMilliseconds /
-                                sessionState.duration.inMilliseconds
-                          : 0.0,
-                      backgroundColor: colors.white.withValues(alpha: 0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(colors.white),
-                      minHeight: 4,
-                      borderRadius: .circular(2),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          formatDuration(sessionState.position),
-                          style: typo.labelSmall.copyWith(color: colors.white),
-                        ),
-                        Text(
-                          formatDuration(sessionState.duration),
-                          style: typo.labelSmall.copyWith(color: colors.white),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
 class CurrentlyPlayingBG extends StatelessWidget {
-  const CurrentlyPlayingBG({super.key, required this.sessionState});
-  final CastSessionState sessionState;
+  const CurrentlyPlayingBG({super.key, required this.thumbnailBytes});
+  final Uint8List? thumbnailBytes;
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         gradient: context.appGradients.surface,
-        image: sessionState.activeMedia?.thumbnailBytes != null
-            ? DecorationImage(
-                fit: .cover,
-                image: MemoryImage(sessionState.activeMedia!.thumbnailBytes!),
-              )
+        image: thumbnailBytes != null
+            ? DecorationImage(fit: .cover, image: MemoryImage(thumbnailBytes!))
             : null,
       ),
     );

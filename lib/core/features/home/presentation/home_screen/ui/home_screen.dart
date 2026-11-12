@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
@@ -32,11 +34,16 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          if (kDebugMode)
+            IconButton(
+              onPressed: () => context.push('/cast-debug'),
+              icon: Icon(Icons.bug_report),
+            ),
           IconButton(
             onPressed: () {
               DeviceManagerScreen.show(context);
             },
-            icon: Icon(Icons.tv, color: colors.textSecondary),
+            icon: Icon(Icons.tv),
           ),
           IconButton(
             onPressed: () {
@@ -44,10 +51,7 @@ class HomeScreen extends StatelessWidget {
             },
             icon: Icon(Icons.queue_music),
           ),
-          IconButton(
-            onPressed: () {},
-            icon: Icon(Icons.settings, color: colors.textSecondary),
-          ),
+          IconButton(onPressed: () {}, icon: Icon(Icons.settings)),
         ],
         bottom: PreferredSize(
           preferredSize: Size(double.infinity, 2),

@@ -8,8 +8,18 @@ void main() {
       'format': {'format_name': 'mkv', 'duration': '10'},
       'streams': [
         {'codec_type': 'video', 'codec_name': 'h264', 'level': 41},
-        {'codec_type': 'audio', 'index': 1, 'codec_name': 'dts', 'disposition': {'default': 1}},
-        {'codec_type': 'audio', 'index': 2, 'codec_name': 'aac', 'disposition': {'default': 0}},
+        {
+          'codec_type': 'audio',
+          'index': 1,
+          'codec_name': 'dts',
+          'disposition': {'default': 1},
+        },
+        {
+          'codec_type': 'audio',
+          'index': 2,
+          'codec_name': 'aac',
+          'disposition': {'default': 0},
+        },
       ],
     });
     final plan = decide(p, const CastDeviceCaps());

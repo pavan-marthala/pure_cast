@@ -10,17 +10,36 @@ class CastFfmpegDiagnostics {
     final bsfs = await _run('-hide_banner -bsfs');
     final encoders = await _run('-hide_banner -encoders');
 
-    final wantedMuxers = ['hls', 'mpegts', 'mp4', 'mov', 'matroska', 'webm', 'segment', 'dash', 'mpeg', 'h264'];
+    final wantedMuxers = [
+      'hls',
+      'mpegts',
+      'mp4',
+      'mov',
+      'matroska',
+      'webm',
+      'segment',
+      'dash',
+      'mpeg',
+      'h264',
+    ];
     final wantedDemuxers = ['matroska', 'avi', 'mov', 'mp4', 'mpegts', 'webm'];
     final wantedFilters = ['scale', 'overlay', 'format', 'aresample'];
     final wantedBsfs = ['h264_mp4toannexb'];
-    final wantedEncoders = ['libx264', 'h264_mediacodec', 'aac', 'eac3', 'hevc_mediacodec'];
+    final wantedEncoders = [
+      'libx264',
+      'h264_mediacodec',
+      'aac',
+      'eac3',
+      'hevc_mediacodec',
+    ];
 
     for (final m in wantedMuxers) {
       debugPrint('[FFDBG] muxer $m: ${_contains(muxers, m) ? 'YES' : 'NO'}');
     }
     for (final d in wantedDemuxers) {
-      debugPrint('[FFDBG] demuxer $d: ${_contains(demuxers, d) ? 'YES' : 'NO'}');
+      debugPrint(
+        '[FFDBG] demuxer $d: ${_contains(demuxers, d) ? 'YES' : 'NO'}',
+      );
     }
     for (final f in wantedFilters) {
       debugPrint('[FFDBG] filter $f: ${_contains(filters, f) ? 'YES' : 'NO'}');
@@ -29,7 +48,9 @@ class CastFfmpegDiagnostics {
       debugPrint('[FFDBG] bsf $b: ${_contains(bsfs, b) ? 'YES' : 'NO'}');
     }
     for (final e in wantedEncoders) {
-      debugPrint('[FFDBG] encoder $e: ${_contains(encoders, e) ? 'YES' : 'NO'}');
+      debugPrint(
+        '[FFDBG] encoder $e: ${_contains(encoders, e) ? 'YES' : 'NO'}',
+      );
     }
   }
 
@@ -49,7 +70,9 @@ class CastFfmpegDiagnostics {
   static Future<void> selfTest(String path) async {
     debugPrint('[PREPDBG] selftest (a) demux check');
     try {
-      final sess = await FFmpegKit.execute('-hide_banner -loglevel error -i $path -t 5 -c copy -f null -');
+      final sess = await FFmpegKit.execute(
+        '-hide_banner -loglevel error -i $path -t 5 -c copy -f null -',
+      );
       final rc = await sess.getReturnCode();
       final logs = await sess.getAllLogsAsString();
       debugPrint('[PREPDBG] (a) rc=${rc?.getValue()}');
@@ -59,7 +82,9 @@ class CastFfmpegDiagnostics {
     }
     // probe
     try {
-      final session = await FFprobeKit.getMediaInformation(path.startsWith('file://') ? Uri.parse(path).toFilePath() : path);
+      final session = await FFprobeKit.getMediaInformation(
+        path.startsWith('file://') ? Uri.parse(path).toFilePath() : path,
+      );
       final info = session.getMediaInformation();
       debugPrint('[PREPDBG] probe container=${info?.getFormat()}');
     } catch (e) {
@@ -77,4 +102,4 @@ class CastFfmpegDiagnostics {
       debugPrint('[PREPDBG] ${joined.substring(i, end)}');
     }
   }
-    }
+}

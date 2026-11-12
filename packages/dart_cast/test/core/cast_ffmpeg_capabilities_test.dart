@@ -4,17 +4,20 @@ import 'package:test/test.dart';
 
 void main() {
   group('CastFfmpegCapabilities.parseCapabilities', () {
-    test('h264_mediacodec present -> hasH264Mediacodec=true, hasH264Encoder=true, transcodeEnabled=true', () {
-      final caps = CastFfmpegCapabilities.parseCapabilities(
-        'V..... libx264\nV..... h264_mediacodec\nA..... aac',
-        'D..... h264\nD..... h264_mediacodec',
-        'E muxer hls\nE muxer mpegts\nE muxer mp4',
-        'scale  V->V',
-      );
-      expect(caps.hasH264Mediacodec, isTrue);
-      expect(caps.hasH264Encoder, isTrue);
-      expect(caps.transcodeEnabled, isTrue);
-    });
+    test(
+      'h264_mediacodec present -> hasH264Mediacodec=true, hasH264Encoder=true, transcodeEnabled=false (default off)',
+      () {
+        final caps = CastFfmpegCapabilities.parseCapabilities(
+          'V..... libx264\nV..... h264_mediacodec\nA..... aac',
+          'D..... h264\nD..... h264_mediacodec',
+          'E muxer hls\nE muxer mpegts\nE muxer mp4',
+          'scale  V->V',
+        );
+        expect(caps.hasH264Mediacodec, isTrue);
+        expect(caps.hasH264Encoder, isTrue);
+        expect(caps.transcodeEnabled, isFalse);
+      },
+    );
 
     test('no H.264 encoder -> all false', () {
       final caps = CastFfmpegCapabilities.parseCapabilities(
@@ -37,7 +40,7 @@ void main() {
       );
       expect(caps.hasH264Encoder, isTrue);
       expect(caps.hasH264Mediacodec, isFalse);
-      expect(caps.transcodeEnabled, isTrue);
+      expect(caps.transcodeEnabled, isFalse);
     });
 
     test('supportsHevc always false (receiver knowledge)', () {
@@ -66,14 +69,33 @@ void main() {
     test('caching -> detect called twice, query only once', () async {
       CastFfmpegCapabilities.clearCache();
       int callCount = 0;
-      Future<String> fakeQuery(String cmd) async {
+      Future<String?> fakeQuery(String cmd) async {
         callCount++;
         return 'V..... h264_mediacodec\nA..... aac';
       }
+
       final caps1 = await CastFfmpegCapabilities.detect(query: fakeQuery);
       final caps2 = await CastFfmpegCapabilities.detect(query: fakeQuery);
       expect(identical(caps1, caps2), isTrue);
       expect(callCount, 4);
+      CastFfmpegCapabilities.clearCache();
+    });
+
+    test('failed detection is not cached and retried on next call', () async {
+      CastFfmpegCapabilities.clearCache();
+      int callCount = 0;
+      Future<String?> fakeQuery(String cmd) async {
+        callCount++;
+        if (callCount <= 4) throw Exception('FFmpegKit unavailable');
+        return 'V..... h264_mediacodec\nA..... aac';
+      }
+
+      final caps1 = await CastFfmpegCapabilities.detect(query: fakeQuery);
+      expect(caps1.hasH264Encoder, isFalse);
+      // Failure was NOT cached, so next call retries.
+      final caps2 = await CastFfmpegCapabilities.detect(query: fakeQuery);
+      expect(caps2.hasH264Encoder, isTrue);
+      expect(callCount, 8); // 4 queries per attempt, 2 attempts
       CastFfmpegCapabilities.clearCache();
     });
   });

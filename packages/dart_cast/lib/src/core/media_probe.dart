@@ -16,7 +16,9 @@ class MediaProbe {
   });
 
   factory MediaProbe.fromJson(Map<String, dynamic> json) {
-    final format = (json['format'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
+    final format =
+        (json['format'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     final streams = (json['streams'] as List?) ?? const [];
     VideoStream? video;
     final audio = <AudioStream>[];
@@ -35,7 +37,8 @@ class MediaProbe {
     final dur = format['duration'];
     return MediaProbe(
       container: (format['format_name'] as String?) ?? '',
-      durationSeconds: dur is String ? double.tryParse(dur) : (dur as num?)?.toDouble(),
+      durationSeconds:
+          dur is String ? double.tryParse(dur) : (dur as num?)?.toDouble(),
       video: video,
       audio: audio,
       subtitles: subs,
@@ -63,14 +66,14 @@ class VideoStream {
   });
 
   factory VideoStream.fromJson(Map<String, dynamic> j) => VideoStream(
-        codec: (j['codec_name'] as String?) ?? 'unknown',
-        profile: j['profile'] as String?,
-        level: (j['level'] as num?)?.toInt(),
-        pixFmt: j['pix_fmt'] as String?,
-        width: (j['width'] as num?)?.toInt(),
-        height: (j['height'] as num?)?.toInt(),
-        fps: _parseFps(j['r_frame_rate'] as String?),
-      );
+    codec: (j['codec_name'] as String?) ?? 'unknown',
+    profile: j['profile'] as String?,
+    level: (j['level'] as num?)?.toInt(),
+    pixFmt: j['pix_fmt'] as String?,
+    width: (j['width'] as num?)?.toInt(),
+    height: (j['height'] as num?)?.toInt(),
+    fps: _parseFps(j['r_frame_rate'] as String?),
+  );
 
   static double? _parseFps(String? r) {
     if (r == null) return null;
@@ -100,12 +103,12 @@ class AudioStream {
   });
 
   factory AudioStream.fromJson(Map<String, dynamic> j) => AudioStream(
-        index: (j['index'] as num?)?.toInt() ?? -1,
-        codec: (j['codec_name'] as String?) ?? 'unknown',
-        channels: (j['channels'] as num?)?.toInt() ?? 2,
-        language: (j['tags'] is Map) ? (j['tags']['language'] as String?) : null,
-        isDefault: j['disposition'] is Map && (j['disposition']['default'] == 1),
-      );
+    index: (j['index'] as num?)?.toInt() ?? -1,
+    codec: (j['codec_name'] as String?) ?? 'unknown',
+    channels: (j['channels'] as num?)?.toInt() ?? 2,
+    language: (j['tags'] is Map) ? (j['tags']['language'] as String?) : null,
+    isDefault: j['disposition'] is Map && (j['disposition']['default'] == 1),
+  );
 }
 
 class SubtitleStream {
@@ -113,11 +116,15 @@ class SubtitleStream {
   final String codec;
   final String? language;
 
-  const SubtitleStream({required this.index, required this.codec, this.language});
+  const SubtitleStream({
+    required this.index,
+    required this.codec,
+    this.language,
+  });
 
   factory SubtitleStream.fromJson(Map<String, dynamic> j) => SubtitleStream(
-        index: (j['index'] as num?)?.toInt() ?? -1,
-        codec: (j['codec_name'] as String?) ?? 'unknown',
-        language: (j['tags'] is Map) ? (j['tags']['language'] as String?) : null,
-      );
+    index: (j['index'] as num?)?.toInt() ?? -1,
+    codec: (j['codec_name'] as String?) ?? 'unknown',
+    language: (j['tags'] is Map) ? (j['tags']['language'] as String?) : null,
+  );
 }

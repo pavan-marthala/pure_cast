@@ -312,6 +312,7 @@ class ChromecastSession extends CastSession {
     String? contentType,
     String? streamType,
     Duration? duration,
+    bool bypassTransform = false,
   }) async {
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
@@ -326,7 +327,7 @@ class ChromecastSession extends CastSession {
     _isLoadingMedia = true;
 
     try {
-      await _loadMediaInternal(media);
+      await _loadMediaInternal(media, bypassTransform: bypassTransform);
     } finally {
       _isLoadingMedia = false;
     }
@@ -340,12 +341,15 @@ class ChromecastSession extends CastSession {
     CastSubtitle? subtitle,
     String? forcePlan,
     Future<bool?> Function(String receiverId, String codecKey)? memoryLookup,
-    Future<void> Function(String receiverId, String codecKey, bool directOk)? memoryRecord,
+    Future<void> Function(String receiverId, String codecKey, bool directOk)?
+    memoryRecord,
     void Function(CastPrepareSession?)? onPrepareStarted,
     void Function()? onPrepareFinished,
   }) async {
     debugPrint('[PREPDBG] receiver=${device.name} id=${device.id}');
-    debugPrint('[PREPDBG] caps: hasH264Encoder=${caps.hasH264Encoder} hasH264Mediacodec=${caps.hasH264Mediacodec} transcodeEnabled=${caps.transcodeEnabled} supportsHevc=${caps.supportsHevc}');
+    debugPrint(
+      '[PREPDBG] caps: hasH264Encoder=${caps.hasH264Encoder} hasH264Mediacodec=${caps.hasH264Mediacodec} transcodeEnabled=${caps.transcodeEnabled} supportsHevc=${caps.supportsHevc}',
+    );
     // Probe (with fallback)
     String input = path;
     if (input.startsWith('content://')) {
@@ -357,20 +361,40 @@ class ChromecastSession extends CastSession {
     MediaProbe? probe;
     late CastPlan plan;
     try {
-      final session = await FFprobeKit.getMediaInformation(input).timeout(const Duration(seconds: 8));
+      final session = await FFprobeKit.getMediaInformation(
+        input,
+      ).timeout(const Duration(seconds: 8));
       final info = session.getMediaInformation();
       probe = MediaProbe.fromJson(_mediaInfoToJson(info));
       plan = decide(probe!, caps);
-      debugPrint('[PREPDBG] plan=${plan.runtimeType} reason=${_planReason(plan)}');
-      debugPrint('[PREPDBG] probe container=${probe!.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a)=>'${a.codec}/${a.channels}').join(',')}');
+      debugPrint(
+        '[PREPDBG] plan=${plan.runtimeType} reason=${_planReason(plan)}',
+      );
+      debugPrint(
+        '[PREPDBG] probe container=${probe!.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a) => '${a.codec}/${a.channels}').join(',')}',
+      );
     } catch (e) {
-      debugPrint('[HLSDBG] probe failed/timeout: $e; falling back to direct load');
-      await loadMedia(CastMedia.file(filePath: path, type: CastMediaType.mp4, subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+      debugPrint(
+        '[HLSDBG] probe failed/timeout: $e; falling back to direct load',
+      );
+      await loadMedia(
+        CastMedia.file(
+          filePath: path,
+          type: CastMediaType.mp4,
+          subtitles: subtitle != null ? [subtitle] : const [],
+          defaultSubtitle: subtitle,
+        ),
+      );
       return;
     }
-    final audioIdx = audioStreamIndex == 0 ? _defaultAudioIndex(probe.audio) : audioStreamIndex;
-    if (forcePlan == 'remuxAudio') plan = RemuxAudioPlan('forced', audioStreamIndex: audioIdx);
-    if (forcePlan == 'remuxContainer') plan = RemuxContainerPlan('forced', audioStreamIndex: audioIdx);
+    final audioIdx =
+        audioStreamIndex == 0
+            ? _defaultAudioIndex(probe.audio)
+            : audioStreamIndex;
+    if (forcePlan == 'remuxAudio')
+      plan = RemuxAudioPlan('forced', audioStreamIndex: audioIdx);
+    if (forcePlan == 'remuxContainer')
+      plan = RemuxContainerPlan('forced', audioStreamIndex: audioIdx);
 
     if (plan is DirectPlan || plan is UncertainDirectPlan) {
       final codec = probe?.video?.codec ?? 'video';
@@ -390,16 +414,28 @@ class ChromecastSession extends CastSession {
       debugPrint('[PREPDBG] memory result for $memKey: $memResult');
       if (memResult == false) {
         // Known to fail on this receiver — skip direct, go to fallback/transcode.
-        debugPrint('[PREPDBG] memory says directFailed for $memKey; skipping direct attempt');
-        if (plan is UncertainDirectPlan && (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+        debugPrint(
+          '[PREPDBG] memory says directFailed for $memKey; skipping direct attempt',
+        );
+        if (plan is UncertainDirectPlan &&
+            (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
           // fall through to prepare path
         } else {
-          throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+          throw Exception(
+            'This Chromecast can\'t play this video ($codec $depthStr)',
+          );
         }
       } else {
         // Unknown or supported: attempt direct playback.
         try {
-          await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe!.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+          await loadMedia(
+            CastMedia.file(
+              filePath: path,
+              type: CastCompat.mediaTypeForContainer(probe!.container),
+              subtitles: subtitle != null ? [subtitle] : const [],
+              defaultSubtitle: subtitle,
+            ),
+          );
           debugPrint('[PREPDBG] direct load OK for $memKey');
           // Record positive result.
           if (memoryRecord != null) {
@@ -411,7 +447,8 @@ class ChromecastSession extends CastSession {
         } catch (e) {
           debugPrint('[PREPDBG] direct load FAILED for $memKey: $e');
           // Only record negative on receiver rejection (LOAD_FAILED), not network/timeout/other.
-          final isReceiverRejection = e.toString().contains('LOAD_FAILED') ||
+          final isReceiverRejection =
+              e.toString().contains('LOAD_FAILED') ||
               e.toString().contains('Receiver rejected') ||
               e.toString().contains('IDLE/ERROR');
           if (isReceiverRejection && memoryRecord != null) {
@@ -420,10 +457,13 @@ class ChromecastSession extends CastSession {
               debugPrint('[PREPDBG] recorded directFailed for $memKey');
             } catch (_) {}
           }
-          if (plan is UncertainDirectPlan && (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+          if (plan is UncertainDirectPlan &&
+              (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
             // fall through to prepare path
           } else {
-            throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+            throw Exception(
+              'This Chromecast can\'t play this video ($codec $depthStr)',
+            );
           }
         }
       }
@@ -440,25 +480,41 @@ class ChromecastSession extends CastSession {
           final memResult = await memoryLookup(device.id, memKey);
           if (memResult == false) {
             tryDirect = false;
-            debugPrint('[PREPDBG] memory says directFailed for $memKey; skipping direct');
+            debugPrint(
+              '[PREPDBG] memory says directFailed for $memKey; skipping direct',
+            );
           }
         } catch (_) {}
       }
       if (tryDirect) {
         try {
-          await loadMedia(CastMedia.file(filePath: path, type: CastCompat.mediaTypeForContainer(probe!.container), subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle));
+          await loadMedia(
+            CastMedia.file(
+              filePath: path,
+              type: CastCompat.mediaTypeForContainer(probe!.container),
+              subtitles: subtitle != null ? [subtitle] : const [],
+              defaultSubtitle: subtitle,
+            ),
+          );
           if (memoryRecord != null) {
-            try { await memoryRecord(device.id, memKey, true); } catch (_) {}
+            try {
+              await memoryRecord(device.id, memKey, true);
+            } catch (_) {}
           }
           return;
         } catch (e) {
-          final isReceiverRejection = e.toString().contains('LOAD_FAILED') ||
+          final isReceiverRejection =
+              e.toString().contains('LOAD_FAILED') ||
               e.toString().contains('Receiver rejected') ||
               e.toString().contains('IDLE/ERROR');
           if (isReceiverRejection && memoryRecord != null) {
-            try { await memoryRecord(device.id, memKey, false); } catch (_) {}
+            try {
+              await memoryRecord(device.id, memKey, false);
+            } catch (_) {}
           }
-          throw Exception('This Chromecast can\'t play this video ($codec $depthStr)');
+          throw Exception(
+            'This Chromecast can\'t play this video ($codec $depthStr)',
+          );
         }
       }
       throw Exception('Unsupported: ${plan.reason}');
@@ -467,26 +523,61 @@ class ChromecastSession extends CastSession {
     // remux/transcode -> prepare
     List<String> Function(String) builder;
     if (plan is UncertainDirectPlan) {
-      if (caps.hasH264Encoder) {
-        builder = (out) => CastFfmpegCommands.transcodeVideo(input: path, outputDir: out, audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex, videoEncoder: 'libx264');
-      } else if (caps.hasH264Mediacodec) {
-        builder = (out) => CastFfmpegCommands.transcodeVideoMediacodec(input: path, outputDir: out, audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex);
+      if (caps.hasH264Mediacodec) {
+        builder =
+            (out) => CastFfmpegCommands.transcodeVideoMediacodec(
+              input: path,
+              outputDir: out,
+              audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex,
+            );
+      } else if (caps.hasLibx264) {
+        builder =
+            (out) => CastFfmpegCommands.transcodeVideo(
+              input: path,
+              outputDir: out,
+              audioStreamIndex: (plan as UncertainDirectPlan).audioStreamIndex,
+              videoEncoder: 'libx264',
+            );
       } else {
         final codec = probe?.video?.codec ?? 'video';
-        final depth = (probe?.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
-        throw Exception('This Chromecast can\'t play this video ($codec $depth)');
+        final depth =
+            (probe?.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
+        throw Exception(
+          'This Chromecast can\'t play this video ($codec $depth)',
+        );
       }
     } else if (plan is RemuxAudioPlan) {
-      builder = (out) => CastFfmpegCommands.remuxAudio(input: path, outputDir: out, audioStreamIndex: audioIdx);
+      builder =
+          (out) => CastFfmpegCommands.remuxAudio(
+            input: path,
+            outputDir: out,
+            audioStreamIndex: audioIdx,
+          );
     } else if (plan is RemuxContainerPlan) {
-      builder = (out) => CastFfmpegCommands.remuxContainer(input: path, outputDir: out, audioStreamIndex: audioIdx);
+      builder =
+          (out) => CastFfmpegCommands.remuxContainer(
+            input: path,
+            outputDir: out,
+            audioStreamIndex: audioIdx,
+          );
     } else if (plan is TranscodeVideoPlan) {
-      if (caps.hasH264Encoder) {
-        builder = (out) => CastFfmpegCommands.transcodeVideo(input: path, outputDir: out, audioStreamIndex: audioIdx, videoEncoder: 'libx264');
-      } else if (caps.hasH264Mediacodec) {
-        builder = (out) => CastFfmpegCommands.transcodeVideoMediacodec(input: path, outputDir: out, audioStreamIndex: audioIdx);
+      if (caps.hasH264Mediacodec) {
+        builder =
+            (out) => CastFfmpegCommands.transcodeVideoMediacodec(
+              input: path,
+              outputDir: out,
+              audioStreamIndex: audioIdx,
+            );
+      } else if (caps.hasLibx264) {
+        builder =
+            (out) => CastFfmpegCommands.transcodeVideo(
+              input: path,
+              outputDir: out,
+              audioStreamIndex: audioIdx,
+              videoEncoder: 'libx264',
+            );
       } else {
-        throw Exception('Unsupported: no H.264 encoder');
+        throw Exception('Unsupported: no usable H.264 encoder');
       }
     } else {
       throw Exception('Unknown plan');
@@ -494,24 +585,58 @@ class ChromecastSession extends CastSession {
 
     final args = builder('/tmp/__OUTDIR__');
     debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
-    final prepare = await CastPrepareSession.start(inputPath: path, buildArgs: builder);
+    final prepare = await CastPrepareSession.start(
+      inputPath: path,
+      buildArgs: builder,
+    );
     onPrepareStarted?.call(prepare);
     // wait for ready
-    await prepare.stateStream.firstWhere((s) => s == PrepareState.ready || s == PrepareState.failed);
+    await prepare.stateStream.firstWhere(
+      (s) => s == PrepareState.ready || s == PrepareState.failed,
+    );
     onPrepareFinished?.call();
     if (prepare.state != PrepareState.ready) {
       try {
-        debugPrint('[PREPDBG] dir contents: ${prepare.tempDir.listSync().map((f)=>f.path.split('/').last).join(', ')}');
+        debugPrint(
+          '[PREPDBG] dir contents: ${prepare.tempDir.listSync().map((f) => f.path.split('/').last).join(', ')}',
+        );
       } catch (_) {}
       debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
       throw Exception('Prepare failed: ${prepare.error}');
     }
-    final hlsUrl = _proxy.registerHlsDirectory(prepare.sessionId, prepare.tempDir.path);
+    final hlsUrl = _proxy.registerHlsDirectory(
+      prepare.sessionId,
+      prepare.tempDir.path,
+    );
     // load via proxy url through loadMedia? loadMedia expects CastMedia. Use a remote media with hls url.
-    await loadMedia(CastMedia(url: hlsUrl, type: CastMediaType.hls, subtitles: subtitle != null ? [subtitle] : const [], defaultSubtitle: subtitle), contentType: 'application/x-mpegURL', duration: probe.durationSeconds != null ? Duration(milliseconds: (probe.durationSeconds! * 1000).round()) : null);
+    await loadMedia(
+      CastMedia(
+        url: hlsUrl,
+        type: CastMediaType.hls,
+        subtitles: subtitle != null ? [subtitle] : const [],
+        defaultSubtitle: subtitle,
+      ),
+      contentType: 'application/x-mpegURL',
+      duration:
+          probe.durationSeconds != null
+              ? Duration(milliseconds: (probe.durationSeconds! * 1000).round())
+              : null,
+      bypassTransform: true,
+    );
   }
 
-  String _planReason(CastPlan p) => p is DirectPlan ? 'direct' : p is RemuxAudioPlan ? 'remuxAudio' : p is RemuxContainerPlan ? 'remuxContainer' : p is TranscodeVideoPlan ? 'transcodeVideo' : p is UnsupportedPlan ? 'unsupported: ${p.reason}' : 'unknown';
+  String _planReason(CastPlan p) =>
+      p is DirectPlan
+          ? 'direct'
+          : p is RemuxAudioPlan
+          ? 'remuxAudio'
+          : p is RemuxContainerPlan
+          ? 'remuxContainer'
+          : p is TranscodeVideoPlan
+          ? 'transcodeVideo'
+          : p is UnsupportedPlan
+          ? 'unsupported: ${p.reason}'
+          : 'unknown';
 
   int _defaultAudioIndex(List<AudioStream> audio) {
     for (var i = 0; i < audio.length; i++) {
@@ -526,28 +651,47 @@ class ChromecastSession extends CastSession {
     final streams = <Map<String, dynamic>>[];
     for (final s in info.getStreams()) {
       final tags = s.getTags();
+      // Try to read disposition from getAllProperties if available.
+      // FFprobeKit's StreamInformation does not expose a getDisposition()
+      // method, but getAllProperties() returns the raw JSON map which may
+      // contain a 'disposition' key with 'default' field.
+      final allProps = s.getAllProperties();
+      final disp =
+          (allProps != null && allProps['disposition'] is Map)
+              ? (allProps['disposition'] as Map)['default']
+              : null;
+      final isDefault = disp == 1;
+      final profile = allProps != null ? allProps['profile'] as String? : null;
+      final channels =
+          allProps != null ? (allProps['channels'] as num?)?.toInt() : null;
       streams.add({
         'codec_type': s.getType(),
         'codec_name': s.getCodec(),
-        'profile': null,
+        'profile': profile,
         'level': s.getNumberProperty('level'),
         'pix_fmt': s.getStringProperty('pix_fmt'),
         'width': s.getWidth(),
         'height': s.getHeight(),
         'r_frame_rate': s.getAverageFrameRate(),
         'index': s.getIndex(),
-        'channels': null,
+        'channels': channels,
         'tags': tags,
-        'disposition': {'default': 0},
+        'disposition': {'default': isDefault ? 1 : 0},
       });
     }
     return {
-      'format': {'format_name': info.getFormat(), 'duration': info.getDuration()},
+      'format': {
+        'format_name': info.getFormat(),
+        'duration': info.getDuration(),
+      },
       'streams': streams,
     };
   }
 
-  Future<void> _loadMediaInternal(CastMedia media) async {
+  Future<void> _loadMediaInternal(
+    CastMedia media, {
+    bool bypassTransform = false,
+  }) async {
     stateMachine.transitionTo(SessionState.loading);
 
     // Reset the deprecated-session tracker for this fresh LOAD. Anything
@@ -559,7 +703,14 @@ class ChromecastSession extends CastSession {
     // Start proxy
     await _proxy.start(targetDeviceIp: device.address.address);
 
-    final isRemoteHls = media.type == CastMediaType.hls && !media.isLocalFile;
+    // Prepared HLS (already served by our own proxy) must NOT go through
+    // the remote-HLS bisect path — that path re-registers the URL through
+    // the proxy (double-proxy) and applies transformers that corrupt the
+    // playlist. Treat it as a direct load instead.
+    // Rely ONLY on the explicit bypassTransform flag (no URL heuristic).
+    final isPreparedHls = bypassTransform;
+    final isRemoteHls =
+        media.type == CastMediaType.hls && !media.isLocalFile && !isPreparedHls;
 
     // Non-HLS / local media — single attempt, no bisect needed.
     if (!isRemoteHls) {

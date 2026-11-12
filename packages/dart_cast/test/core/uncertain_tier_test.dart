@@ -8,8 +8,18 @@ void main() {
     final p = MediaProbe.fromJson({
       'format': {'format_name': 'mp4', 'duration': '10'},
       'streams': [
-        {'codec_type': 'video', 'codec_name': 'hevc', 'pix_fmt': 'yuv420p', 'level': 120},
-        {'codec_type': 'audio', 'index': 1, 'codec_name': 'aac', 'disposition': {'default': 1}},
+        {
+          'codec_type': 'video',
+          'codec_name': 'hevc',
+          'pix_fmt': 'yuv420p',
+          'level': 120,
+        },
+        {
+          'codec_type': 'audio',
+          'index': 1,
+          'codec_name': 'aac',
+          'disposition': {'default': 1},
+        },
       ],
     });
     final plan = decide(p, const CastDeviceCaps(supportsHevc: true));
@@ -21,7 +31,12 @@ void main() {
       'format': {'format_name': 'mkv', 'duration': '10'},
       'streams': [
         {'codec_type': 'video', 'codec_name': 'av1', 'pix_fmt': 'yuv420p10le'},
-        {'codec_type': 'audio', 'index': 1, 'codec_name': 'aac', 'disposition': {'default': 1}},
+        {
+          'codec_type': 'audio',
+          'index': 1,
+          'codec_name': 'aac',
+          'disposition': {'default': 1},
+        },
       ],
     });
     final plan = decide(p, const CastDeviceCaps());
@@ -35,7 +50,12 @@ void main() {
   });
 
   test('filter quoting in builders', () {
-    final a = CastFfmpegCommands.transcodeVideo(input: 'in.mkv', outputDir: '/tmp/out', audioStreamIndex: 0, videoEncoder: 'libx264');
+    final a = CastFfmpegCommands.transcodeVideo(
+      input: 'in.mkv',
+      outputDir: '/tmp/out',
+      audioStreamIndex: 0,
+      videoEncoder: 'libx264',
+    );
     expect(a.join(' '), contains('min(1080'));
   });
 }

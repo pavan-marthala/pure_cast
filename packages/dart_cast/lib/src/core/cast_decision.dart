@@ -1,5 +1,6 @@
 import 'media_probe.dart';
 import 'cast_media.dart';
+
 sealed class CastPlan {}
 
 class DirectPlan extends CastPlan {
@@ -39,12 +40,14 @@ class UnsupportedPlan extends CastPlan {
 class CastDeviceCaps {
   final bool supportsHevc;
   final bool hasH264Encoder;
+  final bool hasLibx264;
   final bool hasH264Mediacodec;
   final bool transcodeEnabled;
   final String? modelName;
   const CastDeviceCaps({
     this.supportsHevc = false,
     this.hasH264Encoder = false,
+    this.hasLibx264 = false,
     this.hasH264Mediacodec = false,
     this.transcodeEnabled = false,
     this.modelName,
@@ -56,8 +59,22 @@ class CastCompat {
   static const vp9Codecs = {'vp9', 'vp09'};
   static const hevcCodecs = {'hevc', 'hvc1', 'hev1'};
   static const compatibleAudio = {'aac', 'mp3', 'ac3', 'mp2'};
-  static const incompatibleAudio = {'dts', 'truehd', 'eac3', 'flac', 'vorbis', 'opus'};
-  static const directContainers = {'mp4', 'webm', 'mkv', 'mov', 'matroska', 'mov,mp4,m4a,3gp,3g2,mj2'};
+  static const incompatibleAudio = {
+    'dts',
+    'truehd',
+    'eac3',
+    'flac',
+    'vorbis',
+    'opus',
+  };
+  static const directContainers = {
+    'mp4',
+    'webm',
+    'mkv',
+    'mov',
+    'matroska',
+    'mov,mp4,m4a,3gp,3g2,mj2',
+  };
   static const remuxContainers = {'avi', 'ts', 'm2ts', 'wmv', 'flv'};
 
   static CastMediaType mediaTypeForContainer(String container) {
@@ -86,7 +103,8 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   final is10bit = bitDepthOf(v.pixFmt) >= 10;
   final isAv1 = vCodec == 'av1';
   final isHevc8 = isHevc && !is10bit;
-  final videoCompatible = (isH264 && (v.level == null || v.level! <= 42)) ||
+  final videoCompatible =
+      (isH264 && (v.level == null || v.level! <= 42)) ||
       isVp9 ||
       (isHevc && caps.supportsHevc);
   final isUncertain = (isHevc8 || isVp9) && !is10bit;
@@ -95,31 +113,60 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
     final idx = audioIdx < probe.audio.length ? audioIdx : 0;
     audio = probe.audio[idx];
   }
-  final audioCompatible = audio == null || CastCompat.compatibleAudio.contains(audio.codec.toLowerCase());
-  final audioIncompatible = audio != null && CastCompat.incompatibleAudio.contains(audio.codec.toLowerCase());
-  final containerOk = CastCompat.directContainers.contains(probe.container.split(',').first.trim().toLowerCase());
+  final audioCompatible =
+      audio == null ||
+      CastCompat.compatibleAudio.contains(audio.codec.toLowerCase());
+  final audioIncompatible =
+      audio != null &&
+      CastCompat.incompatibleAudio.contains(audio.codec.toLowerCase());
+  final containerOk = CastCompat.directContainers.contains(
+    probe.container.split(',').first.trim().toLowerCase(),
+  );
 
   if (isAv1 || is10bit) {
-    if (!caps.hasH264Encoder && !caps.hasH264Mediacodec) return UnsupportedPlan('no usable H.264 encoder');
-    if (!caps.transcodeEnabled) return UnsupportedPlan('video transcode is disabled');
-    return TranscodeVideoPlan('video codec ${v.codec} needs transcode', audioStreamIndex: audioIdx);
+    if (!caps.hasLibx264 && !caps.hasH264Mediacodec)
+      return UnsupportedPlan('no usable H.264 encoder');
+    if (!caps.transcodeEnabled)
+      return UnsupportedPlan('video transcode is disabled');
+    return TranscodeVideoPlan(
+      'video codec ${v.codec} needs transcode',
+      audioStreamIndex: audioIdx,
+    );
+  }
+  // HEVC 8-bit and VP9 always try direct play first (unless 10-bit/AV1).
+  if (isUncertain) {
+    return UncertainDirectPlan(
+      'trying direct play for ${v.codec}',
+      audioStreamIndex: audioIdx,
+    );
   }
   if (!videoCompatible) {
-    if (!caps.hasH264Encoder && !caps.hasH264Mediacodec) return UnsupportedPlan('no usable H.264 encoder');
-    if (!caps.transcodeEnabled) return UnsupportedPlan('video transcode is disabled');
-    return TranscodeVideoPlan('video codec ${v.codec} needs transcode', audioStreamIndex: audioIdx);
-  }
-  if (isUncertain) {
-    return UncertainDirectPlan('trying direct play for ${v.codec}', audioStreamIndex: audioIdx);
+    if (!caps.hasLibx264 && !caps.hasH264Mediacodec)
+      return UnsupportedPlan('no usable H.264 encoder');
+    if (!caps.transcodeEnabled)
+      return UnsupportedPlan('video transcode is disabled');
+    return TranscodeVideoPlan(
+      'video codec ${v.codec} needs transcode',
+      audioStreamIndex: audioIdx,
+    );
   }
   if (audioIncompatible) {
-    return RemuxAudioPlan('audio codec ${audio!.codec} needs remux to AAC', audioStreamIndex: audioIdx);
+    return RemuxAudioPlan(
+      'audio codec ${audio!.codec} needs remux to AAC',
+      audioStreamIndex: audioIdx,
+    );
   }
   if (!containerOk) {
-    return RemuxContainerPlan('container ${probe.container} needs remux', audioStreamIndex: audioIdx);
+    return RemuxContainerPlan(
+      'container ${probe.container} needs remux',
+      audioStreamIndex: audioIdx,
+    );
   }
   if (!audioCompatible && !audioIncompatible) {
-    return RemuxAudioPlan('unknown audio codec ${audio?.codec}', audioStreamIndex: audioIdx);
+    return RemuxAudioPlan(
+      'unknown audio codec ${audio?.codec}',
+      audioStreamIndex: audioIdx,
+    );
   }
   return DirectPlan('direct play compatible');
 }
@@ -130,7 +177,6 @@ int _defaultAudioIndex(List<AudioStream> audio) {
   }
   return 0;
 }
-
 
 int bitDepthOf(String? pixFmt) {
   if (pixFmt == null) return 8;

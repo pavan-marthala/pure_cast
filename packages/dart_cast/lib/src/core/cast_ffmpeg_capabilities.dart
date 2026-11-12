@@ -33,31 +33,34 @@ class CastFfmpegCapabilities {
   /// [query] is an optional override used by tests to inject synthetic FFmpeg
   /// output or simulate query failures without invoking the real FFmpegKit.
   static Future<CastDeviceCaps> detect({
-    Future<String> Function(String)? query,
+    Future<String?> Function(String)? query,
   }) async {
     if (_cached != null) return _cached!;
     final q = query ?? _query;
     try {
-      final results = await Future.wait<String>([
+      final results = await Future.wait<String?>([
         q('-hide_banner -encoders'),
         q('-hide_banner -decoders'),
         q('-hide_banner -muxers'),
         q('-hide_banner -filters'),
       ]);
+      // If any query failed (returned null), treat as failure.
+      if (results.any((r) => r == null)) {
+        throw Exception('FFmpeg capability query failed');
+      }
       final caps = parseCapabilities(
-        results[0],
-        results[1],
-        results[2],
-        results[3],
+        results[0]!,
+        results[1]!,
+        results[2]!,
+        results[3]!,
       );
       _cached = caps;
       return caps;
     } catch (e, st) {
       debugPrint('[FFDBG] capability detection failed: $e');
       debugPrint('$st');
-      // Conservative fallback: assume nothing is available.
-      _cached = const CastDeviceCaps();
-      return _cached!;
+      // Conservative fallback: do NOT cache so the next call retries.
+      return const CastDeviceCaps();
     }
   }
 
@@ -85,20 +88,25 @@ class CastFfmpegCapabilities {
       // known to support it.
       supportsHevc: false,
       hasH264Encoder: hasH264Encoder,
+      hasLibx264: hasLibx264,
       hasH264Mediacodec: hasH264Mediacodec,
-      // Transcoding is allowed whenever we have some H.264 encoder.
-      transcodeEnabled: hasH264Encoder,
+      // Transcoding is OFF by default. The app enables it via the
+      // "Experimental: convert unsupported videos" setting only after the
+      // encoder self-test passes.
+      transcodeEnabled: false,
       modelName: null,
     );
   }
 
-  static Future<String> _query(String cmd) async {
+  static Future<String?> _query(String cmd) async {
     try {
       final session = await FFmpegKit.execute(cmd);
-      return (await session.getOutput()) ?? '';
+      final output = await session.getOutput();
+      if (output == null || output.isEmpty) return null;
+      return output;
     } catch (e) {
       debugPrint('[FFDBG] query "$cmd" failed: $e');
-      return '';
+      return null;
     }
   }
 

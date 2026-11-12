@@ -104,10 +104,13 @@ class DartCastAdapter implements ICastService {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
       } catch (e) {
         final msg = e.toString();
-        if (msg.contains('Unsupported:') || msg.contains("can't play this video")) {
+        // Surface prepare failures and unsupported reasons without fallback.
+        if (msg.contains('Unsupported:') ||
+            msg.contains("can't play this video") ||
+            msg.contains('Prepare failed:')) {
           throw PureCastException(msg, e);
         }
-        // Fallback: try direct load
+        // Fallback: try direct load (probe failures only)
         final session = _castService.activeSession;
         if (session == null) rethrow;
         try {

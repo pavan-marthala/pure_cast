@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -1567,7 +1568,9 @@ class MediaProxy {
     final sessionId = parts[0];
     final fileName = parts.sublist(1).join('/');
     // reject traversal
-    if (fileName.contains('..') || fileName.startsWith('/') || sessionId.contains('..')) {
+    if (fileName.contains('..') ||
+        fileName.startsWith('/') ||
+        sessionId.contains('..')) {
       request.response.statusCode = HttpStatus.forbidden;
       await request.response.close();
       return;
@@ -1596,11 +1599,57 @@ class MediaProxy {
     final isPlaylist = fileName.endsWith('.m3u8');
     final ct = isPlaylist ? 'application/x-mpegURL' : 'video/mp2t';
     _addCorsHeaders(request.response, request.headers.value('Origin'));
+    request.response.headers.set('Accept-Ranges', 'bytes');
+    final fileSize = await file.length();
+    final rangeHeader = request.headers.value('Range');
+    if (rangeHeader != null && !isPlaylist) {
+      // Parse Range: bytes=start-end
+      final match = RegExp(r'bytes=(\d+)-(\d*)').firstMatch(rangeHeader);
+      if (match != null) {
+        final start = int.parse(match.group(1)!);
+        final endStr = match.group(2)!;
+        final end = endStr.isEmpty ? fileSize - 1 : int.parse(endStr);
+        // Unsatisfiable range
+        if (start >= fileSize || start > end) {
+          request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+          request.response.headers.set('Content-Range', 'bytes */$fileSize');
+          await request.response.close();
+          debugPrint('[HLSDBG] $path 416 $remoteIp');
+          return;
+        }
+        final contentLength = end - start + 1;
+        request.response.statusCode = HttpStatus.partialContent;
+        request.response.headers.contentType = ContentType.parse(ct);
+        request.response.headers.set(
+          'Content-Range',
+          'bytes $start-$end/$fileSize',
+        );
+        request.response.headers.set(
+          'Content-Length',
+          contentLength.toString(),
+        );
+        if (request.method != 'HEAD') {
+          final raf = await file.open();
+          try {
+            await raf.setPosition(start);
+            final bytes = await raf.read(contentLength);
+            request.response.add(bytes);
+          } finally {
+            await raf.close();
+          }
+        }
+        await request.response.close();
+        debugPrint('[HLSDBG] $path 206 $remoteIp');
+        return;
+      }
+    }
     request.response.statusCode = HttpStatus.ok;
     request.response.headers.contentType = ContentType.parse(ct);
-    final bytes = await file.readAsBytes();
-    request.response.contentLength = bytes.length;
-    if (request.method != 'HEAD') request.response.add(bytes);
+    request.response.headers.set('Content-Length', fileSize.toString());
+    if (request.method != 'HEAD') {
+      final bytes = await file.readAsBytes();
+      request.response.add(bytes);
+    }
     await request.response.close();
     debugPrint('[HLSDBG] $path 200 $remoteIp');
   }

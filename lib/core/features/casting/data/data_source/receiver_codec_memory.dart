@@ -1,17 +1,37 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Stores per-receiver codec compatibility results.
+///
+/// Keyed by receiver model (mDNS `md` record) with fallback to device id,
+/// plus codec and bit depth. Results expire after 30 days.
 class ReceiverCodecMemory {
   static const _prefix = 'receiver_codec_';
+  static const _expiryDays = 30;
+
+  static String _key(String receiverId, String codecKey) =>
+      '$_prefix${receiverId}_$codecKey';
 
   static Future<void> record(String receiverId, String codecKey, bool directOk) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('$_prefix${receiverId}_$codecKey', directOk);
+    await prefs.setBool(_key(receiverId, codecKey), directOk);
+    await prefs.setInt('${_key(receiverId, codecKey)}_ts', DateTime.now().millisecondsSinceEpoch);
   }
 
   static Future<bool?> lookup(String receiverId, String codecKey) async {
     final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey('$_prefix${receiverId}_$codecKey')) return null;
-    return prefs.getBool('$_prefix${receiverId}_$codecKey');
+    final key = _key(receiverId, codecKey);
+    if (!prefs.containsKey(key)) return null;
+    // Check expiry
+    final ts = prefs.getInt('${key}_ts');
+    if (ts != null) {
+      final age = DateTime.now().millisecondsSinceEpoch - ts;
+      if (age > _expiryDays * 24 * 60 * 60 * 1000) {
+        await prefs.remove(key);
+        await prefs.remove('${key}_ts');
+        return null;
+      }
+    }
+    return prefs.getBool(key);
   }
 
   static Future<void> clear(String receiverId) async {

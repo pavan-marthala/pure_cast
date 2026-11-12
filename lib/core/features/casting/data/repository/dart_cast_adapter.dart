@@ -105,7 +105,7 @@ class DartCastAdapter implements ICastService {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
       } catch (e) {
         // Only fall back to direct load for probe failures.
-        if (e is dart_cast.ProbeFailedException) {
+        if (shouldFallbackToDirect(e)) {
           final session = _castService.activeSession;
           if (session == null) rethrow;
           try {
@@ -197,6 +197,14 @@ class DartCastAdapter implements ICastService {
         ));
       }
     } catch (e) {
+      // Rethrow typed dart_cast exceptions as-is so callers can inspect
+      // the concrete type (e.g. ProbeFailedException for fallback).
+      if (e is dart_cast.ProbeFailedException ||
+          e is dart_cast.UnsupportedMediaException ||
+          e is dart_cast.PrepareFailedException ||
+          e is dart_cast.MediaLoadFailedException) {
+        rethrow;
+      }
       throw PureCastException('Failed to load local file: $path — ${e.toString()}', e);
     }
   }
@@ -480,5 +488,19 @@ class DartCastAdapter implements ICastService {
       language: s.language.isNotEmpty ? s.language : 'und',
       format: 'vtt',
     );
+  }
+
+  /// Pure decision: should we fall back to direct load for this exception?
+  ///
+  /// Only probe failures trigger a fallback. All other errors (typed
+  /// dart_cast exceptions, wrapped PureCastExceptions, etc.) are surfaced
+  /// without retrying.
+  static bool shouldFallbackToDirect(Object e) {
+    if (e is dart_cast.ProbeFailedException) return true;
+    // Handle wrapped form: PureCastException with originalError = ProbeFailedException
+    if (e is PureCastException && e.originalError is dart_cast.ProbeFailedException) {
+      return true;
+    }
+    return false;
   }
 }

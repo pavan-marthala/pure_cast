@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/transcode_settings.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/DI/injection.dart';
@@ -24,6 +25,15 @@ class CastDebugScreen extends StatefulWidget {
 
 class _CastDebugScreenState extends State<CastDebugScreen> {
   final List<String> _log = [];
+  bool _experimentalTranscode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TranscodeSettings.isEnabled().then((v) {
+      if (mounted) setState(() => _experimentalTranscode = v);
+    });
+  }
 
   void _logLine(String s) {
     setState(() => _log.add(s));
@@ -123,6 +133,15 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       appBar: AppBar(title: const Text('Cast Debug')),
       body: Column(
         children: [
+          SwitchListTile(
+            title: const Text('Experimental: convert unsupported videos'),
+            value: _experimentalTranscode,
+            onChanged: (v) async {
+              await TranscodeSettings.setEnabled(v);
+              setState(() => _experimentalTranscode = v);
+              _logLine('experimental transcode = $v');
+            },
+          ),
           Wrap(
             runSpacing: 12,
             spacing: 12,

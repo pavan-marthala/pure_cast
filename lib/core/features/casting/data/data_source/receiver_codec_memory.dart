@@ -11,20 +11,22 @@ class ReceiverCodecMemory {
   static String _key(String receiverId, String codecKey) =>
       '$_prefix${receiverId}_$codecKey';
 
-  static Future<void> record(String receiverId, String codecKey, bool directOk) async {
+  static Future<void> record(String receiverId, String codecKey, bool directOk, {DateTime? now}) async {
     final prefs = await SharedPreferences.getInstance();
+    final currentTime = now ?? DateTime.now();
     await prefs.setBool(_key(receiverId, codecKey), directOk);
-    await prefs.setInt('${_key(receiverId, codecKey)}_ts', DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt('${_key(receiverId, codecKey)}_ts', currentTime.millisecondsSinceEpoch);
   }
 
-  static Future<bool?> lookup(String receiverId, String codecKey) async {
+  static Future<bool?> lookup(String receiverId, String codecKey, {DateTime? now}) async {
     final prefs = await SharedPreferences.getInstance();
     final key = _key(receiverId, codecKey);
     if (!prefs.containsKey(key)) return null;
     // Check expiry
     final ts = prefs.getInt('${key}_ts');
     if (ts != null) {
-      final age = DateTime.now().millisecondsSinceEpoch - ts;
+      final currentTime = now ?? DateTime.now();
+      final age = currentTime.millisecondsSinceEpoch - ts;
       if (age > _expiryDays * 24 * 60 * 60 * 1000) {
         await prefs.remove(key);
         await prefs.remove('${key}_ts');

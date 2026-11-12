@@ -401,7 +401,7 @@ class ChromecastSession extends CastSession {
       final codec = probe?.video?.codec ?? 'video';
       final depth = bitDepthOf(probe?.video?.pixFmt);
       final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
-      final memKey = '${device.id}_${codec}_$depthStr';
+      final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
       debugPrint('[PREPDBG] memory lookup key=$memKey');
       // Check receiver memory before attempting direct playback.
       bool? memResult;
@@ -480,7 +480,7 @@ class ChromecastSession extends CastSession {
       final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
       final isAv1 = (probe?.video?.codec.toLowerCase() == 'av1');
       bool tryDirect = !(isAv1 || depth >= 10);
-      final memKey = '${device.id}_${codec}_$depthStr';
+      final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
       if (memoryLookup != null) {
         try {
           final memResult = await memoryLookup(device.id, memKey);

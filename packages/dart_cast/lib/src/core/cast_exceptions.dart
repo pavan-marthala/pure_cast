@@ -72,3 +72,13 @@ class ProtocolException extends CastException {
   @override
   String toString() => 'ProtocolException(${protocol.name}): $message';
 }
+
+/// Thrown when media preparation (remux/transcode) fails.
+class PrepareFailedException extends CastException {
+  PrepareFailedException(super.message, [super.cause]);
+}
+
+/// Thrown when media is unsupported by the receiver and cannot be prepared.
+class UnsupportedMediaException extends CastException {
+  UnsupportedMediaException(super.message, [super.cause]);
+}

@@ -100,12 +100,20 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     final src = res.first.path;
     if (src == null) return;
     _logLine('forced plan=$plan src=$src');
+    final bloc = context.read<CastSessionBloc>();
+    final dev = bloc.state.activeDevice;
+    if (dev == null) {
+      _logLine('Connect to a Chromecast first');
+      return;
+    }
+    _logLine('receiver=${dev.id} ${dev.name}');
     try {
       final service = getIt<ICastService>();
       await service.loadLocalFile(src, forcePlan: plan);
       _logLine('loadLocalFile completed');
-    } catch (e) {
+    } catch (e, st) {
       _logLine('error: $e');
+      _logLine(st.toString());
     }
   }
 

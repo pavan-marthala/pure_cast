@@ -14,6 +14,7 @@ import '../../core/cast_exceptions.dart';
 import '../../core/cast_media.dart';
 import '../../core/media_probe.dart';
 import '../../core/cast_decision.dart';
+import '../../core/direct_attempt_policy.dart';
 import '../../core/cast_prepare_session.dart';
 import '../../core/cast_ffmpeg_commands.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
@@ -418,10 +419,11 @@ class ChromecastSession extends CastSession {
           '[PREPDBG] memory says directFailed for $memKey; skipping direct attempt',
         );
         if (plan is UncertainDirectPlan &&
-            (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+            (caps.hasH264Encoder || caps.hasH264Mediacodec) &&
+            caps.transcodeEnabled) {
           // fall through to prepare path
         } else {
-          throw Exception(
+          throw UnsupportedMediaException(
             'This Chromecast can\'t play this video ($codec $depthStr)',
           );
         }
@@ -446,22 +448,26 @@ class ChromecastSession extends CastSession {
           return;
         } catch (e) {
           debugPrint('[PREPDBG] direct load FAILED for $memKey: $e');
-          // Only record negative on receiver rejection (LOAD_FAILED), not network/timeout/other.
-          final isReceiverRejection =
-              e.toString().contains('LOAD_FAILED') ||
-              e.toString().contains('Receiver rejected') ||
-              e.toString().contains('IDLE/ERROR');
-          if (isReceiverRejection && memoryRecord != null) {
-            try {
-              await memoryRecord(device.id, memKey, false);
-              debugPrint('[PREPDBG] recorded directFailed for $memKey');
-            } catch (_) {}
+          final isMediaLoadFailed = e is MediaLoadFailedException;
+          if (DirectAttemptPolicy.shouldRecordDirectFailed(
+            isMediaLoadFailed: isMediaLoadFailed,
+            codec: codec,
+            hasSubtitle: subtitle != null,
+            isDirectAttempt: true,
+          )) {
+            debugPrint('[PREPDBG] recording directFailed for $memKey');
+            if (memoryRecord != null) {
+              try {
+                await memoryRecord(device.id, memKey, false);
+              } catch (_) {}
+            }
           }
           if (plan is UncertainDirectPlan &&
-              (caps.hasH264Encoder || caps.hasH264Mediacodec)) {
+              (caps.hasH264Mediacodec || caps.hasLibx264) &&
+              caps.transcodeEnabled) {
             // fall through to prepare path
           } else {
-            throw Exception(
+            throw UnsupportedMediaException(
               'This Chromecast can\'t play this video ($codec $depthStr)',
             );
           }
@@ -503,21 +509,25 @@ class ChromecastSession extends CastSession {
           }
           return;
         } catch (e) {
-          final isReceiverRejection =
-              e.toString().contains('LOAD_FAILED') ||
-              e.toString().contains('Receiver rejected') ||
-              e.toString().contains('IDLE/ERROR');
-          if (isReceiverRejection && memoryRecord != null) {
-            try {
-              await memoryRecord(device.id, memKey, false);
-            } catch (_) {}
+          final isMediaLoadFailed = e is MediaLoadFailedException;
+          if (DirectAttemptPolicy.shouldRecordDirectFailed(
+            isMediaLoadFailed: isMediaLoadFailed,
+            codec: codec,
+            hasSubtitle: subtitle != null,
+            isDirectAttempt: true,
+          )) {
+            if (memoryRecord != null) {
+              try {
+                await memoryRecord(device.id, memKey, false);
+              } catch (_) {}
+            }
           }
-          throw Exception(
+          throw UnsupportedMediaException(
             'This Chromecast can\'t play this video ($codec $depthStr)',
           );
         }
       }
-      throw Exception('Unsupported: ${plan.reason}');
+      throw UnsupportedMediaException('Unsupported: ${plan.reason}');
     }
 
     // remux/transcode -> prepare
@@ -542,7 +552,7 @@ class ChromecastSession extends CastSession {
         final codec = probe?.video?.codec ?? 'video';
         final depth =
             (probe?.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
-        throw Exception(
+        throw UnsupportedMediaException(
           'This Chromecast can\'t play this video ($codec $depth)',
         );
       }
@@ -577,10 +587,10 @@ class ChromecastSession extends CastSession {
               videoEncoder: 'libx264',
             );
       } else {
-        throw Exception('Unsupported: no usable H.264 encoder');
+        throw UnsupportedMediaException('Unsupported: no usable H.264 encoder');
       }
     } else {
-      throw Exception('Unknown plan');
+      throw UnsupportedMediaException('Unknown plan');
     }
 
     final args = builder('/tmp/__OUTDIR__');
@@ -602,7 +612,7 @@ class ChromecastSession extends CastSession {
         );
       } catch (_) {}
       debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
-      throw Exception('Prepare failed: ${prepare.error}');
+      throw PrepareFailedException('Prepare failed: ${prepare.error}');
     }
     final hlsUrl = _proxy.registerHlsDirectory(
       prepare.sessionId,

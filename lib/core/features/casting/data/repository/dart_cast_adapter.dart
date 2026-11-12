@@ -7,6 +7,7 @@ import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/transcode_settings.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
 
 /// Concrete adapter wrapping dart_cast package services.
@@ -103,12 +104,10 @@ class DartCastAdapter implements ICastService {
       try {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
       } catch (e) {
-        final msg = e.toString();
         // Surface prepare failures and unsupported reasons without fallback.
-        if (msg.contains('Unsupported:') ||
-            msg.contains("can't play this video") ||
-            msg.contains('Prepare failed:')) {
-          throw PureCastException(msg, e);
+        if (e is dart_cast.UnsupportedMediaException ||
+            e is dart_cast.PrepareFailedException) {
+          throw PureCastException(e.toString(), e);
         }
         // Fallback: try direct load (probe failures only)
         final session = _castService.activeSession;
@@ -149,6 +148,19 @@ class DartCastAdapter implements ICastService {
     }
   }
 
+  Future<dart_cast.CastDeviceCaps> _detectCaps() async {
+    final caps = await dart_cast.CastFfmpegCapabilities.detect();
+    final transcodeEnabled = await TranscodeSettings.isEnabled();
+    return dart_cast.CastDeviceCaps(
+      supportsHevc: caps.supportsHevc,
+      hasH264Encoder: caps.hasH264Encoder,
+      hasLibx264: caps.hasLibx264,
+      hasH264Mediacodec: caps.hasH264Mediacodec,
+      transcodeEnabled: transcodeEnabled && caps.hasH264Encoder,
+      modelName: caps.modelName,
+    );
+  }
+
   @override
   Future<void> loadLocalFile(
     String path, {
@@ -167,7 +179,7 @@ class DartCastAdapter implements ICastService {
           path,
           audioStreamIndex: audioStreamIndex,
           // Detect FFmpeg capabilities at runtime instead of hardcoding false.
-          caps: await dart_cast.CastFfmpegCapabilities.detect(),
+          caps: await _detectCaps(),
           forcePlan: forcePlan,
           subtitle: dartSubtitle,
           memoryLookup: (receiverId, codecKey) =>

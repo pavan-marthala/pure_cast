@@ -604,10 +604,27 @@ class ChromecastSession extends CastSession {
       debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
       throw PrepareFailedException('Prepare failed: ${prepare.error}');
     }
+    // Start the proxy BEFORE registering the HLS directory, because
+    // registerHlsDirectory builds the URL from _baseUrl which is only
+    // set inside start(). (start is a no-op if already running.)
+    await _proxy.start(targetDeviceIp: device.address.address);
     final hlsUrl = _proxy.registerHlsDirectory(
       prepare.sessionId,
       prepare.tempDir.path,
     );
+    debugPrint('[HLSDBG] final URL: $hlsUrl');
+    // Log whether the host is a private LAN IP.
+    try {
+      final uri = Uri.parse(hlsUrl);
+      final host = uri.host;
+      final isPrivate =
+          host.startsWith('10.') ||
+          host.startsWith('172.') ||
+          host.startsWith('192.168.') ||
+          host == '127.0.0.1' ||
+          host == 'localhost';
+      debugPrint('[HLSDBG] host=$host isPrivateLAN=$isPrivate');
+    } catch (_) {}
     // load via proxy url through loadMedia? loadMedia expects CastMedia. Use a remote media with hls url.
     await loadMedia(
       CastMedia(
@@ -933,7 +950,9 @@ class ChromecastSession extends CastSession {
     final payloadStr = loadPayload;
     for (var i = 0; i < payloadStr.length; i += 800) {
       final end = (i + 800 < payloadStr.length) ? i + 800 : payloadStr.length;
-      debugPrint('[HLSDBG] LOAD payload chunk: ${payloadStr.substring(i, end)}');
+      debugPrint(
+        '[HLSDBG] LOAD payload chunk: ${payloadStr.substring(i, end)}',
+      );
     }
 
     final priorMediaSessionId = _mediaSessionId;

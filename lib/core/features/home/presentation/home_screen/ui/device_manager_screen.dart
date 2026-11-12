@@ -39,7 +39,6 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
           listener: (context, sessionState) {
             if (sessionState.connectionError != null &&
                 sessionState.connectionStatus == StateStatus.error) {
-                  
               showErrorToast(message: sessionState.connectionError!);
             }
           },
@@ -79,13 +78,16 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                                       StateStatus.loading;
                               final isConnected =
                                   isSelected &&
-                                  sessionState.connectionStatus == StateStatus.loaded;
+                                  sessionState.connectionStatus ==
+                                      StateStatus.loaded;
                               return GestureDetector(
                                 onTap: () {
                                   context.read<CastSessionBloc>().add(
                                     isConnected
                                         ? CastSessionEvent.disconnectDevice()
-                                        : CastSessionEvent.connectDevice(device),
+                                        : CastSessionEvent.connectDevice(
+                                            device,
+                                          ),
                                   );
                                 },
                                 child: Row(
@@ -103,7 +105,9 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                                       padding: .all(8),
                                       decoration: BoxDecoration(
                                         color: isSelected
-                                            ? colors.primary.withValues(alpha: 0.2)
+                                            ? colors.primary.withValues(
+                                                alpha: 0.2,
+                                              )
                                             : colors.surfaceDark,
                                         borderRadius: .circular(8),
                                       ),
@@ -119,7 +123,10 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                                       child: Column(
                                         crossAxisAlignment: .start,
                                         children: [
-                                          Text(device.name, style: typo.titleSmall),
+                                          Text(
+                                            device.name,
+                                            style: typo.titleSmall,
+                                          ),
                                           Text(device.protocol.name),
                                         ],
                                       ),
@@ -173,7 +180,9 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
                               SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                               Text("Still looking for more devices..."),
                             ],

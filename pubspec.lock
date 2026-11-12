@@ -296,6 +296,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.1"
+  dotlottie_flutter:
+    dependency: "direct main"
+    description:
+      name: dotlottie_flutter
+      sha256: e7488c5b2e7a357fd47bac1b5cc686f93ac1109381101079e45e48f924fd0f11
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
   drift:
     dependency: "direct main"
     description:

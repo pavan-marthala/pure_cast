@@ -6,6 +6,7 @@ import FlutterMacOS
 import Foundation
 
 import device_info_plus
+import dotlottie_flutter
 import ffmpeg_kit_flutter_new_min
 import file_picker_darwin
 import flutter_secure_storage_darwin
@@ -17,6 +18,7 @@ import wakelock_plus
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   DeviceInfoPlusMacosPlugin.register(with: registry.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
+  DotLottieFlutterPlugin.register(with: registry.registrar(forPlugin: "DotLottieFlutterPlugin"))
   FFmpegKitFlutterPlugin.register(with: registry.registrar(forPlugin: "FFmpegKitFlutterPlugin"))
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
   FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))

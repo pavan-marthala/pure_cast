@@ -157,6 +157,9 @@ class MediaProxy {
     String? pathExtension,
     bool stripDvbTables = true,
   }) {
+    if (_baseUrl == null) {
+      throw StateError('MediaProxy not started');
+    }
     final token = _generateToken();
     _routes[token] = _ProxyRoute(
       type: _RouteType.remote,
@@ -174,6 +177,9 @@ class MediaProxy {
   ///
   /// Returns a proxy URL that can be given to a cast device.
   String registerFile(String filePath) {
+    if (_baseUrl == null) {
+      throw StateError('MediaProxy not started');
+    }
     final token = _generateToken();
     // Add file extension to the proxy URL so players/TVs can detect format.
     // Many DLNA TVs require the extension to recognize subtitle files.
@@ -199,6 +205,9 @@ class MediaProxy {
 
   /// Registers a directory containing an HLS playlist (index.m3u8 + segments).
   String registerHlsDirectory(String sessionId, String dirPath) {
+    if (_baseUrl == null) {
+      throw StateError('MediaProxy not started');
+    }
     _hlsDirs[sessionId] = dirPath;
     return '$_baseUrl/hls/$sessionId/index.m3u8';
   }
@@ -222,6 +231,9 @@ class MediaProxy {
   /// The returned URL is served over the same path local files use, so it
   /// works for Chromecast, DLNA and AirPlay alike.
   String registerSource(MediaSource source, {String? fileExtension}) {
+    if (_baseUrl == null) {
+      throw StateError('MediaProxy not started');
+    }
     final token = _generateToken();
     final ext = _normaliseExtension(fileExtension);
     _routes['$token$ext'] = _ProxyRoute(
@@ -1592,7 +1604,7 @@ class MediaProxy {
     }
     final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
     if (!await file.exists()) {
-      debugPrint('[HLSDBG] $path 404 $remoteIp');
+      debugPrint('[HLSDBG] ${request.method} $path 404 $remoteIp');
       request.response.statusCode = HttpStatus.notFound;
       _addCorsHeaders(request.response, request.headers.value('Origin'));
       await request.response.close();
@@ -1616,7 +1628,7 @@ class MediaProxy {
           request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
           request.response.headers.set('Content-Range', 'bytes */$fileSize');
           await request.response.close();
-          debugPrint('[HLSDBG] $path 416 $remoteIp');
+          debugPrint('[HLSDBG] ${request.method} $path 416 $remoteIp');
           return;
         }
         final contentLength = end - start + 1;
@@ -1641,7 +1653,7 @@ class MediaProxy {
           }
         }
         await request.response.close();
-        debugPrint('[HLSDBG] $path 206 $remoteIp');
+        debugPrint('[HLSDBG] ${request.method} $path 206 $remoteIp');
         return;
       }
     }
@@ -1653,7 +1665,7 @@ class MediaProxy {
       request.response.add(bytes);
     }
     await request.response.close();
-    debugPrint('[HLSDBG] $path 200 $remoteIp');
+    debugPrint('[HLSDBG] ${request.method} $path 200 $remoteIp');
   }
 
   bool _isSubtitleFile(String path) {

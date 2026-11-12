@@ -22,6 +22,14 @@ void main() {
       await tmpDir.delete(recursive: true);
     });
 
+    test('registerHlsDirectory before start throws', () {
+      final unstarted = MediaProxy();
+      expect(
+        () => unstarted.registerHlsDirectory('s', tmpDir.path),
+        throwsStateError,
+      );
+    });
+
     test('content type m3u8', () async {
       final url = proxy.registerHlsDirectory('sess1', tmpDir.path);
       expect(url, contains('/hls/sess1/index.m3u8'));

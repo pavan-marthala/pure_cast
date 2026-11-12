@@ -201,6 +201,9 @@ class PureCastMedia {
           thumbnailUrl == other.thumbnailUrl &&
           duration == other.duration &&
           isLocalFile == other.isLocalFile;
+  factory PureCastMedia.skeleton() {
+    return PureCastMedia(uri: 'kjgd', type: .video, title: 'TEmhcd.mp4');
+  }
 
   PureCastMedia copyWith({
     String? uri,

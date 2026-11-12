@@ -1,4 +1,4 @@
-
+import 'package:material_ui/material_ui.dart';
 
 String formatDuration(Duration duration) {
   String twoDigits(int n) => n.toString().padLeft(2, "0");
@@ -9,3 +9,6 @@ String formatDuration(Duration duration) {
   }
   return "$twoDigitMinutes:$twoDigitSeconds";
 }
+
+const Color shimmerBase = Color(0xFF303030);
+const Color shimmerHighlight = Color(0xFF505050);

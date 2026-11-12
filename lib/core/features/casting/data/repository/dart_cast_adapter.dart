@@ -317,9 +317,26 @@ class DartCastAdapter implements ICastService {
     buf.writeln('duration=${session.duration}');
     if (session is dart_cast.ChromecastSession) {
       buf.writeln('mediaSessionId=${session.mediaSessionId}');
+      buf.writeln('playerState=${session.lastPlayerState ?? "<none>"}');
       buf.writeln('idleReason=${session.idleReason ?? "<none>"}');
     }
     return buf.toString();
+  }
+
+  @override
+  void enableRawMessageLogging() {
+    final session = _castService.activeSession;
+    if (session is dart_cast.ChromecastSession) {
+      session.enableRawMessageLogging();
+    }
+  }
+
+  @override
+  void disableRawMessageLogging() {
+    final session = _castService.activeSession;
+    if (session is dart_cast.ChromecastSession) {
+      session.disableRawMessageLogging();
+    }
   }
 
   @override

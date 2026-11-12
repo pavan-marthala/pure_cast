@@ -53,6 +53,12 @@ abstract class ICastService {
   /// Only meaningful for Chromecast sessions.
   Future<String> getDebugMediaStatus();
 
+  /// Enables raw message logging on the active Chromecast session.
+  void enableRawMessageLogging();
+
+  /// Disables raw message logging on the active Chromecast session.
+  void disableRawMessageLogging();
+
   /// Stream of session state changes.
   Stream<PureCastSessionState> get sessionStateStream;
 

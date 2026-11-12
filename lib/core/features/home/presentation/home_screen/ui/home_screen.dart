@@ -128,6 +128,8 @@ class MediaBotton extends StatelessWidget {
           isScrollControlled: true,
           useRootNavigator: true,
           useSafeArea: true,
+          showDragHandle: true,
+          backgroundColor: colors.background,
           builder: (context) {
             return MusicLibraryScreen(filterType: filterType);
           },

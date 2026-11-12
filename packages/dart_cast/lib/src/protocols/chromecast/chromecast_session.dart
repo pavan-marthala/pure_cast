@@ -80,6 +80,8 @@ class ChromecastSession extends CastSession {
   String? _sessionId; // Used for STOP app via receiver namespace.
   int? _mediaSessionId;
   String? _idleReason;
+  String? _lastPlayerState;
+  bool _rawMessageLogging = false;
 
   /// Fingerprint of the last logged MEDIA_STATUS, used to elide the payload
   /// of unchanged 1 Hz poll answers from the debug log.
@@ -143,6 +145,10 @@ class ChromecastSession extends CastSession {
   String? get sessionId => _sessionId;
   int? get mediaSessionId => _mediaSessionId;
   String? get idleReason => _idleReason;
+  String? get lastPlayerState => _lastPlayerState;
+  bool get rawMessageLogging => _rawMessageLogging;
+  void enableRawMessageLogging() => _rawMessageLogging = true;
+  void disableRawMessageLogging() => _rawMessageLogging = false;
   Timer? _heartbeatTimer;
   StreamSubscription<dynamic>? _messageSubscription;
 
@@ -1308,6 +1314,16 @@ class ChromecastSession extends CastSession {
     final payload = _getPayload(msg);
     if (payload == null) return;
 
+    // Raw message logging for diagnostics (enabled by debug panel).
+    if (_rawMessageLogging) {
+      final raw = payload.toString();
+      final ns = namespace ?? '?';
+      for (var i = 0; i < raw.length; i += 800) {
+        final end = (i + 800 < raw.length) ? i + 800 : raw.length;
+        debugPrint('[RXDBG-RAW] ns=$ns chunk: ${raw.substring(i, end)}');
+      }
+    }
+
     // Receiver-bound message firehose for diagnostics. Equivalent to the
     // stream CaC Tool renders — every namespaced message the receiver
     // sends back. PING/PONG heartbeats are dropped to keep the log
@@ -1411,6 +1427,7 @@ class ChromecastSession extends CastSession {
 
   void _updateState(String playerState, String? idleReason) {
     _idleReason = idleReason;
+    _lastPlayerState = playerState;
     final targetState = switch (playerState) {
       'PLAYING' => SessionState.playing,
       'PAUSED' => SessionState.paused,

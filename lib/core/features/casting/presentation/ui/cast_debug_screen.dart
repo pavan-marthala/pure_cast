@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/transcode_settings.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
+import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/DI/injection.dart';
 import 'package:pure_cast/core/features/casting/data/repository/dart_cast_adapter.dart';
@@ -123,8 +124,9 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       return;
     }
     _logLine('receiver=${dev.id} ${dev.name}');
+    final service = getIt<ICastService>();
+    service.enableRawMessageLogging();
     try {
-      final service = getIt<ICastService>();
       await service.loadLocalFile(
         src,
         forcePlan: plan,
@@ -144,9 +146,48 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
         final status = await service.getDebugMediaStatus();
         _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
+      service.disableRawMessageLogging();
     } catch (e, st) {
       _logLine('error: $e');
       _logLine(st.toString());
+      service.disableRawMessageLogging();
+    }
+  }
+
+  Future<void> _controlPublicHls() async {
+    _logLine('=== Control: public HLS ===');
+    final service = getIt<ICastService>();
+    final bloc = context.read<CastSessionBloc>();
+    final dev = bloc.state.activeDevice;
+    if (dev == null) {
+      _logLine('Connect to a Chromecast first');
+      return;
+    }
+    _logLine('receiver=${dev.id} ${dev.name}');
+    service.enableRawMessageLogging();
+    const url = 'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
+    _logLine('URL: $url (unverified reachable)');
+    try {
+      final media = PureCastMedia(
+        uri: url,
+        type: PureCastMediaType.hls,
+        title: 'Public HLS Test',
+        isLocalFile: false,
+      );
+      await service.loadMedia(media);
+      _logLine('loadMedia completed');
+      await service.play();
+      _logLine('play() called');
+      for (var i = 0; i < 20; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        final status = await service.getDebugMediaStatus();
+        _logLine('[RXDBG] t=${i + 1}s\n$status');
+      }
+      service.disableRawMessageLogging();
+    } catch (e, st) {
+      _logLine('error: $e');
+      _logLine(st.toString());
+      service.disableRawMessageLogging();
     }
   }
 
@@ -217,6 +258,10 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               ElevatedButton(
                 onPressed: () => _forcedPlan('remuxContainer'),
                 child: const Text('Force remuxContainer'),
+              ),
+              ElevatedButton(
+                onPressed: _controlPublicHls,
+                child: const Text('Control: public HLS'),
               ),
             ],
           ),

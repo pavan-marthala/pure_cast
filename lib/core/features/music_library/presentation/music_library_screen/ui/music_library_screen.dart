@@ -6,6 +6,8 @@ import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
+import 'package:pure_cast/core/utils/app_utils.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 class MusicLibraryScreen extends StatefulWidget {
   const new({super.key, required this.filterType});
@@ -29,23 +31,44 @@ class _MusicLibraryScreenState extends State<MusicLibraryScreen> {
   Widget build(BuildContext context) {
     return BlocBuilder<MediaBloc, MediaState>(
       builder: (context, state) {
-        final isLoading = state.status == .loading;
+        final isLoading = state.status == .loading || state.status == .initial;
+        final isError = state.status == .error;
+
         return Scaffold(
-          appBar: AppBar(),
-          body: SafeArea(
-            child: isLoading
-                ? Center(child: CircularProgressIndicator())
-                : MasonryGridView.count(
+          // appBar: AppBar(),
+          body: Builder(
+            builder: (context) {
+              if (isError) {
+                return Center(
+                  child: Text(state.error ?? "Error loading media"),
+                );
+              }
+              final mediaItems = isLoading
+                  ? List.generate(6, (_) => PureCastMedia.skeleton())
+                  : state.mediaItems;
+              return SafeArea(
+                child: Skeletonizer(
+                  enabled: isLoading,
+                  effect: ShimmerEffect(
+                    baseColor: shimmerBase,
+                    highlightColor: shimmerHighlight,
+                    duration: Duration(seconds: 1),
+                  ),
+                  ignoreContainers: false,
+                  child: MasonryGridView.count(
                     padding: .all(16),
                     itemBuilder: (context, index) {
-                      final media = state.mediaItems[index];
+                      final media = mediaItems[index];
                       return MediaWidget(media: media);
                     },
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    itemCount: state.mediaItems.length,
+                    itemCount: mediaItems.length,
                     crossAxisCount: 2,
                   ),
+                ),
+              );
+            },
           ),
         );
       },
@@ -67,30 +90,38 @@ class MediaWidget extends StatelessWidget {
       },
       child: Column(
         children: [
-          Container(
-            height: 260,
-            width: double.infinity,
-            padding: .all(8),
-            decoration: BoxDecoration(
-              color: colors.surfaceDark,
-              borderRadius: .circular(8),
-              image: media.thumbnailBytes == null
-                  ? null
-                  : DecorationImage(
-                      image: MemoryImage(media.thumbnailBytes!),
-                      fit: .cover,
-                    ),
+          ClipRRect(
+            borderRadius: .circular(8),
+            child: Skeleton.replace(
+              height: 260,
+              width: double.infinity,
+              child: Container(
+                height: 260,
+                width: double.infinity,
+                padding: .all(8),
+                decoration: BoxDecoration(
+                  color: colors.surfaceDark,
+                  image: media.thumbnailBytes == null
+                      ? null
+                      : DecorationImage(
+                          image: MemoryImage(media.thumbnailBytes!),
+                          fit: .cover,
+                        ),
+                ),
+                alignment: .center,
+                child: media.thumbnailBytes == null
+                    ? Skeleton.shade(
+                        child: Icon(
+                          media.type == .video
+                              ? Icons.videocam_outlined
+                              : Icons.audiotrack,
+                          size: 40,
+                          color: colors.textSecondary,
+                        ),
+                      )
+                    : null,
+              ),
             ),
-            alignment: .center,
-            child: media.thumbnailBytes == null
-                ? Icon(
-                    media.type == .video
-                        ? Icons.videocam_outlined
-                        : Icons.audiotrack,
-                    size: 40,
-                    color: colors.textSecondary,
-                  )
-                : null,
           ),
           Row(
             children: [

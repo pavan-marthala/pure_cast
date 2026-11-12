@@ -80,6 +80,11 @@ class FakeCastService implements ICastService {
 
   @override
   Future<String> getDebugMediaStatus() async => 'fake';
+  @override
+  void enableRawMessageLogging() {}
+
+  @override
+  void disableRawMessageLogging() {}
 
   @override
   Future<void> play() async {}

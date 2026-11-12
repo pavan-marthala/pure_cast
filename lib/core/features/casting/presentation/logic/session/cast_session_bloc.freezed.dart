@@ -1071,7 +1071,7 @@ as Duration,
 /// @nodoc
 mixin _$CastSessionState implements DiagnosticableTreeMixin {
 
- PureCastSessionState get sessionState; PureCastDevice? get activeDevice; PureCastMedia? get activeMedia; PureCastSubtitleTrack? get activeSubtitle; StateStatus get connectionStatus; String? get connectionError; StateStatus get playbackStatus; String? get playbackError; Duration get position; bool get preparing; String? get castPlan; String? get castPlanReason; String? get prepareError; Duration get duration; double get volume;
+ PureCastSessionState get sessionState; PureCastDevice? get activeDevice; PureCastMedia? get activeMedia; PureCastSubtitleTrack? get activeSubtitle; StateStatus get connectionStatus; String? get connectionError; StateStatus get playbackStatus; String? get playbackError; Duration get position; bool get preparing; bool get preparingSubtitles; String? get castPlan; String? get castPlanReason; String? get prepareError; String? get prepareSubtitlesError; Duration get duration; double get volume;
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1084,26 +1084,26 @@ void debugFillProperties(DiagnosticPropertiesBuilder properties) {
   final _this = this as CastSessionState;
   properties
     ..add(DiagnosticsProperty('type', 'CastSessionState'))
-    ..add(DiagnosticsProperty('sessionState', _this.sessionState))..add(DiagnosticsProperty('activeDevice', _this.activeDevice))..add(DiagnosticsProperty('activeMedia', _this.activeMedia))..add(DiagnosticsProperty('activeSubtitle', _this.activeSubtitle))..add(DiagnosticsProperty('connectionStatus', _this.connectionStatus))..add(DiagnosticsProperty('connectionError', _this.connectionError))..add(DiagnosticsProperty('playbackStatus', _this.playbackStatus))..add(DiagnosticsProperty('playbackError', _this.playbackError))..add(DiagnosticsProperty('position', _this.position))..add(DiagnosticsProperty('preparing', _this.preparing))..add(DiagnosticsProperty('castPlan', _this.castPlan))..add(DiagnosticsProperty('castPlanReason', _this.castPlanReason))..add(DiagnosticsProperty('prepareError', _this.prepareError))..add(DiagnosticsProperty('duration', _this.duration))..add(DiagnosticsProperty('volume', _this.volume));
+    ..add(DiagnosticsProperty('sessionState', _this.sessionState))..add(DiagnosticsProperty('activeDevice', _this.activeDevice))..add(DiagnosticsProperty('activeMedia', _this.activeMedia))..add(DiagnosticsProperty('activeSubtitle', _this.activeSubtitle))..add(DiagnosticsProperty('connectionStatus', _this.connectionStatus))..add(DiagnosticsProperty('connectionError', _this.connectionError))..add(DiagnosticsProperty('playbackStatus', _this.playbackStatus))..add(DiagnosticsProperty('playbackError', _this.playbackError))..add(DiagnosticsProperty('position', _this.position))..add(DiagnosticsProperty('preparing', _this.preparing))..add(DiagnosticsProperty('preparingSubtitles', _this.preparingSubtitles))..add(DiagnosticsProperty('castPlan', _this.castPlan))..add(DiagnosticsProperty('castPlanReason', _this.castPlanReason))..add(DiagnosticsProperty('prepareError', _this.prepareError))..add(DiagnosticsProperty('prepareSubtitlesError', _this.prepareSubtitlesError))..add(DiagnosticsProperty('duration', _this.duration))..add(DiagnosticsProperty('volume', _this.volume));
 }
 
 @override
 bool operator ==(Object other) {
   final _this = this as CastSessionState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionState&&(identical(other.sessionState, _this.sessionState) || other.sessionState == _this.sessionState)&&(identical(other.activeDevice, _this.activeDevice) || other.activeDevice == _this.activeDevice)&&(identical(other.activeMedia, _this.activeMedia) || other.activeMedia == _this.activeMedia)&&(identical(other.activeSubtitle, _this.activeSubtitle) || other.activeSubtitle == _this.activeSubtitle)&&(identical(other.connectionStatus, _this.connectionStatus) || other.connectionStatus == _this.connectionStatus)&&(identical(other.connectionError, _this.connectionError) || other.connectionError == _this.connectionError)&&(identical(other.playbackStatus, _this.playbackStatus) || other.playbackStatus == _this.playbackStatus)&&(identical(other.playbackError, _this.playbackError) || other.playbackError == _this.playbackError)&&(identical(other.position, _this.position) || other.position == _this.position)&&(identical(other.preparing, _this.preparing) || other.preparing == _this.preparing)&&(identical(other.castPlan, _this.castPlan) || other.castPlan == _this.castPlan)&&(identical(other.castPlanReason, _this.castPlanReason) || other.castPlanReason == _this.castPlanReason)&&(identical(other.prepareError, _this.prepareError) || other.prepareError == _this.prepareError)&&(identical(other.duration, _this.duration) || other.duration == _this.duration)&&(identical(other.volume, _this.volume) || other.volume == _this.volume));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastSessionState&&(identical(other.sessionState, _this.sessionState) || other.sessionState == _this.sessionState)&&(identical(other.activeDevice, _this.activeDevice) || other.activeDevice == _this.activeDevice)&&(identical(other.activeMedia, _this.activeMedia) || other.activeMedia == _this.activeMedia)&&(identical(other.activeSubtitle, _this.activeSubtitle) || other.activeSubtitle == _this.activeSubtitle)&&(identical(other.connectionStatus, _this.connectionStatus) || other.connectionStatus == _this.connectionStatus)&&(identical(other.connectionError, _this.connectionError) || other.connectionError == _this.connectionError)&&(identical(other.playbackStatus, _this.playbackStatus) || other.playbackStatus == _this.playbackStatus)&&(identical(other.playbackError, _this.playbackError) || other.playbackError == _this.playbackError)&&(identical(other.position, _this.position) || other.position == _this.position)&&(identical(other.preparing, _this.preparing) || other.preparing == _this.preparing)&&(identical(other.preparingSubtitles, _this.preparingSubtitles) || other.preparingSubtitles == _this.preparingSubtitles)&&(identical(other.castPlan, _this.castPlan) || other.castPlan == _this.castPlan)&&(identical(other.castPlanReason, _this.castPlanReason) || other.castPlanReason == _this.castPlanReason)&&(identical(other.prepareError, _this.prepareError) || other.prepareError == _this.prepareError)&&(identical(other.prepareSubtitlesError, _this.prepareSubtitlesError) || other.prepareSubtitlesError == _this.prepareSubtitlesError)&&(identical(other.duration, _this.duration) || other.duration == _this.duration)&&(identical(other.volume, _this.volume) || other.volume == _this.volume));
 }
 
 
 @override
 int get hashCode {
   final _this = this as CastSessionState;
-  return Object.hash(runtimeType,_this.sessionState,_this.activeDevice,_this.activeMedia,_this.activeSubtitle,_this.connectionStatus,_this.connectionError,_this.playbackStatus,_this.playbackError,_this.position,_this.preparing,_this.castPlan,_this.castPlanReason,_this.prepareError,_this.duration,_this.volume);
+  return Object.hash(runtimeType,_this.sessionState,_this.activeDevice,_this.activeMedia,_this.activeSubtitle,_this.connectionStatus,_this.connectionError,_this.playbackStatus,_this.playbackError,_this.position,_this.preparing,_this.preparingSubtitles,_this.castPlan,_this.castPlanReason,_this.prepareError,_this.prepareSubtitlesError,_this.duration,_this.volume);
 }
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
   final _this = this as CastSessionState;
-  return 'CastSessionState(sessionState: ${_this.sessionState}, activeDevice: ${_this.activeDevice}, activeMedia: ${_this.activeMedia}, activeSubtitle: ${_this.activeSubtitle}, connectionStatus: ${_this.connectionStatus}, connectionError: ${_this.connectionError}, playbackStatus: ${_this.playbackStatus}, playbackError: ${_this.playbackError}, position: ${_this.position}, preparing: ${_this.preparing}, castPlan: ${_this.castPlan}, castPlanReason: ${_this.castPlanReason}, prepareError: ${_this.prepareError}, duration: ${_this.duration}, volume: ${_this.volume})';
+  return 'CastSessionState(sessionState: ${_this.sessionState}, activeDevice: ${_this.activeDevice}, activeMedia: ${_this.activeMedia}, activeSubtitle: ${_this.activeSubtitle}, connectionStatus: ${_this.connectionStatus}, connectionError: ${_this.connectionError}, playbackStatus: ${_this.playbackStatus}, playbackError: ${_this.playbackError}, position: ${_this.position}, preparing: ${_this.preparing}, preparingSubtitles: ${_this.preparingSubtitles}, castPlan: ${_this.castPlan}, castPlanReason: ${_this.castPlanReason}, prepareError: ${_this.prepareError}, prepareSubtitlesError: ${_this.prepareSubtitlesError}, duration: ${_this.duration}, volume: ${_this.volume})';
 }
 
 
@@ -1114,7 +1114,7 @@ abstract mixin class $CastSessionStateCopyWith<$Res>  {
   factory $CastSessionStateCopyWith(CastSessionState value, $Res Function(CastSessionState) _then) = _$CastSessionStateCopyWithImpl;
 @useResult
 $Res call({
- PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, bool preparing, String? castPlan, String? castPlanReason, String? prepareError, Duration duration, double volume
+ PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, bool preparing, bool preparingSubtitles, String? castPlan, String? castPlanReason, String? prepareError, String? prepareSubtitlesError, Duration duration, double volume
 });
 
 
@@ -1131,7 +1131,7 @@ class _$CastSessionStateCopyWithImpl<$Res>
 
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? preparing = null,Object? castPlan = freezed,Object? castPlanReason = freezed,Object? prepareError = freezed,Object? duration = null,Object? volume = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? preparing = null,Object? preparingSubtitles = null,Object? castPlan = freezed,Object? castPlanReason = freezed,Object? prepareError = freezed,Object? prepareSubtitlesError = freezed,Object? duration = null,Object? volume = null,}) {
   return _then(CastSessionState(
 sessionState: null == sessionState ? _self.sessionState : sessionState // ignore: cast_nullable_to_non_nullable
 as PureCastSessionState,activeDevice: freezed == activeDevice ? _self.activeDevice : activeDevice // ignore: cast_nullable_to_non_nullable
@@ -1143,9 +1143,11 @@ as String?,playbackStatus: null == playbackStatus ? _self.playbackStatus : playb
 as StateStatus,playbackError: freezed == playbackError ? _self.playbackError : playbackError // ignore: cast_nullable_to_non_nullable
 as String?,position: null == position ? _self.position : position // ignore: cast_nullable_to_non_nullable
 as Duration,preparing: null == preparing ? _self.preparing : preparing // ignore: cast_nullable_to_non_nullable
+as bool,preparingSubtitles: null == preparingSubtitles ? _self.preparingSubtitles : preparingSubtitles // ignore: cast_nullable_to_non_nullable
 as bool,castPlan: freezed == castPlan ? _self.castPlan : castPlan // ignore: cast_nullable_to_non_nullable
 as String?,castPlanReason: freezed == castPlanReason ? _self.castPlanReason : castPlanReason // ignore: cast_nullable_to_non_nullable
 as String?,prepareError: freezed == prepareError ? _self.prepareError : prepareError // ignore: cast_nullable_to_non_nullable
+as String?,prepareSubtitlesError: freezed == prepareSubtitlesError ? _self.prepareSubtitlesError : prepareSubtitlesError // ignore: cast_nullable_to_non_nullable
 as String?,duration: null == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
 as Duration,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
 as double,
@@ -1233,10 +1235,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  String? castPlan,  String? castPlanReason,  String? prepareError,  Duration duration,  double volume)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  bool preparingSubtitles,  String? castPlan,  String? castPlanReason,  String? prepareError,  String? prepareSubtitlesError,  Duration duration,  double volume)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CastSessionState() when $default != null:
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.preparingSubtitles,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.prepareSubtitlesError,_that.duration,_that.volume);case _:
   return orElse();
 
 }
@@ -1254,10 +1256,10 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.ac
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  String? castPlan,  String? castPlanReason,  String? prepareError,  Duration duration,  double volume)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  bool preparingSubtitles,  String? castPlan,  String? castPlanReason,  String? prepareError,  String? prepareSubtitlesError,  Duration duration,  double volume)  $default,) {final _that = this;
 switch (_that) {
 case _CastSessionState():
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.preparingSubtitles,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.prepareSubtitlesError,_that.duration,_that.volume);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -1274,10 +1276,10 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.ac
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  String? castPlan,  String? castPlanReason,  String? prepareError,  Duration duration,  double volume)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( PureCastSessionState sessionState,  PureCastDevice? activeDevice,  PureCastMedia? activeMedia,  PureCastSubtitleTrack? activeSubtitle,  StateStatus connectionStatus,  String? connectionError,  StateStatus playbackStatus,  String? playbackError,  Duration position,  bool preparing,  bool preparingSubtitles,  String? castPlan,  String? castPlanReason,  String? prepareError,  String? prepareSubtitlesError,  Duration duration,  double volume)?  $default,) {final _that = this;
 switch (_that) {
 case _CastSessionState() when $default != null:
-return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.duration,_that.volume);case _:
+return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.activeSubtitle,_that.connectionStatus,_that.connectionError,_that.playbackStatus,_that.playbackError,_that.position,_that.preparing,_that.preparingSubtitles,_that.castPlan,_that.castPlanReason,_that.prepareError,_that.prepareSubtitlesError,_that.duration,_that.volume);case _:
   return null;
 
 }
@@ -1289,7 +1291,7 @@ return $default(_that.sessionState,_that.activeDevice,_that.activeMedia,_that.ac
 
 
 class _CastSessionState extends CastSessionState with DiagnosticableTreeMixin {
-  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.activeSubtitle = null, this.connectionStatus = StateStatus.initial, this.connectionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.preparing = false, this.castPlan, this.castPlanReason, this.prepareError, this.duration = Duration.zero, this.volume = 1.0}): super._();
+  const _CastSessionState({this.sessionState = PureCastSessionState.disconnected, this.activeDevice, this.activeMedia, this.activeSubtitle = null, this.connectionStatus = StateStatus.initial, this.connectionError, this.playbackStatus = StateStatus.initial, this.playbackError, this.position = Duration.zero, this.preparing = false, this.preparingSubtitles = false, this.castPlan, this.castPlanReason, this.prepareError, this.prepareSubtitlesError, this.duration = Duration.zero, this.volume = 1.0}): super._();
   
 
 @override@JsonKey() final  PureCastSessionState sessionState;
@@ -1302,9 +1304,11 @@ class _CastSessionState extends CastSessionState with DiagnosticableTreeMixin {
 @override final  String? playbackError;
 @override@JsonKey() final  Duration position;
 @override@JsonKey() final  bool preparing;
+@override@JsonKey() final  bool preparingSubtitles;
 @override final  String? castPlan;
 @override final  String? castPlanReason;
 @override final  String? prepareError;
+@override final  String? prepareSubtitlesError;
 @override@JsonKey() final  Duration duration;
 @override@JsonKey() final  double volume;
 
@@ -1319,23 +1323,23 @@ _$CastSessionStateCopyWith<_CastSessionState> get copyWith => __$CastSessionStat
 void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     properties
     ..add(DiagnosticsProperty('type', 'CastSessionState'))
-    ..add(DiagnosticsProperty('sessionState', sessionState))..add(DiagnosticsProperty('activeDevice', activeDevice))..add(DiagnosticsProperty('activeMedia', activeMedia))..add(DiagnosticsProperty('activeSubtitle', activeSubtitle))..add(DiagnosticsProperty('connectionStatus', connectionStatus))..add(DiagnosticsProperty('connectionError', connectionError))..add(DiagnosticsProperty('playbackStatus', playbackStatus))..add(DiagnosticsProperty('playbackError', playbackError))..add(DiagnosticsProperty('position', position))..add(DiagnosticsProperty('preparing', preparing))..add(DiagnosticsProperty('castPlan', castPlan))..add(DiagnosticsProperty('castPlanReason', castPlanReason))..add(DiagnosticsProperty('prepareError', prepareError))..add(DiagnosticsProperty('duration', duration))..add(DiagnosticsProperty('volume', volume));
+    ..add(DiagnosticsProperty('sessionState', sessionState))..add(DiagnosticsProperty('activeDevice', activeDevice))..add(DiagnosticsProperty('activeMedia', activeMedia))..add(DiagnosticsProperty('activeSubtitle', activeSubtitle))..add(DiagnosticsProperty('connectionStatus', connectionStatus))..add(DiagnosticsProperty('connectionError', connectionError))..add(DiagnosticsProperty('playbackStatus', playbackStatus))..add(DiagnosticsProperty('playbackError', playbackError))..add(DiagnosticsProperty('position', position))..add(DiagnosticsProperty('preparing', preparing))..add(DiagnosticsProperty('preparingSubtitles', preparingSubtitles))..add(DiagnosticsProperty('castPlan', castPlan))..add(DiagnosticsProperty('castPlanReason', castPlanReason))..add(DiagnosticsProperty('prepareError', prepareError))..add(DiagnosticsProperty('prepareSubtitlesError', prepareSubtitlesError))..add(DiagnosticsProperty('duration', duration))..add(DiagnosticsProperty('volume', volume));
 }
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastSessionState&&(identical(other.sessionState, sessionState) || other.sessionState == sessionState)&&(identical(other.activeDevice, activeDevice) || other.activeDevice == activeDevice)&&(identical(other.activeMedia, activeMedia) || other.activeMedia == activeMedia)&&(identical(other.activeSubtitle, activeSubtitle) || other.activeSubtitle == activeSubtitle)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.connectionError, connectionError) || other.connectionError == connectionError)&&(identical(other.playbackStatus, playbackStatus) || other.playbackStatus == playbackStatus)&&(identical(other.playbackError, playbackError) || other.playbackError == playbackError)&&(identical(other.position, position) || other.position == position)&&(identical(other.preparing, preparing) || other.preparing == preparing)&&(identical(other.castPlan, castPlan) || other.castPlan == castPlan)&&(identical(other.castPlanReason, castPlanReason) || other.castPlanReason == castPlanReason)&&(identical(other.prepareError, prepareError) || other.prepareError == prepareError)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.volume, volume) || other.volume == volume));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastSessionState&&(identical(other.sessionState, sessionState) || other.sessionState == sessionState)&&(identical(other.activeDevice, activeDevice) || other.activeDevice == activeDevice)&&(identical(other.activeMedia, activeMedia) || other.activeMedia == activeMedia)&&(identical(other.activeSubtitle, activeSubtitle) || other.activeSubtitle == activeSubtitle)&&(identical(other.connectionStatus, connectionStatus) || other.connectionStatus == connectionStatus)&&(identical(other.connectionError, connectionError) || other.connectionError == connectionError)&&(identical(other.playbackStatus, playbackStatus) || other.playbackStatus == playbackStatus)&&(identical(other.playbackError, playbackError) || other.playbackError == playbackError)&&(identical(other.position, position) || other.position == position)&&(identical(other.preparing, preparing) || other.preparing == preparing)&&(identical(other.preparingSubtitles, preparingSubtitles) || other.preparingSubtitles == preparingSubtitles)&&(identical(other.castPlan, castPlan) || other.castPlan == castPlan)&&(identical(other.castPlanReason, castPlanReason) || other.castPlanReason == castPlanReason)&&(identical(other.prepareError, prepareError) || other.prepareError == prepareError)&&(identical(other.prepareSubtitlesError, prepareSubtitlesError) || other.prepareSubtitlesError == prepareSubtitlesError)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.volume, volume) || other.volume == volume));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,sessionState,activeDevice,activeMedia,activeSubtitle,connectionStatus,connectionError,playbackStatus,playbackError,position,preparing,castPlan,castPlanReason,prepareError,duration,volume);
+    return Object.hash(runtimeType,sessionState,activeDevice,activeMedia,activeSubtitle,connectionStatus,connectionError,playbackStatus,playbackError,position,preparing,preparingSubtitles,castPlan,castPlanReason,prepareError,prepareSubtitlesError,duration,volume);
 }
 
 @override
 String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
-    return 'CastSessionState(sessionState: $sessionState, activeDevice: $activeDevice, activeMedia: $activeMedia, activeSubtitle: $activeSubtitle, connectionStatus: $connectionStatus, connectionError: $connectionError, playbackStatus: $playbackStatus, playbackError: $playbackError, position: $position, preparing: $preparing, castPlan: $castPlan, castPlanReason: $castPlanReason, prepareError: $prepareError, duration: $duration, volume: $volume)';
+    return 'CastSessionState(sessionState: $sessionState, activeDevice: $activeDevice, activeMedia: $activeMedia, activeSubtitle: $activeSubtitle, connectionStatus: $connectionStatus, connectionError: $connectionError, playbackStatus: $playbackStatus, playbackError: $playbackError, position: $position, preparing: $preparing, preparingSubtitles: $preparingSubtitles, castPlan: $castPlan, castPlanReason: $castPlanReason, prepareError: $prepareError, prepareSubtitlesError: $prepareSubtitlesError, duration: $duration, volume: $volume)';
 }
 
 
@@ -1346,7 +1350,7 @@ abstract mixin class _$CastSessionStateCopyWith<$Res> implements $CastSessionSta
   factory _$CastSessionStateCopyWith(_CastSessionState value, $Res Function(_CastSessionState) _then) = __$CastSessionStateCopyWithImpl;
 @override @useResult
 $Res call({
- PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, bool preparing, String? castPlan, String? castPlanReason, String? prepareError, Duration duration, double volume
+ PureCastSessionState sessionState, PureCastDevice? activeDevice, PureCastMedia? activeMedia, PureCastSubtitleTrack? activeSubtitle, StateStatus connectionStatus, String? connectionError, StateStatus playbackStatus, String? playbackError, Duration position, bool preparing, bool preparingSubtitles, String? castPlan, String? castPlanReason, String? prepareError, String? prepareSubtitlesError, Duration duration, double volume
 });
 
 
@@ -1363,7 +1367,7 @@ class __$CastSessionStateCopyWithImpl<$Res>
 
 /// Create a copy of CastSessionState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? preparing = null,Object? castPlan = freezed,Object? castPlanReason = freezed,Object? prepareError = freezed,Object? duration = null,Object? volume = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? sessionState = null,Object? activeDevice = freezed,Object? activeMedia = freezed,Object? activeSubtitle = freezed,Object? connectionStatus = null,Object? connectionError = freezed,Object? playbackStatus = null,Object? playbackError = freezed,Object? position = null,Object? preparing = null,Object? preparingSubtitles = null,Object? castPlan = freezed,Object? castPlanReason = freezed,Object? prepareError = freezed,Object? prepareSubtitlesError = freezed,Object? duration = null,Object? volume = null,}) {
   return _then(_CastSessionState(
 sessionState: null == sessionState ? _self.sessionState : sessionState // ignore: cast_nullable_to_non_nullable
 as PureCastSessionState,activeDevice: freezed == activeDevice ? _self.activeDevice : activeDevice // ignore: cast_nullable_to_non_nullable
@@ -1375,9 +1379,11 @@ as String?,playbackStatus: null == playbackStatus ? _self.playbackStatus : playb
 as StateStatus,playbackError: freezed == playbackError ? _self.playbackError : playbackError // ignore: cast_nullable_to_non_nullable
 as String?,position: null == position ? _self.position : position // ignore: cast_nullable_to_non_nullable
 as Duration,preparing: null == preparing ? _self.preparing : preparing // ignore: cast_nullable_to_non_nullable
+as bool,preparingSubtitles: null == preparingSubtitles ? _self.preparingSubtitles : preparingSubtitles // ignore: cast_nullable_to_non_nullable
 as bool,castPlan: freezed == castPlan ? _self.castPlan : castPlan // ignore: cast_nullable_to_non_nullable
 as String?,castPlanReason: freezed == castPlanReason ? _self.castPlanReason : castPlanReason // ignore: cast_nullable_to_non_nullable
 as String?,prepareError: freezed == prepareError ? _self.prepareError : prepareError // ignore: cast_nullable_to_non_nullable
+as String?,prepareSubtitlesError: freezed == prepareSubtitlesError ? _self.prepareSubtitlesError : prepareSubtitlesError // ignore: cast_nullable_to_non_nullable
 as String?,duration: null == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
 as Duration,volume: null == volume ? _self.volume : volume // ignore: cast_nullable_to_non_nullable
 as double,

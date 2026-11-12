@@ -293,7 +293,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
             if (!result.isSuccess) {
               emit(
                 state.copyWith(
-                  playbackError: result.error?.message ?? 'Extraction failed',
+                  prepareSubtitlesError:
+                      result.error?.message ?? 'Extraction failed',
                 ),
               );
               return;
@@ -322,15 +323,18 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         for (final t in updatedSubtitles) {
           debugPrint('[SUBDBG]   track id=${t.id} url=${t.url}');
         }
-        final updatedMedia = media.copyWith(subtitles: updatedSubtitles, defaultSubtitle: subtitle);
+        final updatedMedia = media.copyWith(
+          subtitles: updatedSubtitles,
+          defaultSubtitle: subtitle,
+        );
         try {
           debugPrint('[SUBDBG] loadMedia start');
           if (updatedMedia.isLocalFile) {
-            emit(state.copyWith(preparing: true, prepareError: null));
+            emit(state.copyWith(preparingSubtitles: true, prepareError: null));
           }
           await _castService.loadMedia(updatedMedia);
           if (updatedMedia.isLocalFile) {
-            emit(state.copyWith(preparing: false));
+            emit(state.copyWith(preparingSubtitles: false));
           }
           debugPrint('[SUBDBG] loadMedia done');
           emit(state.copyWith(activeMedia: updatedMedia));
@@ -357,7 +361,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       await _castService.setSubtitle(subtitle);
       emit(state.copyWith(activeSubtitle: subtitle));
     } catch (e) {
-      emit(state.copyWith(playbackError: e.toString()));
+      emit(state.copyWith(prepareSubtitlesError: e.toString()));
     }
   }
 
@@ -407,7 +411,9 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
       if (matchingStream == null) {
         emit(
-          state.copyWith(playbackError: 'Subtitle stream not found in video'),
+          state.copyWith(
+            prepareSubtitlesError: 'Subtitle stream not found in video',
+          ),
         );
         return;
       }
@@ -421,7 +427,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       if (!result.isSuccess) {
         emit(
           state.copyWith(
-            playbackError: result.error?.message ?? 'Extraction failed',
+            prepareSubtitlesError: result.error?.message ?? 'Extraction failed',
           ),
         );
         return;
@@ -454,11 +460,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       // If device is connected, reload media with updated subtitles, then set subtitle
       if (state.activeDevice != null) {
         if (updatedMedia.isLocalFile) {
-          emit(state.copyWith(preparing: true, prepareError: null));
+          emit(state.copyWith(preparingSubtitles: true, prepareError: null));
         }
         await _castService.loadMedia(updatedMedia);
         if (updatedMedia.isLocalFile) {
-          emit(state.copyWith(preparing: false));
+          emit(state.copyWith(preparingSubtitles: false));
         }
         emit(state.copyWith(activeMedia: updatedMedia));
         await _castService.setSubtitle(updatedSubtitle);
@@ -472,7 +478,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         );
       }
     } catch (e) {
-      emit(state.copyWith(playbackError: e.toString()));
+      emit(state.copyWith(prepareSubtitlesError: e.toString()));
     }
   }
 

@@ -15,9 +15,11 @@ abstract class CastSessionState with _$CastSessionState {
     String? playbackError,
     @Default(Duration.zero) Duration position,
     @Default(false) bool preparing,
+    @Default(false) bool preparingSubtitles,
     String? castPlan,
     String? castPlanReason,
     String? prepareError,
+    String? prepareSubtitlesError,
     @Default(Duration.zero) Duration duration,
     @Default(1.0) double volume,
   }) = _CastSessionState;

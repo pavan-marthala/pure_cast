@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
@@ -122,6 +123,8 @@ class Body extends StatelessWidget {
         Duration,
         Duration,
         bool,
+        bool,
+        String?,
         String?,
       )
     >(
@@ -133,7 +136,9 @@ class Body extends StatelessWidget {
           state.position,
           state.duration,
           state.preparing,
+          state.preparingSubtitles,
           state.prepareError,
+          state.prepareSubtitlesError,
         );
       },
       builder: (context, state) {
@@ -144,7 +149,9 @@ class Body extends StatelessWidget {
           position,
           duration,
           preparing,
+          preparingSubtitles,
           prepareError,
+          prepareSubtitlesError,
         ) = state;
         if (preparing) {
           return const SliverToBoxAdapter(
@@ -267,16 +274,23 @@ class Body extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              Text(
-                                subtitle != null ? subtitle.label : 'Off',
-                                style: typo.labelMedium.copyWith(
-                                  color: colors.textSecondary,
+                              if (!preparingSubtitles)
+                                Text(
+                                  subtitle != null ? subtitle.label : 'Off',
+                                  style: typo.labelMedium.copyWith(
+                                    color: colors.textSecondary,
+                                  ),
                                 ),
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: colors.textSecondary,
-                              ),
+                              preparingSubtitles
+                                  ? SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : Icon(
+                                      Icons.chevron_right,
+                                      color: colors.textSecondary,
+                                    ),
                             ],
                           ),
                         ),

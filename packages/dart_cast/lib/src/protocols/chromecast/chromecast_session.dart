@@ -712,6 +712,21 @@ class ChromecastSession extends CastSession {
     final isRemoteHls =
         media.type == CastMediaType.hls && !media.isLocalFile && !isPreparedHls;
 
+    // Prepared HLS (bypassTransform) — skip the transformer entirely and
+    // pass the proxy URL straight to the receiver. The transformer would
+    // re-proxy the /hls/... URL (double proxy) and corrupt the playlist.
+    if (bypassTransform) {
+      debugPrint('[HLSDBG] bypassTransform: loading prepared HLS directly');
+      debugPrint('[HLSDBG] final URL: ${media.url}');
+      await _attemptLoad(
+        media: media,
+        proxyUrl: media.url,
+        effectiveType: CastMediaType.hls,
+        attemptLabel: 'prepared-hls',
+      );
+      return;
+    }
+
     // Non-HLS / local media — single attempt, no bisect needed.
     if (!isRemoteHls) {
       final transformed = await _mediaTransformer.transform(media, _proxy);
@@ -914,6 +929,12 @@ class ChromecastSession extends CastSession {
       'effectiveType=${effectiveType.name}',
     );
     CastLogger.debug('Chromecast: LOAD payload = $loadPayload');
+    // [HLSDBG] Log the exact LOAD payload JSON in chunks for diagnosis.
+    final payloadStr = loadPayload;
+    for (var i = 0; i < payloadStr.length; i += 800) {
+      final end = (i + 800 < payloadStr.length) ? i + 800 : payloadStr.length;
+      debugPrint('[HLSDBG] LOAD payload chunk: ${payloadStr.substring(i, end)}');
+    }
 
     final priorMediaSessionId = _mediaSessionId;
 

@@ -788,6 +788,8 @@ class MediaProxy {
       // Handle CORS preflight (OPTIONS) requests — Chromecast's HLS player
       // sends these before fetching segments from a different origin/path.
       if (request.method == 'OPTIONS') {
+        final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
+        debugPrint('[HLSDBG] ${request.uri.path} 204 $remoteIp');
         _addCorsHeaders(request.response, request.headers.value('Origin'));
         request.response.statusCode = HttpStatus.noContent;
         await request.response.close();

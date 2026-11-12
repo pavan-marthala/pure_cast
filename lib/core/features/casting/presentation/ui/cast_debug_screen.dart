@@ -174,7 +174,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
         title: 'Public HLS Test',
         isLocalFile: false,
       );
-      await service.loadMedia(media);
+      await service.loadMedia(media, bypassTransform: true);
       _logLine('loadMedia completed');
       await service.play();
       _logLine('play() called');

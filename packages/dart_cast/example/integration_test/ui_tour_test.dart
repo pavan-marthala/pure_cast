@@ -31,7 +31,7 @@ class FakeCastSession extends CastSession {
   }
 
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(CastMedia media, {bool bypassTransform = false}) async {
     stateMachine
       ..transitionTo(SessionState.loading)
       ..transitionTo(SessionState.playing);

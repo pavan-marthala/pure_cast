@@ -15,7 +15,7 @@ abstract class ICastService {
   Future<void> disconnect();
 
   /// Loads media onto the connected receiver device.
-  Future<void> loadMedia(PureCastMedia media);
+  Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false});
 
   /// Loads a local file, probing/preparing it for Chromecast when needed.
   Future<void> loadLocalFile(

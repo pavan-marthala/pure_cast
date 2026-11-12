@@ -129,7 +129,10 @@ class DlnaSession extends CastSession {
   }
 
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(
+    CastMedia media, {
+    bool bypassTransform = false,
+  }) async {
     if (_isLoadingMedia) {
       CastLogger.warning(
         'DLNA: loadMedia called while already loading — ignoring',

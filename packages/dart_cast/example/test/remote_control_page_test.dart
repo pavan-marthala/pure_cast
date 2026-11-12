@@ -15,7 +15,7 @@ class FakeCastSession extends CastSession {
   FakeCastSession(super.device);
 
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(CastMedia media, {bool bypassTransform = false}) async {
     calls.add('loadMedia');
     loadedMedia.add(media);
   }

@@ -7,7 +7,10 @@ class _TestSession extends CastSession {
   _TestSession(super.device);
 
   @override
-  Future<void> loadMedia(CastMedia media) async {}
+  Future<void> loadMedia(
+    CastMedia media, {
+    bool bypassTransform = false,
+  }) async {}
 
   @override
   Future<void> play() async {}

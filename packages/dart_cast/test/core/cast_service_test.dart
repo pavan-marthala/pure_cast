@@ -66,7 +66,10 @@ class MockCastSession extends CastSession {
   MockCastSession(super.device);
 
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(
+    CastMedia media, {
+    bool bypassTransform = false,
+  }) async {
     loadCalled = true;
   }
 

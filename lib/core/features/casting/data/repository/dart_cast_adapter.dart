@@ -99,7 +99,7 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
-  Future<void> loadMedia(PureCastMedia media) async {
+  Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false}) async {
     if (media.isLocalFile) {
       try {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
@@ -127,7 +127,7 @@ class DartCastAdapter implements ICastService {
 
     try {
       final dartMedia = _mapMediaToDartCast(media);
-      await session.loadMedia(dartMedia);
+      await session.loadMedia(dartMedia, bypassTransform: bypassTransform);
 
       // dart_cast may return from loadMedia() once the receiver acknowledges
       // the LOAD, but the session might still be idle/disconnected if the

@@ -192,7 +192,7 @@ abstract class CastSession {
   // -- Abstract methods --
 
   /// Loads media onto the cast device.
-  Future<void> loadMedia(CastMedia media);
+  Future<void> loadMedia(CastMedia media, {bool bypassTransform = false});
 
   /// Starts or resumes playback.
   Future<void> play();

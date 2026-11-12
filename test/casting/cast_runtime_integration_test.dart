@@ -70,7 +70,7 @@ class FakeCastService implements ICastService {
   }
 
   @override
-  Future<void> loadMedia(PureCastMedia media) async {
+  Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false}) async {
     loadedMedia = media;
     sessionStateController.add(PureCastSessionState.playing);
   }

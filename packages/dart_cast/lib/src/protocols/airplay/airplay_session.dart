@@ -269,7 +269,10 @@ class AirPlaySession extends CastSession {
   /// Starts the media proxy, registers the media URL, and sends a `POST /play`
   /// to the device. Begins position polling after playback starts.
   @override
-  Future<void> loadMedia(CastMedia media) async {
+  Future<void> loadMedia(
+    CastMedia media, {
+    bool bypassTransform = false,
+  }) async {
     if (_isLoadingMedia) {
       CastLogger.warning(
         'AirPlay: loadMedia called while already loading — ignoring',

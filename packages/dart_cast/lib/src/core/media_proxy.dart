@@ -56,6 +56,13 @@ class _ProxyRoute {
   });
 }
 
+/// Handle returned by [MediaProxy.registerLiveStream]'s open callback.
+class LiveStreamRun {
+  final Stream<List<int>> stream;
+  final Future<void> Function() close;
+  LiveStreamRun({required this.stream, required this.close});
+}
+
 /// Local HTTP proxy server for casting.
 ///
 /// Proxies remote URLs with custom header injection and rewrites HLS playlists.
@@ -69,11 +76,7 @@ class MediaProxy {
   final Map<String, String> _hlsDirs = {};
   final Map<
     String,
-    ({
-      Future<Stream<List<int>>> Function() open,
-      Future<void> Function() onClose,
-      String contentType,
-    })
+    ({Future<LiveStreamRun> Function() open, String contentType})
   >
   _liveStreams = {};
   final Map<String, _SyntheticContent> _syntheticContent = {};
@@ -232,19 +235,14 @@ class MediaProxy {
   /// [onClose] is called when the client disconnects.
   /// Returns the URL the receiver should fetch.
   String registerLiveStream({
-    required Future<Stream<List<int>>> Function() open,
-    required Future<void> Function() onClose,
+    required Future<LiveStreamRun> Function() open,
     String contentType = 'video/x-matroska',
   }) {
     if (_baseUrl == null) {
       throw StateError('MediaProxy not started');
     }
     final token = _generateToken();
-    _liveStreams[token] = (
-      open: open,
-      onClose: onClose,
-      contentType: contentType,
-    );
+    _liveStreams[token] = (open: open, contentType: contentType);
     return '$_baseUrl/live/$token';
   }
 
@@ -1737,7 +1735,10 @@ class MediaProxy {
       );
     }
 
-    debugPrint('[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp');
+    final userAgent = request.headers.value('User-Agent') ?? '?';
+    debugPrint(
+      '[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp UA=$userAgent',
+    );
 
     _addCorsHeaders(request.response, request.headers.value('Origin'));
     request.response.statusCode = HttpStatus.ok;
@@ -1745,23 +1746,22 @@ class MediaProxy {
     request.response.headers.set('Accept-Ranges', 'none');
 
     var onCloseCalled = false;
+    LiveStreamRun? run;
+    var bytesSent = 0;
+    var clientClosed = false;
+    var sourceEnded = false;
     Future<void> closeOnce() async {
       if (onCloseCalled) return;
       onCloseCalled = true;
       try {
-        await entry.onClose();
+        await run?.close();
       } catch (_) {}
     }
 
-    Stream<List<int>>? stream;
-    var bytesSent = 0;
-    var clientClosed = false;
-    var sourceEnded = false;
     try {
-      stream = await entry.open();
-      final countedStream = stream.map((chunk) {
+      run = await entry.open();
+      final countedStream = run.stream.map((chunk) {
         bytesSent += chunk.length;
-        final now = DateTime.now();
         if (bytesSent % (5 * 1024 * 1024) < chunk.length) {
           debugPrint('[LIVE] bytes sent=$bytesSent');
         }

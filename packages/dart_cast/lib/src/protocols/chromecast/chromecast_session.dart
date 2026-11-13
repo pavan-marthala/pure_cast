@@ -756,19 +756,21 @@ class ChromecastSession extends CastSession {
         debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
         final session = await FFmpegKit.executeWithArgumentsAsync(args);
         final stream = File(pipePath).openRead();
-        // Store session id for cleanup
-        _liveSessionIds.add(session.getSessionId() ?? 0);
-        return stream;
-      },
-      onClose: () async {
-        debugPrint('[LIVE] close: cancelling ffmpeg and closing pipe');
-        // Cancel the most recent session
-        if (_liveSessionIds.isNotEmpty) {
-          final sid = _liveSessionIds.removeLast();
-          try {
-            await FFmpegKit.cancel(sid);
-          } catch (_) {}
-        }
+        final sessionId = session.getSessionId() ?? 0;
+        _liveSessionIds.add(sessionId);
+        return LiveStreamRun(
+          stream: stream,
+          close: () async {
+            debugPrint('[LIVE] close: cancelling ffmpeg and closing pipe');
+            try {
+              await FFmpegKit.cancel(sessionId);
+            } catch (_) {}
+            try {
+              await FFmpegKitConfig.closeFFmpegPipe(pipePath);
+            } catch (_) {}
+            _liveSessionIds.remove(sessionId);
+          },
+        );
       },
       contentType: 'video/x-matroska',
     );

@@ -476,44 +476,19 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     final service = getIt<ICastService>();
     service.enableRawMessageLogging();
     try {
-      final pipePath = await FFmpegKitConfig.registerNewFFmpegPipe();
-      if (pipePath == null) {
-        _logLine('registerNewFFmpegPipe returned null');
-        service.disableRawMessageLogging();
-        return;
-      }
-      _logLine('pipe path=$pipePath');
-      final args = ['-nostdin', '-i', src, '-map', '0:v:0', '-map', '0:a:0', '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', '-b:a', '192k', '-f', 'matroska', pipePath];
-      _logLine('RUN: ${args.join(' ')}');
-      final session = await FFmpegKit.executeWithArgumentsAsync(args);
-      final dartSession = (service as dynamic)._castService?.activeSession;
-      if (dartSession is dart_cast.ChromecastSession) {
-        final url = dartSession.proxy.registerLiveStream(
-          open: () async => File(pipePath).openRead(),
-          onClose: () async {
-            try { await FFmpegKit.cancel(session.getSessionId()); } catch (_) {}
-            try { await FFmpegKitConfig.closeFFmpegPipe(pipePath); } catch (_) {}
-          },
-          contentType: 'video/x-matroska',
-        );
-        _logLine('live URL: $url');
-        final media = PureCastMedia(
-          uri: url,
-          type: PureCastMediaType.mkv,
-          title: 'Live MKV Test',
-          isLocalFile: false,
-        );
-        await service.loadMedia(media, bypassTransform: true);
-        _logLine('loadMedia completed');
-        await service.play();
-        _logLine('play() called');
-        for (var i = 0; i < 30; i++) {
-          await Future.delayed(const Duration(seconds: 1));
-          final status = await service.getDebugMediaStatus();
-          _logLine('[RXDBG] t=${i + 1}s\n$status');
-        }
-      } else {
-        _logLine('Not a Chromecast session');
+      await service.loadLiveMkv(
+        filePath: src,
+        audioIndex: _pipeAudioIdx,
+        streamType: _useLive ? 'LIVE' : 'BUFFERED',
+        includeDuration: _includeDuration,
+      );
+      _logLine('loadLiveMkv completed');
+      await service.play();
+      _logLine('play() called');
+      for (var i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        final status = await service.getDebugMediaStatus();
+        _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
       service.disableRawMessageLogging();
     } catch (e, st) {

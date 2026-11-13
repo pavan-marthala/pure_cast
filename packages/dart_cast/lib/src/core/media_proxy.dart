@@ -1744,34 +1744,52 @@ class MediaProxy {
     request.response.headers.contentType = ContentType.parse(entry.contentType);
     request.response.headers.set('Accept-Ranges', 'none');
 
-    Stream<List<int>>? stream;
-    try {
-      stream = await entry.open();
-      var bytesSent = 0;
-      var lastLogTime = DateTime.now();
-      await for (final chunk in stream) {
-        request.response.add(chunk);
-        bytesSent += chunk.length;
-        final now = DateTime.now();
-        if (bytesSent % (5 * 1024 * 1024) < chunk.length ||
-            now.difference(lastLogTime).inSeconds >= 5) {
-          debugPrint('[LIVE] bytes sent=$bytesSent');
-          lastLogTime = now;
-        }
-      }
-      await request.response.close();
-      debugPrint(
-        '[LIVE] stream ended: client closed=false source ended=true bytes=$bytesSent',
-      );
-    } catch (e) {
-      debugPrint('[LIVE] error: $e');
-      try {
-        await request.response.close();
-      } catch (_) {}
-    } finally {
+    var onCloseCalled = false;
+    Future<void> closeOnce() async {
+      if (onCloseCalled) return;
+      onCloseCalled = true;
       try {
         await entry.onClose();
       } catch (_) {}
+    }
+
+    Stream<List<int>>? stream;
+    var bytesSent = 0;
+    var clientClosed = false;
+    var sourceEnded = false;
+    try {
+      stream = await entry.open();
+      final countedStream = stream.map((chunk) {
+        bytesSent += chunk.length;
+        final now = DateTime.now();
+        if (bytesSent % (5 * 1024 * 1024) < chunk.length) {
+          debugPrint('[LIVE] bytes sent=$bytesSent');
+        }
+        return chunk;
+      });
+      await request.response.addStream(countedStream);
+      sourceEnded = true;
+      await request.response.close();
+      debugPrint(
+        '[LIVE] stream ended: client closed=$clientClosed source ended=$sourceEnded bytes=$bytesSent',
+      );
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('Connection reset') ||
+          msg.contains('Broken pipe') ||
+          msg.contains('SocketException')) {
+        clientClosed = true;
+        debugPrint('[LIVE] client closed: $e');
+      } else {
+        debugPrint('[LIVE] error: $e');
+      }
+    } finally {
+      await closeOnce();
+      if (clientClosed) {
+        debugPrint(
+          '[LIVE] stream ended: client closed=true source ended=$sourceEnded bytes=$bytesSent',
+        );
+      }
     }
   }
 

@@ -20,6 +20,7 @@ import '../../core/cast_prepare_session.dart';
 import '../../core/cast_ffmpeg_commands.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/media_information.dart';
+import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
 import '../../core/cast_session.dart';
 import '../../core/media_proxy.dart';
@@ -328,6 +329,13 @@ class ChromecastSession extends CastSession {
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
   }) async {
+    // Cancel any running live sessions from a previous load.
+    for (final sid in _liveSessionIds) {
+      try {
+        await FFmpegKit.cancel(sid);
+      } catch (_) {}
+    }
+    _liveSessionIds.clear();
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
     }
@@ -697,6 +705,88 @@ class ChromecastSession extends CastSession {
       hlsVideoSegmentFormat: hlsVideoSegmentFormat,
     );
   }
+
+  /// Loads a local file as a live MKV stream (no disk buffering).
+  Future<void> loadLiveMkv({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    required bool includeDuration,
+  }) async {
+    debugPrint(
+      '[PREPDBG] loadLiveMkv: $filePath audioIndex=$audioIndex streamType=$streamType',
+    );
+    await _proxy.start(targetDeviceIp: device.address.address);
+
+    // Probe for duration
+    double? durationSec;
+    if (includeDuration) {
+      try {
+        String input = filePath;
+        if (input.startsWith('content://')) {
+          final saf = await FFmpegKitConfig.getSafParameterForRead(input);
+          if (saf != null) input = saf;
+        } else if (input.startsWith('file://')) {
+          input = Uri.parse(input).toFilePath();
+        }
+        final session = await FFprobeKit.getMediaInformation(
+          input,
+        ).timeout(const Duration(seconds: 8));
+        final info = session.getMediaInformation();
+        if (info != null) {
+          final dur = info.getDuration();
+          durationSec = double.tryParse(dur ?? '');
+        }
+      } catch (e) {
+        debugPrint('[PREPDBG] probe failed: $e');
+      }
+    }
+
+    final liveUrl = _proxy.registerLiveStream(
+      open: () async {
+        debugPrint('[LIVE] open: starting new ffmpeg run');
+        final pipePath = await FFmpegKitConfig.registerNewFFmpegPipe();
+        if (pipePath == null)
+          throw Exception('registerNewFFmpegPipe returned null');
+        final args = CastFfmpegCommands.liveMkv(
+          input: filePath,
+          audioStreamIndex: audioIndex,
+          output: pipePath,
+        );
+        debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
+        final session = await FFmpegKit.executeWithArgumentsAsync(args);
+        final stream = File(pipePath).openRead();
+        // Store session id for cleanup
+        _liveSessionIds.add(session.getSessionId() ?? 0);
+        return stream;
+      },
+      onClose: () async {
+        debugPrint('[LIVE] close: cancelling ffmpeg and closing pipe');
+        // Cancel the most recent session
+        if (_liveSessionIds.isNotEmpty) {
+          final sid = _liveSessionIds.removeLast();
+          try {
+            await FFmpegKit.cancel(sid);
+          } catch (_) {}
+        }
+      },
+      contentType: 'video/x-matroska',
+    );
+
+    debugPrint('[LIVE] live URL: $liveUrl');
+    await loadMedia(
+      CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
+      contentType: 'video/x-matroska',
+      duration:
+          durationSec != null
+              ? Duration(milliseconds: (durationSec * 1000).round())
+              : null,
+      bypassTransform: true,
+      streamType: streamType,
+    );
+  }
+
+  final List<int> _liveSessionIds = [];
 
   String _planReason(CastPlan p) =>
       p is DirectPlan
@@ -1230,6 +1320,13 @@ class ChromecastSession extends CastSession {
     _transportId = null;
     _sessionId = null;
     _mediaSessionId = null;
+    // Cancel all live ffmpeg sessions.
+    for (final sid in _liveSessionIds) {
+      try {
+        await FFmpegKit.cancel(sid);
+      } catch (_) {}
+    }
+    _liveSessionIds.clear();
     stateMachine.transitionTo(SessionState.disconnected);
 
     // Clean up socket and proxy with a timeout so we don't hang
@@ -1251,6 +1348,12 @@ class ChromecastSession extends CastSession {
     _stopHeartbeat();
     _stopPositionPolling();
     _mediaStatusSubscription?.cancel();
+    for (final sid in _liveSessionIds) {
+      try {
+        FFmpegKit.cancel(sid);
+      } catch (_) {}
+    }
+    _liveSessionIds.clear();
     unawaited(_proxy.stop());
     super.dispose();
   }

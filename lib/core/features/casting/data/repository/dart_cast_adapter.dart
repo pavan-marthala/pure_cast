@@ -161,6 +161,30 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
+  Future<void> loadLiveMkv({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    required bool includeDuration,
+  }) async {
+    final session = _castService.activeSession;
+    if (session == null) throw const PureCastException('No active cast session');
+    if (session is! dart_cast.ChromecastSession) {
+      throw const PureCastException('Live MKV cast requires a Chromecast session');
+    }
+    try {
+      await session.loadLiveMkv(
+        filePath: filePath,
+        audioIndex: audioIndex,
+        streamType: streamType,
+        includeDuration: includeDuration,
+      );
+    } catch (e) {
+      throw PureCastException('Failed to load live MKV: $filePath', e);
+    }
+  }
+
+  @override
   Future<void> loadLocalFile(
     String path, {
     int audioStreamIndex = 0,

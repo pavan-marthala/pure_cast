@@ -241,6 +241,30 @@ class CastFfmpegCommands {
     '$outputDir/seg_%05d.ts',
     '$outputDir/index.m3u8',
   ];
+  static List<String> liveMkv({
+    required String input,
+    required int audioStreamIndex,
+    required String output,
+  }) => [
+    '-nostdin',
+    '-i',
+    input,
+    '-map',
+    '0:v:0',
+    '-map',
+    '0:a:$audioStreamIndex',
+    '-c:v',
+    'copy',
+    '-c:a',
+    'aac',
+    '-ac',
+    '2',
+    '-b:a',
+    '192k',
+    '-live',
+    '1',
+    '-f',
+    'matroska',
+    output,
+  ];
 }
-
-// extension

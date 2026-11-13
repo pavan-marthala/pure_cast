@@ -17,6 +17,14 @@ abstract class ICastService {
   /// Loads media onto the connected receiver device.
   Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false});
 
+  /// Loads a local file as a live MKV stream (no disk buffering).
+  Future<void> loadLiveMkv({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    required bool includeDuration,
+  });
+
   /// Loads a local file, probing/preparing it for Chromecast when needed.
   Future<void> loadLocalFile(
     String path, {

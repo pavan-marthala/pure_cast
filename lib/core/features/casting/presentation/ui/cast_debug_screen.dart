@@ -35,10 +35,8 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
   bool _useLive = false;
   String _streams = 'both';
   String _segments = 'ts';
-  String _pipeTransport = 'pipe';
   int _pipeAudioIdx = 0;
   List<Map<String, dynamic>> _audioTracks = [];
-  String _audioTrackLabel = '0';
 
   @override
   void initState() {
@@ -168,7 +166,19 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     _logLine('[PIPETEST] audio tracks: $_audioTracks');
 
     final audioIdx = _pipeAudioIdx;
-    final transport = _pipeTransport;
+
+    // TCP transport only
+    _logLine('[PIPETEST] Transport: tcp');
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final port = server.port;
+    _logLine('[PIPETEST] tcp port=$port');
+
+    final args = [
+      '-nostdin', '-i', src, '-t', '15', '-map', '0:v:0', '-map', '0:a:$audioIdx',
+      '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
+      '-f', 'matroska', 'tcp://127.0.0.1:$port',
+    ];
+    _logLine('[PIPETEST] transport=tcp args=${args.join(' ')}');
 
     final beforeFiles = await _listLargeFiles();
     _logLine('[PIPETEST] files before: ${beforeFiles.length}');
@@ -178,167 +188,53 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     int totalBytes = 0;
     bool ebmlHeader = false;
     int? rc;
-    String lastStep = 'init';
 
     final watchdog = Timer(const Duration(seconds: 20), () {
-      _logLine('[PIPETEST] WATCHDOG fired at ${stopwatch.elapsedMilliseconds}ms lastStep=$lastStep');
-      try { FFmpegKit.cancel(); } catch (_) {}
-      try {
-        final w = File('/tmp/unblock').openWrite();
-        w.close();
-      } catch (_) {}
+      _logLine('[PIPETEST] WATCHDOG fired at ${stopwatch.elapsedMilliseconds}ms');
+      try { server.close(); } catch (_) {}
     });
 
-    if (transport == 'tcp') {
-      _logLine('[PIPETEST] Transport: tcp');
-      ServerSocket? server;
-      Socket? socket;
-      try {
-        server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-        final port = server.port;
-        _logLine('[PIPETEST] tcp port=$port');
+    try {
+      _logLine('[PIPETEST] step: starting ffmpeg');
+      final session = await FFmpegKit.executeWithArgumentsAsync(args);
+      _logLine('[PIPETEST] step: ffmpeg session created id=${session.getSessionId()}');
 
-        final args = [
-          '-nostdin', '-i', src, '-t', '15', '-map', '0:v:0', '-map', '0:a:$audioIdx',
-          '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', '-b:a', '192k',
-          '-f', 'matroska', 'tcp://127.0.0.1:$port',
-        ];
-        _logLine('[PIPETEST] transport=tcp args=${args.join(' ')}');
+      _logLine('[PIPETEST] step: waiting for connection');
+      final socket = await server.first.timeout(const Duration(seconds: 18));
+      _logLine('[PIPETEST] step: connection accepted');
 
-        lastStep = 'starting ffmpeg';
-        _logLine('[PIPETEST] step: starting ffmpeg');
-        final session = await FFmpegKit.executeWithArgumentsAsync(args);
-        _logLine('[PIPETEST] step: ffmpeg session created id=${session.getSessionId()}');
-
-        lastStep = 'waiting for connection';
-        _logLine('[PIPETEST] step: waiting for connection');
-        socket = await server.first.timeout(const Duration(seconds: 18));
-        _logLine('[PIPETEST] step: connection accepted');
-
-        lastStep = 'reading';
-        _logLine('[PIPETEST] step: reading');
-        await for (final chunk in socket) {
-          if (firstByteMs == null) {
-            firstByteMs = stopwatch.elapsedMilliseconds;
-            _logLine('[PIPETEST] step: first chunk after ${firstByteMs}ms');
-            if (chunk.length >= 4) {
-              ebmlHeader = chunk[0] == 0x1A && chunk[1] == 0x45 && chunk[2] == 0xDF && chunk[3] == 0xA3;
-            }
+      _logLine('[PIPETEST] step: reading');
+      await for (final chunk in socket) {
+        if (firstByteMs == null) {
+          firstByteMs = stopwatch.elapsedMilliseconds;
+          _logLine('[PIPETEST] step: first chunk after ${firstByteMs}ms');
+          if (chunk.length >= 4) {
+            ebmlHeader = chunk[0] == 0x1A && chunk[1] == 0x45 && chunk[2] == 0xDF && chunk[3] == 0xA3;
           }
-          totalBytes += chunk.length;
-          lastStep = 'reading (total=$totalBytes)';
         }
-        stopwatch.stop();
-        _logLine('[PIPETEST] step: reader done total=$totalBytes');
-        rc = (await session.getReturnCode())?.getValue();
-        final logs = await session.getAllLogsAsString();
-        final errorLines = (logs ?? '').split('\n').where((l) => l.toLowerCase().contains('error') || l.toLowerCase().contains('warning')).toList();
-        _logLine('[PIPETEST] transport=tcp timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes ebmlHeader=$ebmlHeader eof=true rc=$rc');
-        if (errorLines.isNotEmpty) {
-          _logLine('[PIPETEST] ffmpeg errors/warnings: ${errorLines.take(10).join('\n')}');
-        }
-      } catch (e) {
-        stopwatch.stop();
-        _logLine('[PIPETEST] transport=tcp error: $e at step=$lastStep timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes');
-      } finally {
-        watchdog.cancel();
-        try { await FFmpegKit.cancel(); } catch (_) {}
-        try { await server?.close(); } catch (_) {}
-        try { socket?.destroy(); } catch (_) {}
-        final afterFiles = await _listLargeFiles();
-        final newLarge = afterFiles.where((f) => !beforeFiles.contains(f)).toList();
-        if (newLarge.isNotEmpty) {
-          _logLine('[PIPETEST] NEW large files: ${newLarge.join(', ')}');
-        } else {
-          _logLine('[PIPETEST] no new large files created');
-        }
+        totalBytes += chunk.length;
       }
-    } else {
-      // Pipe transport
-      _logLine('[PIPETEST] Transport: pipe');
-      _logLine('[PIPETEST] step: registering pipe');
-      final pipePath = await FFmpegKitConfig.registerNewFFmpegPipe();
-      _logLine('[PIPETEST] step: pipe registered path=$pipePath');
-      if (pipePath == null) {
-        _logLine('[PIPETEST] registerNewFFmpegPipe returned null');
-        return;
+      stopwatch.stop();
+      _logLine('[PIPETEST] step: reader done total=$totalBytes');
+      rc = (await session.getReturnCode())?.getValue();
+      final logs = await session.getAllLogsAsString();
+      final errorLines = (logs ?? '').split('\n').where((l) => l.toLowerCase().contains('error') || l.toLowerCase().contains('warning')).toList();
+      _logLine('[PIPETEST] transport=tcp timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes ebmlHeader=$ebmlHeader eof=true rc=$rc');
+      if (errorLines.isNotEmpty) {
+        _logLine('[PIPETEST] ffmpeg errors/warnings: ${errorLines.take(10).join('\n')}');
       }
-      try {
-        final stat = await File(pipePath).stat();
-        _logLine('[PIPETEST] pipe FileStat type=${stat.type}');
-      } catch (e) {
-        _logLine('[PIPETEST] pipe stat error: $e');
-      }
-
-      final args = ['-nostdin', '-i', src, '-t', '15', '-map', '0:v:0', '-map', '0:a:$audioIdx', '-c:v', 'copy', '-c:a', 'aac', '-ac', '2', '-b:a', '192k', '-f', 'matroska', pipePath];
-      _logLine('[PIPETEST] transport=pipe args=${args.join(' ')}');
-
-      final beforeFiles = await _listLargeFiles();
-      _logLine('[PIPETEST] files before: ${beforeFiles.length}');
-
-      final stopwatch = Stopwatch()..start();
-      int? firstByteMs;
-      int totalBytes = 0;
-      bool ebmlHeader = false;
-      int? rc;
-      String lastStep = 'init';
-
-      final watchdog = Timer(const Duration(seconds: 20), () {
-        _logLine('[PIPETEST] WATCHDOG fired at ${stopwatch.elapsedMilliseconds}ms lastStep=$lastStep');
-        try { FFmpegKit.cancel(); } catch (_) {}
-        try {
-          final w = File(pipePath).openWrite();
-          w.close();
-        } catch (_) {}
-        try { FFmpegKitConfig.closeFFmpegPipe(pipePath); } catch (_) {}
-      });
-
-      try {
-        _logLine('[PIPETEST] step: opening reader');
-        final file = File(pipePath);
-        final stream = file.openRead();
-        _logLine('[PIPETEST] step: reader opened');
-
-        _logLine('[PIPETEST] step: starting ffmpeg');
-        final session = await FFmpegKit.executeWithArgumentsAsync(args);
-        _logLine('[PIPETEST] step: ffmpeg session created id=${session.getSessionId()}');
-
-        lastStep = 'reading';
-        _logLine('[PIPETEST] step: reading');
-        await for (final chunk in stream) {
-          if (firstByteMs == null) {
-            firstByteMs = stopwatch.elapsedMilliseconds;
-            _logLine('[PIPETEST] step: first chunk after ${firstByteMs}ms');
-            if (chunk.length >= 4) {
-              ebmlHeader = chunk[0] == 0x1A && chunk[1] == 0x45 && chunk[2] == 0xDF && chunk[3] == 0xA3;
-            }
-          }
-          totalBytes += chunk.length;
-          lastStep = 'reading (total=$totalBytes)';
-        }
-        stopwatch.stop();
-        _logLine('[PIPETEST] step: reader done total=$totalBytes');
-        rc = (await session.getReturnCode())?.getValue();
-        final logs = await session.getAllLogsAsString();
-        final errorLines = (logs ?? '').split('\n').where((l) => l.toLowerCase().contains('error') || l.toLowerCase().contains('warning')).toList();
-        _logLine('[PIPETEST] transport=pipe timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes ebmlHeader=$ebmlHeader eof=true rc=$rc');
-        if (errorLines.isNotEmpty) {
-          _logLine('[PIPETEST] ffmpeg errors/warnings: ${errorLines.take(10).join('\n')}');
-        }
-      } catch (e) {
-        stopwatch.stop();
-        _logLine('[PIPETEST] transport=pipe error: $e at step=$lastStep timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes');
-      } finally {
-        watchdog.cancel();
-        try { await FFmpegKit.cancel(); } catch (_) {}
-        try { await FFmpegKitConfig.closeFFmpegPipe(pipePath); } catch (_) {}
-        final afterFiles = await _listLargeFiles();
-        final newLarge = afterFiles.where((f) => !beforeFiles.contains(f)).toList();
-        if (newLarge.isNotEmpty) {
-          _logLine('[PIPETEST] NEW large files: ${newLarge.join(', ')}');
-        } else {
-          _logLine('[PIPETEST] no new large files created');
-        }
+    } catch (e) {
+      stopwatch.stop();
+      _logLine('[PIPETEST] transport=tcp error: $e timeToFirstByte=${firstByteMs}ms totalBytes=$totalBytes');
+    } finally {
+      watchdog.cancel();
+      try { await server.close(); } catch (_) {}
+      final afterFiles = await _listLargeFiles();
+      final newLarge = afterFiles.where((f) => !beforeFiles.contains(f)).toList();
+      if (newLarge.isNotEmpty) {
+        _logLine('[PIPETEST] NEW large files: ${newLarge.join(', ')}');
+      } else {
+        _logLine('[PIPETEST] no new large files created');
       }
     }
   }
@@ -529,14 +425,6 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               DropdownMenuItem(value: 'fmp4', child: Text('Segments: fMP4')),
             ],
             onChanged: (v) => setState(() => _segments = v ?? 'ts'),
-          ),
-          DropdownButton<String>(
-            value: _pipeTransport,
-            items: const [
-              DropdownMenuItem(value: 'pipe', child: Text('Transport: pipe')),
-              DropdownMenuItem(value: 'tcp', child: Text('Transport: tcp')),
-            ],
-            onChanged: (v) => setState(() => _pipeTransport = v ?? 'pipe'),
           ),
           Wrap(
             runSpacing: 12,

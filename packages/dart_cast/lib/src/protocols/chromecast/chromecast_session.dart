@@ -15,6 +15,7 @@ import '../../core/cast_exceptions.dart';
 import '../../core/cast_media.dart';
 import '../../core/media_probe.dart';
 import '../../core/cast_decision.dart';
+import '../../core/local_tcp_source.dart';
 import '../../core/direct_attempt_policy.dart';
 import '../../core/cast_prepare_session.dart';
 import '../../core/cast_ffmpeg_commands.dart';
@@ -745,29 +746,30 @@ class ChromecastSession extends CastSession {
     final liveUrl = _proxy.registerLiveStream(
       open: () async {
         debugPrint('[LIVE] open: starting new ffmpeg run');
-        final pipePath = await FFmpegKitConfig.registerNewFFmpegPipe();
-        if (pipePath == null)
-          throw Exception('registerNewFFmpegPipe returned null');
+        final tcpSource = LocalTcpSource();
+        await tcpSource.bind();
+        debugPrint('[LIVE] open: tcp source bound on port ${tcpSource.port}');
         final args = CastFfmpegCommands.liveMkv(
           input: filePath,
           audioStreamIndex: audioIndex,
-          output: pipePath,
+          output: 'tcp://127.0.0.1:${tcpSource.port}',
         );
         debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
         final session = await FFmpegKit.executeWithArgumentsAsync(args);
-        final stream = File(pipePath).openRead();
         final sessionId = session.getSessionId() ?? 0;
         _liveSessionIds.add(sessionId);
+        final socket = await tcpSource.accept(
+          timeout: const Duration(seconds: 15),
+        );
+        debugPrint('[LIVE] open: connection accepted');
         return LiveStreamRun(
-          stream: stream,
+          stream: socket,
           close: () async {
-            debugPrint('[LIVE] close: cancelling ffmpeg and closing pipe');
+            debugPrint('[LIVE] close: cancelling ffmpeg and closing source');
             try {
               await FFmpegKit.cancel(sessionId);
             } catch (_) {}
-            try {
-              await FFmpegKitConfig.closeFFmpegPipe(pipePath);
-            } catch (_) {}
+            await tcpSource.close();
             _liveSessionIds.remove(sessionId);
           },
         );

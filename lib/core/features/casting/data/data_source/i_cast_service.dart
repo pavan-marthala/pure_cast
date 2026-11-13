@@ -29,6 +29,8 @@ abstract class ICastService {
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
+    String streams = 'both',
+    String segments = 'ts',
   });
 
   /// Starts or resumes media playback.

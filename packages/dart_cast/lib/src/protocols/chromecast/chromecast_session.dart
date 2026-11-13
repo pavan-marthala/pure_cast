@@ -7,6 +7,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 
 import '../../core/cast_device.dart';
@@ -364,6 +365,8 @@ class ChromecastSession extends CastSession {
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
+    String streams = 'both',
+    String segments = 'ts',
     Future<bool?> Function(String receiverId, String codecKey)? memoryLookup,
     Future<void> Function(String receiverId, String codecKey, bool directOk)?
     memoryRecord,
@@ -608,6 +611,7 @@ class ChromecastSession extends CastSession {
 
     final args = builder('/tmp/__OUTDIR__');
     debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
+    final stopwatch = Stopwatch()..start();
     final prepare = await CastPrepareSession.start(
       inputPath: path,
       buildArgs: builder,
@@ -626,6 +630,22 @@ class ChromecastSession extends CastSession {
         (s) => s == PrepareState.ready || s == PrepareState.failed,
       );
     }
+    // Log truthful finish line.
+    stopwatch.stop();
+    final segCount =
+        prepare.tempDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.ts') || f.path.endsWith('.m4s'))
+            .length;
+    final hasEndlist =
+        File('${prepare.tempDir.path}/index.m3u8').existsSync() &&
+        File(
+          '${prepare.tempDir.path}/index.m3u8',
+        ).readAsStringSync().contains('#EXT-X-ENDLIST');
+    debugPrint(
+      '[RXDBG] ffmpeg finished: waited=true rc=${prepare.returnCode} segments=$segCount endlist=$hasEndlist elapsedMs=${stopwatch.elapsedMilliseconds}',
+    );
     onPrepareFinished?.call();
     if (prepare.state != PrepareState.ready) {
       try {
@@ -777,7 +797,7 @@ class ChromecastSession extends CastSession {
       await _attemptLoad(
         media: media,
         proxyUrl: media.url,
-        effectiveType: CastMediaType.hls,
+        effectiveType: media.type,
         attemptLabel: 'prepared-hls',
         duration: duration,
         streamType: streamType ?? 'BUFFERED',
@@ -1443,7 +1463,14 @@ class ChromecastSession extends CastSession {
         stateMachine.state == SessionState.paused &&
         targetState == SessionState.playing;
 
-    if (targetState != null && stateMachine.canTransitionTo(targetState)) {
+    // When the receiver reports an error, force the transition to idle
+    // even if it's not in the normal transition table.
+    if (targetState == SessionState.idle && idleReason == 'ERROR') {
+      try {
+        stateMachine.forceState(SessionState.idle);
+      } catch (_) {}
+    } else if (targetState != null &&
+        stateMachine.canTransitionTo(targetState)) {
       stateMachine.transitionTo(targetState);
     }
 

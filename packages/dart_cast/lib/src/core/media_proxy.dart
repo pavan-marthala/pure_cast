@@ -67,6 +67,15 @@ class MediaProxy {
   String? _baseUrl;
   final Map<String, _ProxyRoute> _routes = {};
   final Map<String, String> _hlsDirs = {};
+  final Map<
+    String,
+    ({
+      Future<Stream<List<int>>> Function() open,
+      Future<void> Function() onClose,
+      String contentType,
+    })
+  >
+  _liveStreams = {};
   final Map<String, _SyntheticContent> _syntheticContent = {};
   final Random _random = Random.secure();
 
@@ -215,6 +224,33 @@ class MediaProxy {
   /// Unregisters an HLS directory.
   void unregisterHlsDirectory(String sessionId) {
     _hlsDirs.remove(sessionId);
+  }
+
+  /// Registers a live stream that is served without buffering to disk.
+  ///
+  /// [open] is called for each request to get a fresh byte stream.
+  /// [onClose] is called when the client disconnects.
+  /// Returns the URL the receiver should fetch.
+  String registerLiveStream({
+    required Future<Stream<List<int>>> Function() open,
+    required Future<void> Function() onClose,
+    String contentType = 'video/x-matroska',
+  }) {
+    if (_baseUrl == null) {
+      throw StateError('MediaProxy not started');
+    }
+    final token = _generateToken();
+    _liveStreams[token] = (
+      open: open,
+      onClose: onClose,
+      contentType: contentType,
+    );
+    return '$_baseUrl/live/$token';
+  }
+
+  /// Unregisters a live stream.
+  void unregisterLiveStream(String token) {
+    _liveStreams.remove(token);
   }
 
   /// Registers a caller-supplied [MediaSource] for serving.
@@ -844,6 +880,13 @@ class MediaProxy {
       // Route: /hls/<sessionId>/<file> — prepared HLS serving
       if (path.startsWith('/hls/')) {
         await _handleHlsDirectoryRequest(request);
+        return;
+      }
+
+      // Route: /live/<token> — live stream serving (no disk)
+      if (path.startsWith('/live/')) {
+        final token = path.substring('/live/'.length);
+        await _handleLiveStreamRequest(request, token);
         return;
       }
 
@@ -1611,7 +1654,13 @@ class MediaProxy {
       return;
     }
     final isPlaylist = fileName.endsWith('.m3u8');
-    final ct = isPlaylist ? 'application/x-mpegURL' : 'video/mp2t';
+    final isFmp4 = fileName.endsWith('.m4s') || fileName == 'init.mp4';
+    final ct =
+        isPlaylist
+            ? 'application/x-mpegURL'
+            : isFmp4
+            ? 'video/mp4'
+            : 'video/mp2t';
     _addCorsHeaders(request.response, request.headers.value('Origin'));
     request.response.headers.set('Accept-Ranges', 'bytes');
     final fileSize = await file.length();
@@ -1666,6 +1715,64 @@ class MediaProxy {
     }
     await request.response.close();
     debugPrint('[HLSDBG] ${request.method} $path 200 $remoteIp');
+  }
+
+  Future<void> _handleLiveStreamRequest(
+    HttpRequest request,
+    String token,
+  ) async {
+    final entry = _liveStreams[token];
+    final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
+    if (entry == null) {
+      debugPrint('[LIVE] ${request.method} ${request.uri.path} 404 $remoteIp');
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+
+    final rangeHeader = request.headers.value('Range');
+    if (rangeHeader != null) {
+      debugPrint(
+        '[LIVE] ${request.method} ${request.uri.path} Range=$rangeHeader ignored (streaming from start)',
+      );
+    }
+
+    debugPrint('[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp');
+
+    _addCorsHeaders(request.response, request.headers.value('Origin'));
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.parse(entry.contentType);
+    request.response.headers.set('Accept-Ranges', 'none');
+
+    Stream<List<int>>? stream;
+    try {
+      stream = await entry.open();
+      var bytesSent = 0;
+      var lastLogTime = DateTime.now();
+      await for (final chunk in stream) {
+        request.response.add(chunk);
+        bytesSent += chunk.length;
+        final now = DateTime.now();
+        if (bytesSent % (5 * 1024 * 1024) < chunk.length ||
+            now.difference(lastLogTime).inSeconds >= 5) {
+          debugPrint('[LIVE] bytes sent=$bytesSent');
+          lastLogTime = now;
+        }
+      }
+      await request.response.close();
+      debugPrint(
+        '[LIVE] stream ended: client closed=false source ended=true bytes=$bytesSent',
+      );
+    } catch (e) {
+      debugPrint('[LIVE] error: $e');
+      try {
+        await request.response.close();
+      } catch (_) {}
+    } finally {
+      try {
+        await entry.onClose();
+      } catch (_) {}
+    }
   }
 
   bool _isSubtitleFile(String path) {

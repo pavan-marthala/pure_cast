@@ -172,6 +172,8 @@ class DartCastAdapter implements ICastService {
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
+    String streams = 'both',
+    String segments = 'ts',
   }) async {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active cast session');
@@ -187,6 +189,8 @@ class DartCastAdapter implements ICastService {
           forcePlan: forcePlan,
           subtitle: dartSubtitle,
           waitForFinish: waitForFinish,
+          streams: streams,
+          segments: segments,
           includeDuration: includeDuration,
           streamType: streamType,
           hlsSegmentFormat: hlsSegmentFormat,

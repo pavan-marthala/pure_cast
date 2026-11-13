@@ -76,7 +76,7 @@ class FakeCastService implements ICastService {
   }
 
   @override
-  Future<void> loadLocalFile(String path, {int audioStreamIndex = 0, PureCastSubtitleTrack? subtitle, List<PureCastSubtitleTrack>? subtitles, String? forcePlan, bool waitForFinish = false, bool includeDuration = false, String streamType = 'BUFFERED', String? hlsSegmentFormat, String? hlsVideoSegmentFormat}) async {}
+  Future<void> loadLocalFile(String path, {int audioStreamIndex = 0, PureCastSubtitleTrack? subtitle, List<PureCastSubtitleTrack>? subtitles, String? forcePlan, bool waitForFinish = false, bool includeDuration = false, String streamType = 'BUFFERED', String? hlsSegmentFormat, String? hlsVideoSegmentFormat, String streams = 'both', String segments = 'ts'}) async {}
 
   @override
   Future<String> getDebugMediaStatus() async => 'fake';

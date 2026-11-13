@@ -31,6 +31,8 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
   bool _includeDuration = false;
   bool _useLive = false;
   bool _addHlsSegmentFormat = false;
+  String _streams = 'both';
+  String _segments = 'ts';
 
   @override
   void initState() {
@@ -114,8 +116,6 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     if (res.isEmpty) return;
     final src = res.first.path;
     if (src == null) return;
-    final variant = 'waitForFinish=$_waitForFinish includeDuration=$_includeDuration streamType=${_useLive ? 'LIVE' : 'BUFFERED'} hlsSegmentFormat=${_addHlsSegmentFormat ? 'TS' : 'null'} hlsVideoSegmentFormat=${_addHlsSegmentFormat ? 'MPEG2_TS' : 'null'}';
-    _logLine('[RXDBG] variant: $variant');
     _logLine('forced plan=$plan src=$src');
     final bloc = context.read<CastSessionBloc>();
     final dev = bloc.state.activeDevice;
@@ -123,6 +123,8 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       _logLine('Connect to a Chromecast first');
       return;
     }
+    final variant = 'streams=$_streams segments=$_segments waitForFinish=$_waitForFinish includeDuration=$_includeDuration streamType=${_useLive ? 'LIVE' : 'BUFFERED'}';
+    _logLine('[RXDBG] variant: $variant');
     _logLine('receiver=${dev.id} ${dev.name}');
     final service = getIt<ICastService>();
     service.enableRawMessageLogging();
@@ -133,8 +135,8 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
         waitForFinish: _waitForFinish,
         includeDuration: _includeDuration,
         streamType: _useLive ? 'LIVE' : 'BUFFERED',
-        hlsSegmentFormat: _addHlsSegmentFormat ? 'TS' : null,
-        hlsVideoSegmentFormat: _addHlsSegmentFormat ? 'MPEG2_TS' : null,
+        streams: _streams,
+        segments: _segments,
       );
       _logLine('loadLocalFile completed');
       // Call play() after load.
@@ -155,7 +157,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
   }
 
   Future<void> _controlPublicHls() async {
-    _logLine('=== Control: public HLS ===');
+    _logLine('=== Control: direct HLS ===');
     final service = getIt<ICastService>();
     final bloc = context.read<CastSessionBloc>();
     final dev = bloc.state.activeDevice;
@@ -227,6 +229,23 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
             value: _addHlsSegmentFormat,
             onChanged: (v) => setState(() => _addHlsSegmentFormat = v ?? false),
           ),
+          DropdownButton<String>(
+            value: _streams,
+            items: const [
+              DropdownMenuItem(value: 'both', child: Text('Streams: both')),
+              DropdownMenuItem(value: 'video', child: Text('Streams: video only')),
+              DropdownMenuItem(value: 'audio', child: Text('Streams: audio only')),
+            ],
+            onChanged: (v) => setState(() => _streams = v ?? 'both'),
+          ),
+          DropdownButton<String>(
+            value: _segments,
+            items: const [
+              DropdownMenuItem(value: 'ts', child: Text('Segments: TS')),
+              DropdownMenuItem(value: 'fmp4', child: Text('Segments: fMP4')),
+            ],
+            onChanged: (v) => setState(() => _segments = v ?? 'ts'),
+          ),
           Wrap(
             runSpacing: 12,
             spacing: 12,
@@ -261,7 +280,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               ),
               ElevatedButton(
                 onPressed: _controlPublicHls,
-                child: const Text('Control: public HLS'),
+                child: const Text('Control: direct HLS'),
               ),
             ],
           ),

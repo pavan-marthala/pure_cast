@@ -4,65 +4,146 @@ class CastFfmpegCommands {
     required String input,
     required String outputDir,
     required int audioStreamIndex,
-  }) => [
-    '-nostdin',
-    '-i',
-    input,
-    '-map',
-    '0:v:0',
-    '-map',
-    '0:a:$audioStreamIndex',
-    '-c:v',
-    'copy',
-    '-c:a',
-    'aac',
-    '-ac',
-    '2',
-    '-b:a',
-    '192k',
-    '-f',
-    'hls',
-    '-hls_time',
-    '6',
-    '-hls_playlist_type',
-    'event',
-    '-hls_flags',
-    'independent_segments',
-    '-hls_segment_filename',
-    '$outputDir/seg_%05d.ts',
-    '$outputDir/index.m3u8',
-  ];
+    String streams = 'both',
+    String segments = 'ts',
+  }) {
+    final isFmp4 = segments == 'fmp4';
+    final segExt = isFmp4 ? 'm4s' : 'ts';
+    final segName = isFmp4 ? 'seg_%05d.m4s' : 'seg_%05d.ts';
+    final args = <String>['-nostdin'];
+    if (streams == 'video') {
+      args.addAll(['-i', input, '-map', '0:v:0', '-c:v', 'copy', '-an']);
+    } else if (streams == 'audio') {
+      args.addAll([
+        '-i',
+        input,
+        '-map',
+        '0:a:$audioStreamIndex',
+        '-vn',
+        '-c:a',
+        'aac',
+        '-ac',
+        '2',
+        '-b:a',
+        '192k',
+      ]);
+    } else {
+      args.addAll([
+        '-i',
+        input,
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:$audioStreamIndex',
+        '-c:v',
+        'copy',
+        '-c:a',
+        'aac',
+        '-ac',
+        '2',
+        '-b:a',
+        '192k',
+      ]);
+    }
+    args.addAll([
+      '-f',
+      'hls',
+      '-hls_time',
+      '6',
+      '-hls_playlist_type',
+      'event',
+      '-hls_flags',
+      'independent_segments',
+    ]);
+    if (isFmp4) {
+      args.addAll([
+        '-hls_segment_type',
+        'fmp4',
+        '-hls_fmp4_init_filename',
+        'init.mp4',
+      ]);
+    }
+    args.addAll([
+      '-hls_segment_filename',
+      '$outputDir/$segName',
+      '$outputDir/index.m3u8',
+    ]);
+    return args;
+  }
 
   static List<String> remuxContainer({
     required String input,
     required String outputDir,
     required int audioStreamIndex,
-  }) => [
-    '-nostdin',
-    '-fflags',
-    '+genpts',
-    '-i',
-    input,
-    '-map',
-    '0:v:0',
-    '-map',
-    '0:a:$audioStreamIndex',
-    '-c',
-    'copy',
-    '-avoid_negative_ts',
-    'make_zero',
-    '-f',
-    'hls',
-    '-hls_time',
-    '6',
-    '-hls_playlist_type',
-    'event',
-    '-hls_flags',
-    'independent_segments',
-    '-hls_segment_filename',
-    '$outputDir/seg_%05d.ts',
-    '$outputDir/index.m3u8',
-  ];
+    String streams = 'both',
+    String segments = 'ts',
+  }) {
+    final isFmp4 = segments == 'fmp4';
+    final segName = isFmp4 ? 'seg_%05d.m4s' : 'seg_%05d.ts';
+    final args = <String>['-nostdin', '-fflags', '+genpts'];
+    if (streams == 'video') {
+      args.addAll([
+        '-i',
+        input,
+        '-map',
+        '0:v:0',
+        '-c:v',
+        'copy',
+        '-an',
+        '-avoid_negative_ts',
+        'make_zero',
+      ]);
+    } else if (streams == 'audio') {
+      args.addAll([
+        '-i',
+        input,
+        '-map',
+        '0:a:$audioStreamIndex',
+        '-vn',
+        '-c:a',
+        'copy',
+        '-avoid_negative_ts',
+        'make_zero',
+      ]);
+    } else {
+      args.addAll([
+        '-i',
+        input,
+        '-map',
+        '0:v:0',
+        '-map',
+        '0:a:$audioStreamIndex',
+        '-c',
+        'copy',
+        '-avoid_negative_ts',
+        'make_zero',
+      ]);
+    }
+    args.addAll([
+      '-f',
+      'hls',
+      '-hls_time',
+      '6',
+      '-hls_playlist_type',
+      'event',
+      '-hls_flags',
+      'independent_segments',
+    ]);
+    if (isFmp4) {
+      args.addAll([
+        '-hls_segment_type',
+        'fmp4',
+        '-hls_fmp4_init_filename',
+        'init.mp4',
+      ]);
+    }
+    args.addAll([
+      '-hls_segment_filename',
+      '$outputDir/$segName',
+      '$outputDir/index.m3u8',
+    ]);
+    return args;
+  }
 
   static List<String> transcodeVideo({
     required String input,

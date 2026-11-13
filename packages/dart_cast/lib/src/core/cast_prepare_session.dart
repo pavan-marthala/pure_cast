@@ -135,14 +135,31 @@ class CastPrepareSession {
                 debugPrint('[HLSDBG] $l');
               }
             } catch (_) {}
+            // Segment sizes
+            for (var i = 0; i < 3; i++) {
+              final seg = File(
+                '${tempDir.path}/seg_${i.toString().padLeft(5, '0')}.ts',
+              );
+              if (await seg.exists()) {
+                debugPrint(
+                  '[HLSDBG] seg_${i.toString().padLeft(5, '0')}.ts size=${await seg.length()}',
+                );
+              }
+            }
+            // ffprobe seg_00000.ts
             try {
               final segSession = await FFprobeKit.getMediaInformation(
                 seg0.path,
               );
               final info = segSession.getMediaInformation();
-              debugPrint(
-                '[HLSDBG] segment codec=${info?.getStreams().first.getCodec()} start=${info?.getStartTime()}',
-              );
+              if (info != null) {
+                for (final st in info.getStreams()) {
+                  final props = st.getAllProperties();
+                  debugPrint(
+                    '[HLSDBG] stream codec=${st.getCodec()} profile=${props?['profile']} level=${props?['level']} pix_fmt=${st.getFormat()} width=${st.getWidth()} height=${st.getHeight()} fps=${st.getAverageFrameRate()} bit_rate=${props?['bit_rate']} channels=${props?['channels']} sample_rate=${props?['sample_rate']} start_time=${st.getStringProperty('start_time')}',
+                  );
+                }
+              }
             } catch (e) {
               debugPrint('[HLSDBG] ffprobe segment error: $e');
             }

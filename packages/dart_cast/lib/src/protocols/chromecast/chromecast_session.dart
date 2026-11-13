@@ -15,13 +15,12 @@ import '../../core/cast_exceptions.dart';
 import '../../core/cast_media.dart';
 import '../../core/media_probe.dart';
 import '../../core/cast_decision.dart';
-import '../../core/local_tcp_source.dart';
+import '../../core/live_mkv_stream.dart';
 import '../../core/direct_attempt_policy.dart';
 import '../../core/cast_prepare_session.dart';
 import '../../core/cast_ffmpeg_commands.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/media_information.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
 import '../../core/cast_session.dart';
 import '../../core/media_proxy.dart';
@@ -132,6 +131,19 @@ class ChromecastSession extends CastSession {
   /// those late strays without affecting the live session.
   final Set<int> _deprecatedMediaSessionIds = <int>{};
 
+  /// Live MKV runs owned by this session (one per HTTP request).
+  final LiveMkvRunManager _liveRuns;
+
+  /// Stops the HLS [CastPrepareSession] and deletes its temp dir.
+  Future<void> Function()? _stopPrepare;
+
+  /// Token of the currently registered `/live/<token>` stream, if any.
+  String? _liveToken;
+
+  /// True while [loadLocalFile] hands its freshly prepared HLS dir to
+  /// [loadMedia]; prevents the new-load cleanup from deleting it.
+  bool _prepareHandedToLoad = false;
+
   /// When `true`, [connect] additionally subscribes to the Default Media
   /// Receiver's auxiliary debug namespaces (`com.google.cast.cac` +
   /// `com.google.cast.debugoverlay`) and the receiver-message firehose
@@ -177,6 +189,7 @@ class ChromecastSession extends CastSession {
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _RealChannelAdapter(),
        _proxy = MediaProxy(),
+       _liveRuns = LiveMkvRunManager.production(),
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -189,14 +202,20 @@ class ChromecastSession extends CastSession {
   /// created if not provided.
   /// [mediaTransformer] is an optional transformer; defaults to
   /// [TsHlsMediaTransformer].
+  /// [liveRuns] and [prepareStopper] are test seams for the live MKV and HLS
+  /// prepare lifecycles; production code uses the defaults.
   ChromecastSession.withMocks({
     required CastDevice device,
     required dynamic channel,
     MediaProxy? proxy,
     MediaTransformer? mediaTransformer,
+    LiveMkvRunManager? liveRuns,
+    Future<void> Function()? prepareStopper,
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _MockChannelAdapter(channel),
        _proxy = proxy ?? MediaProxy(),
+       _liveRuns = liveRuns ?? LiveMkvRunManager.production(),
+       _stopPrepare = prepareStopper,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -330,13 +349,12 @@ class ChromecastSession extends CastSession {
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
   }) async {
-    // Cancel any running live sessions from a previous load.
-    for (final sid in _liveSessionIds) {
-      try {
-        await FFmpegKit.cancel(sid);
-      } catch (_) {}
+    // Release live runs from a previous load, and the previous HLS prepare
+    // session unless this call is the prepared load itself.
+    await _liveRuns.closeAll();
+    if (!_prepareHandedToLoad) {
+      await _stopPrepareSession();
     }
-    _liveSessionIds.clear();
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
     }
@@ -387,6 +405,9 @@ class ChromecastSession extends CastSession {
     debugPrint(
       '[PREPDBG] caps: hasH264Encoder=${caps.hasH264Encoder} hasH264Mediacodec=${caps.hasH264Mediacodec} transcodeEnabled=${caps.transcodeEnabled} supportsHevc=${caps.supportsHevc}',
     );
+    // A new load replaces any live runs / previous prepared HLS dir.
+    await _cleanupCastResources();
+    _releaseLiveToken();
     // Probe (with fallback)
     String input = path;
     if (input.startsWith('content://')) {
@@ -626,6 +647,7 @@ class ChromecastSession extends CastSession {
       inputPath: path,
       buildArgs: builder,
     );
+    _stopPrepare = prepare.stop;
     onPrepareStarted?.call(prepare);
     if (waitForFinish) {
       // Wait for ffmpeg to fully complete so the playlist gets #EXT-X-ENDLIST.
@@ -664,6 +686,8 @@ class ChromecastSession extends CastSession {
         );
       } catch (_) {}
       debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
+      // Do not leave the failed prepare's temp dir / ffmpeg session behind.
+      await _cleanupCastResources();
       throw PrepareFailedException('Prepare failed: ${prepare.error}');
     }
     // Start the proxy BEFORE registering the HLS directory, because
@@ -688,23 +712,32 @@ class ChromecastSession extends CastSession {
       debugPrint('[HLSDBG] host=$host isPrivateLAN=$isPrivate');
     } catch (_) {}
     // load via proxy url through loadMedia? loadMedia expects CastMedia. Use a remote media with hls url.
-    await loadMedia(
-      CastMedia(
-        url: hlsUrl,
-        type: CastMediaType.hls,
-        subtitles: subtitle != null ? [subtitle] : const [],
-        defaultSubtitle: subtitle,
-      ),
-      contentType: 'application/x-mpegURL',
-      duration:
-          includeDuration && probe.durationSeconds != null
-              ? Duration(milliseconds: (probe.durationSeconds! * 1000).round())
-              : null,
-      bypassTransform: true,
-      streamType: streamType,
-      hlsSegmentFormat: hlsSegmentFormat,
-      hlsVideoSegmentFormat: hlsVideoSegmentFormat,
-    );
+    // This prepare session belongs to this load — keep loadMedia's new-load
+    // cleanup from deleting the temp dir we just prepared.
+    _prepareHandedToLoad = true;
+    try {
+      await loadMedia(
+        CastMedia(
+          url: hlsUrl,
+          type: CastMediaType.hls,
+          subtitles: subtitle != null ? [subtitle] : const [],
+          defaultSubtitle: subtitle,
+        ),
+        contentType: 'application/x-mpegURL',
+        duration:
+            includeDuration && probe.durationSeconds != null
+                ? Duration(
+                  milliseconds: (probe.durationSeconds! * 1000).round(),
+                )
+                : null,
+        bypassTransform: true,
+        streamType: streamType,
+        hlsSegmentFormat: hlsSegmentFormat,
+        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
+      );
+    } finally {
+      _prepareHandedToLoad = false;
+    }
   }
 
   /// Loads a local file as a live MKV stream (no disk buffering).
@@ -717,6 +750,9 @@ class ChromecastSession extends CastSession {
     debugPrint(
       '[PREPDBG] loadLiveMkv: $filePath audioIndex=$audioIndex streamType=$streamType',
     );
+    // A new live load replaces any previous live runs / prepared HLS dir.
+    await _cleanupCastResources();
+    _releaseLiveToken();
     await _proxy.start(targetDeviceIp: device.address.address);
 
     // Probe for duration
@@ -744,38 +780,13 @@ class ChromecastSession extends CastSession {
     }
 
     final liveUrl = _proxy.registerLiveStream(
-      open: () async {
-        debugPrint('[LIVE] open: starting new ffmpeg run');
-        final tcpSource = LocalTcpSource();
-        await tcpSource.bind();
-        debugPrint('[LIVE] open: tcp source bound on port ${tcpSource.port}');
-        final args = CastFfmpegCommands.liveMkv(
-          input: filePath,
-          audioStreamIndex: audioIndex,
-          output: 'tcp://127.0.0.1:${tcpSource.port}',
-        );
-        debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
-        final session = await FFmpegKit.executeWithArgumentsAsync(args);
-        final sessionId = session.getSessionId() ?? 0;
-        _liveSessionIds.add(sessionId);
-        final socket = await tcpSource.accept(
-          timeout: const Duration(seconds: 15),
-        );
-        debugPrint('[LIVE] open: connection accepted');
-        return LiveStreamRun(
-          stream: socket,
-          close: () async {
-            debugPrint('[LIVE] close: cancelling ffmpeg and closing source');
-            try {
-              await FFmpegKit.cancel(sessionId);
-            } catch (_) {}
-            await tcpSource.close();
-            _liveSessionIds.remove(sessionId);
-          },
-        );
-      },
+      open: () => _liveRuns.open(
+        filePath: filePath,
+        audioIndex: audioIndex,
+      ),
       contentType: 'video/x-matroska',
     );
+    _liveToken = Uri.parse(liveUrl).pathSegments.last;
 
     debugPrint('[LIVE] live URL: $liveUrl');
     await loadMedia(
@@ -790,7 +801,33 @@ class ChromecastSession extends CastSession {
     );
   }
 
-  final List<int> _liveSessionIds = [];
+  /// Closes every live run (cancelling each by its own session id) and stops
+  /// the HLS prepare session, which deletes its temp dir. Safe to call
+  /// repeatedly.
+  Future<void> _cleanupCastResources() async {
+    await _liveRuns.closeAll();
+    await _stopPrepareSession();
+  }
+
+  /// Stops the HLS prepare session (cancelling its own ffmpeg id and
+  /// deleting its temp dir), if one is attached.
+  Future<void> _stopPrepareSession() async {
+    final stopPrepare = _stopPrepare;
+    _stopPrepare = null;
+    if (stopPrepare != null) {
+      try {
+        await stopPrepare();
+      } catch (_) {}
+    }
+  }
+
+  /// Unregisters the currently served `/live/<token>` stream so a late
+  /// receiver request cannot start a new run after teardown.
+  void _releaseLiveToken() {
+    final token = _liveToken;
+    _liveToken = null;
+    if (token != null) _proxy.unregisterLiveStream(token);
+  }
 
   String _planReason(CastPlan p) =>
       p is DirectPlan
@@ -1193,6 +1230,10 @@ class ChromecastSession extends CastSession {
 
   @override
   Future<void> stop() async {
+    // Release live ffmpeg runs and the prepared HLS temp dir even if the
+    // media session is already gone.
+    await _cleanupCastResources();
+    _releaseLiveToken();
     _requireMediaSession();
     CastLogger.info('Chromecast: STOP');
     _stopPositionPolling();
@@ -1324,13 +1365,9 @@ class ChromecastSession extends CastSession {
     _transportId = null;
     _sessionId = null;
     _mediaSessionId = null;
-    // Cancel all live ffmpeg sessions.
-    for (final sid in _liveSessionIds) {
-      try {
-        await FFmpegKit.cancel(sid);
-      } catch (_) {}
-    }
-    _liveSessionIds.clear();
+    // Close all live runs and stop the HLS prepare session.
+    await _cleanupCastResources();
+    _releaseLiveToken();
     stateMachine.transitionTo(SessionState.disconnected);
 
     // Clean up socket and proxy with a timeout so we don't hang
@@ -1352,12 +1389,8 @@ class ChromecastSession extends CastSession {
     _stopHeartbeat();
     _stopPositionPolling();
     _mediaStatusSubscription?.cancel();
-    for (final sid in _liveSessionIds) {
-      try {
-        FFmpegKit.cancel(sid);
-      } catch (_) {}
-    }
-    _liveSessionIds.clear();
+    unawaited(_cleanupCastResources());
+    _releaseLiveToken();
     unawaited(_proxy.stop());
     super.dispose();
   }
@@ -1387,6 +1420,8 @@ class ChromecastSession extends CastSession {
     _sessionId = null;
     _mediaSessionId = null;
     _isLoadingMedia = false;
+    unawaited(_cleanupCastResources());
+    _releaseLiveToken();
     stateMachine.transitionTo(SessionState.disconnected);
   }
 

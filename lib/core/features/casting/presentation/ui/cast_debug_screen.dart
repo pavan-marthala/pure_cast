@@ -17,6 +17,7 @@ import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -188,23 +189,31 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     int totalBytes = 0;
     bool ebmlHeader = false;
     int? rc;
+    FFmpegSession? session;
+    Socket? socket;
 
     final watchdog = Timer(const Duration(seconds: 20), () {
       _logLine('[PIPETEST] WATCHDOG fired at ${stopwatch.elapsedMilliseconds}ms');
       try { server.close(); } catch (_) {}
+      final sid = session?.getSessionId();
+      if (sid != null) {
+        _logLine('[PIPETEST] watchdog: cancelling ffmpeg session $sid');
+        unawaited(FFmpegKit.cancel(sid));
+      }
     });
 
     try {
       _logLine('[PIPETEST] step: starting ffmpeg');
-      final session = await FFmpegKit.executeWithArgumentsAsync(args);
+      session = await FFmpegKit.executeWithArgumentsAsync(args);
       _logLine('[PIPETEST] step: ffmpeg session created id=${session.getSessionId()}');
 
       _logLine('[PIPETEST] step: waiting for connection');
-      final socket = await server.first.timeout(const Duration(seconds: 18));
+      final accepted = await server.first.timeout(const Duration(seconds: 18));
+      socket = accepted;
       _logLine('[PIPETEST] step: connection accepted');
 
       _logLine('[PIPETEST] step: reading');
-      await for (final chunk in socket) {
+      await for (final chunk in accepted) {
         if (firstByteMs == null) {
           firstByteMs = stopwatch.elapsedMilliseconds;
           _logLine('[PIPETEST] step: first chunk after ${firstByteMs}ms');
@@ -229,6 +238,11 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     } finally {
       watchdog.cancel();
       try { await server.close(); } catch (_) {}
+      try { socket?.destroy(); } catch (_) {}
+      final sid = session?.getSessionId();
+      if (sid != null) {
+        try { await FFmpegKit.cancel(sid); } catch (_) {}
+      }
       final afterFiles = await _listLargeFiles();
       final newLarge = afterFiles.where((f) => !beforeFiles.contains(f)).toList();
       if (newLarge.isNotEmpty) {

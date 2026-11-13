@@ -8,6 +8,7 @@ export 'src/core/cast_media.dart';
 export 'src/core/cast_service.dart';
 export 'src/core/cast_session.dart';
 export 'src/core/local_tcp_source.dart';
+export 'src/core/live_mkv_stream.dart';
 export 'src/core/cast_ffmpeg_diagnostics.dart';
 export 'src/core/cast_ffmpeg_capabilities.dart';
 export 'src/core/discovery_manager.dart';

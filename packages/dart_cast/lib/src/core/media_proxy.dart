@@ -145,6 +145,7 @@ class MediaProxy {
     _altAudioMuxer = null;
     _baseUrl = null;
     _routes.clear();
+    _liveStreams.clear();
     _syntheticContent.clear();
   }
 
@@ -1736,14 +1737,6 @@ class MediaProxy {
     }
 
     final userAgent = request.headers.value('User-Agent') ?? '?';
-    debugPrint(
-      '[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp UA=$userAgent',
-    );
-
-    _addCorsHeaders(request.response, request.headers.value('Origin'));
-    request.response.statusCode = HttpStatus.ok;
-    request.response.headers.contentType = ContentType.parse(entry.contentType);
-    request.response.headers.set('Accept-Ranges', 'none');
 
     var onCloseCalled = false;
     LiveStreamRun? run;
@@ -1758,9 +1751,31 @@ class MediaProxy {
       } catch (_) {}
     }
 
+    // Open the stream BEFORE sending headers so a failure can still be
+    // reported as 500 instead of an already-committed 200 with no body.
     try {
       run = await entry.open();
-      final countedStream = run.stream.map((chunk) {
+    } catch (e) {
+      debugPrint('[LIVE] open failed: $e');
+      try {
+        request.response.statusCode = HttpStatus.internalServerError;
+        await request.response.close();
+      } catch (_) {}
+      return;
+    }
+    final activeRun = run;
+
+    try {
+      debugPrint(
+        '[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp UA=$userAgent',
+      );
+      _addCorsHeaders(request.response, request.headers.value('Origin'));
+      request.response.statusCode = HttpStatus.ok;
+      request.response.headers.contentType = ContentType.parse(
+        entry.contentType,
+      );
+      request.response.headers.set('Accept-Ranges', 'none');
+      final countedStream = activeRun.stream.map((chunk) {
         bytesSent += chunk.length;
         if (bytesSent % (5 * 1024 * 1024) < chunk.length) {
           debugPrint('[LIVE] bytes sent=$bytesSent');

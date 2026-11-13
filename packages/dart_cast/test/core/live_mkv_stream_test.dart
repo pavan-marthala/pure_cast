@@ -149,5 +149,30 @@ void main() {
 
       await run.close();
     });
+
+    test('open passes startSeconds to ffmpeg as an input seek', () async {
+      final h = _Harness();
+      final run = await h.manager.open(
+        filePath: '/video.mkv',
+        audioIndex: 1,
+        startSeconds: 42.5,
+      );
+
+      expect(
+        h.args.single,
+        containsAllInOrder(['-ss', '42.5', '-i', '/video.mkv']),
+      );
+
+      await run.close();
+    });
+
+    test('open omits -ss when no startSeconds is given', () async {
+      final h = _Harness();
+      final run = await h.manager.open(filePath: '/video.mkv', audioIndex: 0);
+
+      expect(h.args.single, isNot(contains('-ss')));
+
+      await run.close();
+    });
   });
 }

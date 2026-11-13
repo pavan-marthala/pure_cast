@@ -91,6 +91,7 @@ class LiveMkvRunManager {
   Future<LiveStreamRun> open({
     required String filePath,
     required int audioIndex,
+    double? startSeconds,
     Duration acceptTimeout = const Duration(seconds: 15),
   }) async {
     final source = await _createSource();
@@ -100,6 +101,7 @@ class LiveMkvRunManager {
         input: filePath,
         audioStreamIndex: audioIndex,
         output: 'tcp://127.0.0.1:${source.port}',
+        startSeconds: startSeconds,
       );
       debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
       final sessionId = await _start(args);

@@ -140,9 +140,15 @@ class ChromecastSession extends CastSession {
   /// Token of the currently registered `/live/<token>` stream, if any.
   String? _liveToken;
 
+  /// Source position where the current live stream was restarted.
+  Duration _liveStartOffset = Duration.zero;
+
   /// True while [loadLocalFile] hands its freshly prepared HLS dir to
   /// [loadMedia]; prevents the new-load cleanup from deleting it.
   bool _prepareHandedToLoad = false;
+
+  /// Guards [switchLiveAudio] so two restarts cannot interleave.
+  bool _switchingLiveAudio = false;
 
   /// When `true`, [connect] additionally subscribes to the Default Media
   /// Receiver's auxiliary debug namespaces (`com.google.cast.cac` +
@@ -159,6 +165,14 @@ class ChromecastSession extends CastSession {
   /// The current receiver session ID, if connected.
   String? get sessionId => _sessionId;
   MediaProxy get proxy => _proxy;
+
+  /// Source offset of the current live stream (0 unless the stream was
+  /// restarted with [switchLiveAudio]).
+  ///
+  /// The restarted stream's receiver time starts at 0, so the real position
+  /// is `liveStartOffset + position`.
+  Duration get liveStartOffset => _liveStartOffset;
+
   int? get mediaSessionId => _mediaSessionId;
   String? get idleReason => _idleReason;
   String? get lastPlayerState => _lastPlayerState;
@@ -801,6 +815,71 @@ class ChromecastSession extends CastSession {
     );
   }
 
+  /// Restarts the live MKV stream with a different audio track, beginning at
+  /// [position] in the source file.
+  ///
+  /// The receiver's clock for the new stream starts at 0, so the real
+  /// playback position is [liveStartOffset] + [position].
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+  }) async {
+    if (_transportId == null) {
+      throw StateError('Not connected. Call connect() first.');
+    }
+    if (_switchingLiveAudio || _isLoadingMedia) {
+      throw StateError('Another cast load is already in progress');
+    }
+    _switchingLiveAudio = true;
+    try {
+      debugPrint(
+        '[LIVE-SWITCH] restarting audio=$audioIndex '
+        'position=${position.inMilliseconds}ms',
+      );
+      // Close old run(s) and release the old URL before registering the new
+      // stream. Do not leave the old stream half-closed.
+      await _cleanupCastResources();
+      _releaseLiveToken();
+      _liveStartOffset = position;
+      await _proxy.start(targetDeviceIp: device.address.address);
+
+      final startSeconds = position.inMilliseconds / 1000.0;
+      final liveUrl = _proxy.registerLiveStream(
+        open: () => _liveRuns.open(
+          filePath: filePath,
+          audioIndex: audioIndex,
+          startSeconds: startSeconds,
+        ),
+        contentType: 'video/x-matroska',
+      );
+      _liveToken = Uri.parse(liveUrl).pathSegments.last;
+      debugPrint('[LIVE-SWITCH] new URL: $liveUrl');
+
+      await loadMedia(
+        CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
+        contentType: 'video/x-matroska',
+        bypassTransform: true,
+        streamType: streamType,
+      );
+      debugPrint(
+        '[LIVE-SWITCH] audio=$audioIndex '
+        'offset=${position.inMilliseconds}ms loaded',
+      );
+    } catch (e) {
+      // Any failure (proxy start, registration, ffmpeg start/accept timeout
+      // surfacing as a receiver LOAD failure) must leave no half-closed
+      // stream behind.
+      debugPrint('[LIVE-SWITCH] failed: $e');
+      await _liveRuns.closeAll();
+      _releaseLiveToken();
+      rethrow;
+    } finally {
+      _switchingLiveAudio = false;
+    }
+  }
+
   /// Closes every live run (cancelling each by its own session id) and stops
   /// the HLS prepare session, which deletes its temp dir. Safe to call
   /// repeatedly.
@@ -826,6 +905,7 @@ class ChromecastSession extends CastSession {
   void _releaseLiveToken() {
     final token = _liveToken;
     _liveToken = null;
+    _liveStartOffset = Duration.zero;
     if (token != null) _proxy.unregisterLiveStream(token);
   }
 

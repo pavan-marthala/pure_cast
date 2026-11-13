@@ -185,6 +185,44 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+  }) async {
+    final session = _castService.activeSession;
+    if (session == null) throw const PureCastException('No active cast session');
+    if (session is! dart_cast.ChromecastSession) {
+      throw const PureCastException(
+        'Live MKV cast requires a Chromecast session',
+      );
+    }
+    try {
+      await session.switchLiveAudio(
+        filePath: filePath,
+        audioIndex: audioIndex,
+        position: position,
+        streamType: streamType,
+      );
+    } catch (e) {
+      throw PureCastException('Failed to switch live audio: $filePath', e);
+    }
+  }
+
+  @override
+  Duration get liveStartOffset {
+    final session = _castService.activeSession;
+    if (session is dart_cast.ChromecastSession) {
+      return session.liveStartOffset;
+    }
+    return Duration.zero;
+  }
+
+  @override
+  Duration get position => _castService.activeSession?.position ?? Duration.zero;
+
+  @override
   Future<void> loadLocalFile(
     String path, {
     int audioStreamIndex = 0,

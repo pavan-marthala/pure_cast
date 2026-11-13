@@ -81,6 +81,20 @@ class FakeCastService implements ICastService {
   Future<void> loadLiveMkv({required String filePath, required int audioIndex, required String streamType, required bool includeDuration}) async {}
 
   @override
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+  }) async {}
+
+  @override
+  Duration get liveStartOffset => Duration.zero;
+
+  @override
+  Duration get position => Duration.zero;
+
+  @override
   Future<String> getDebugMediaStatus() async => 'fake';
   @override
   void enableRawMessageLogging() {}

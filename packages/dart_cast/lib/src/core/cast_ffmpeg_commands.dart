@@ -245,8 +245,10 @@ class CastFfmpegCommands {
     required String input,
     required int audioStreamIndex,
     required String output,
+    double? startSeconds,
   }) => [
     '-nostdin',
+    if (startSeconds != null && startSeconds > 0) ...['-ss', '$startSeconds'],
     '-i',
     input,
     '-map',

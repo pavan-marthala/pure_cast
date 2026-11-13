@@ -25,6 +25,21 @@ abstract class ICastService {
     required bool includeDuration,
   });
 
+  /// Restarts the live MKV stream with another audio track, resuming at
+  /// [position] in the source file.
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+  });
+
+  /// Source offset of the current live stream (zero when not restarted).
+  Duration get liveStartOffset;
+
+  /// Current playback position of the active session.
+  Duration get position;
+
   /// Loads a local file, probing/preparing it for Chromecast when needed.
   Future<void> loadLocalFile(
     String path, {

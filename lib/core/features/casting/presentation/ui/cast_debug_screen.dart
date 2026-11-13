@@ -37,7 +37,9 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
   String _streams = 'both';
   String _segments = 'ts';
   int _pipeAudioIdx = 0;
-  List<Map<String, dynamic>> _audioTracks = [];
+  String? _liveFilePath;
+  int _liveAudioIndex = 0;
+  List<Map<String, dynamic>> _liveAudioTracks = [];
 
   @override
   void initState() {
@@ -128,16 +130,15 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     }
   }
 
-  Future<void> _pipeTest() async {
-    final res = await FilePicker.pickFiles();
-    if (res.isEmpty) return;
-    final src = res.first.path;
-    if (src == null) return;
-    _logLine('=== Pipe Test ===');
-    _logLine('src=$src');
-
-    // Probe for audio tracks
-    _audioTracks = [];
+  /// Probes [src] for audio streams and returns the debug-track maps used by
+  /// the UI. `index` is the 0-based position among AUDIO streams (the same
+  /// value `-map 0:a:N` and `loadLiveMkv(audioIndex:)` expect), not the global
+  /// stream index.
+  Future<List<Map<String, dynamic>>> _probeAudioTracks(
+    String src, {
+    required String tag,
+  }) async {
+    final tracks = <Map<String, dynamic>>[];
     try {
       final probeSession = await FFprobeKit.getMediaInformation(src);
       final info = probeSession.getMediaInformation();
@@ -145,7 +146,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
         var audioIdx = 0;
         for (final st in info.getStreams()) {
           if (st.getType() == 'audio') {
-            _audioTracks.add({
+            tracks.add({
               'index': audioIdx,
               'codec': st.getCodec() ?? 'unknown',
               'channels': st.getAllProperties()?['channels'] ?? 2,
@@ -156,15 +157,31 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
         }
       }
     } catch (e) {
-      _logLine('[PIPETEST] probe error: $e');
+      _logLine('[$tag] probe error: $e');
     }
-    if (_audioTracks.isEmpty) {
-      _audioTracks = [
-        {'index': 0, 'codec': 'unknown', 'channels': 2, 'language': 'und'},
-      ];
+    if (tracks.isEmpty) {
+      tracks.add({
+        'index': 0,
+        'codec': 'unknown',
+        'channels': 2,
+        'language': 'und',
+      });
     }
+    _logLine('[$tag] audio tracks: $tracks');
+    return tracks;
+  }
+
+  Future<void> _pipeTest() async {
+    final res = await FilePicker.pickFiles();
+    if (res.isEmpty) return;
+    final src = res.first.path;
+    if (src == null) return;
+    _logLine('=== Pipe Test ===');
+    _logLine('src=$src');
+
+    // Probe for audio tracks
+    await _probeAudioTracks(src, tag: 'PIPETEST');
     _pipeAudioIdx = 0;
-    _logLine('[PIPETEST] audio tracks: $_audioTracks');
 
     final audioIdx = _pipeAudioIdx;
 
@@ -384,11 +401,18 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     }
     _logLine('receiver=${dev.id} ${dev.name}');
     final service = getIt<ICastService>();
+    _liveFilePath = src;
+    _liveAudioTracks = await _probeAudioTracks(src, tag: 'LIVE');
+    _liveAudioIndex = 0;
+    _logLine(
+      '[LIVE] using audio=$_liveAudioIndex '
+      'streamType=${_useLive ? 'LIVE' : 'BUFFERED'}',
+    );
     service.enableRawMessageLogging();
     try {
       await service.loadLiveMkv(
         filePath: src,
-        audioIndex: _pipeAudioIdx,
+        audioIndex: _liveAudioIndex,
         streamType: _useLive ? 'LIVE' : 'BUFFERED',
         includeDuration: _includeDuration,
       );
@@ -398,6 +422,13 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       for (var i = 0; i < 30; i++) {
         await Future.delayed(const Duration(seconds: 1));
         final status = await service.getDebugMediaStatus();
+        final offset = service.liveStartOffset;
+        if (offset > Duration.zero) {
+          _logLine(
+            '[LIVE-SWITCH] position=${offset + service.position} '
+            'receiver=${service.position} offset=$offset',
+          );
+        }
         _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
       service.disableRawMessageLogging();
@@ -405,6 +436,68 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       _logLine('error: $e');
       _logLine(st.toString());
       service.disableRawMessageLogging();
+    }
+  }
+
+  /// Restarts the live MKV stream with [audioIndex] at the current real
+  /// position. The receiver's clock restarts at zero for the new stream, so
+  /// the real position is `liveStartOffset + position`.
+  Future<void> _switchLiveAudio(int audioIndex) async {
+    final filePath = _liveFilePath;
+    if (filePath == null) {
+      _logLine('[LIVE-SWITCH] no live file loaded');
+      return;
+    }
+    if (audioIndex == _liveAudioIndex) {
+      _logLine('[LIVE-SWITCH] audio already $audioIndex');
+      return;
+    }
+    final service = getIt<ICastService>();
+    final from = _liveAudioIndex;
+    final offset = service.liveStartOffset;
+    final position = offset + service.position;
+    _logLine(
+      '[LIVE-SWITCH] from=$from to=$audioIndex '
+      'position=${position.inMilliseconds}ms '
+      'receiver=${service.position.inMilliseconds}ms '
+      'offset=${offset.inMilliseconds}ms',
+    );
+    final stopwatch = Stopwatch()..start();
+    String? playerState;
+    try {
+      await service.switchLiveAudio(
+        filePath: filePath,
+        audioIndex: audioIndex,
+        position: position,
+        streamType: _useLive ? 'LIVE' : 'BUFFERED',
+      );
+      setState(() => _liveAudioIndex = audioIndex);
+      _logLine(
+        '[LIVE-SWITCH] loaded to=$audioIndex '
+        'loadMs=${stopwatch.elapsedMilliseconds} '
+        'offset=${service.liveStartOffset.inMilliseconds}ms',
+      );
+      // Autoplay is requested by LOAD; this is a no-op if the receiver is
+      // already playing but recovers a paused/buffering restart.
+      await service.play();
+      // The LOAD acknowledgement is not necessarily PLAYING yet.
+      for (var i = 0; i < 40; i++) {
+        final status = await service.getDebugMediaStatus();
+        playerState =
+            RegExp(r'playerState=(\S+)').firstMatch(status)?.group(1);
+        if (playerState == 'PLAYING') break;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      _logLine(
+        '[LIVE-SWITCH] to=$audioIndex '
+        'playerState=${playerState ?? '<none>'} '
+        'timeToPlayingMs=${stopwatch.elapsedMilliseconds}',
+      );
+    } catch (e, st) {
+      _logLine('[LIVE-SWITCH] error from=$from to=$audioIndex: $e');
+      _logLine(st.toString());
+    } finally {
+      stopwatch.stop();
     }
   }
 
@@ -482,6 +575,28 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               ),
             ],
           ),
+          if (_liveFilePath != null && _liveAudioTracks.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Switch audio:'),
+                  for (final t in _liveAudioTracks)
+                    ElevatedButton(
+                      onPressed: (t['index'] as int) == _liveAudioIndex
+                          ? null
+                          : () => _switchLiveAudio(t['index'] as int),
+                      child: Text(
+                        '#${t['index']} ${t['language']}/'
+                        '${t['codec']}/${t['channels']}ch',
+                      ),
+                    ),
+                ],
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               itemCount: _log.length,

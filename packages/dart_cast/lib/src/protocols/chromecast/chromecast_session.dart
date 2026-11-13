@@ -144,6 +144,7 @@ class ChromecastSession extends CastSession {
 
   /// The current receiver session ID, if connected.
   String? get sessionId => _sessionId;
+  MediaProxy get proxy => _proxy;
   int? get mediaSessionId => _mediaSessionId;
   String? get idleReason => _idleReason;
   String? get lastPlayerState => _lastPlayerState;

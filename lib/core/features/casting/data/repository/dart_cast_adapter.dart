@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+
 import 'dart:developer';
 import 'dart:io';
 
@@ -9,6 +11,7 @@ import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/transcode_settings.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
+import 'package:pure_cast/core/features/casting/data/repository/live_timeline_mapper.dart';
 
 /// Concrete adapter wrapping dart_cast package services.
 class DartCastAdapter implements ICastService {
@@ -20,6 +23,14 @@ class DartCastAdapter implements ICastService {
 
   // Subtitle track ID mapping keyed by subtitle URL, per active session.
   final Map<String, int> _subtitleTrackIds = <String, int>{};
+
+  /// Maps live receiver time onto the source-file timeline and guards the
+  /// restart race (see [LiveTimelineMapper]).
+  final LiveTimelineMapper _liveTimeline = LiveTimelineMapper();
+
+  /// Last duration value pushed to [durationStream], used to avoid duplicate
+  /// live-duration emissions when the receiver reports no duration at all.
+  Duration? _lastDurationEmitted;
 
   final StreamController<PureCastSessionState> _sessionStateController =
       StreamController<PureCastSessionState>.broadcast();
@@ -99,7 +110,10 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
-  Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false}) async {
+  Future<void> loadMedia(
+    PureCastMedia media, {
+    bool bypassTransform = false,
+  }) async {
     if (media.isLocalFile) {
       try {
         return await loadLocalFile(media.uri, subtitles: media.subtitles);
@@ -168,9 +182,12 @@ class DartCastAdapter implements ICastService {
     required bool includeDuration,
   }) async {
     final session = _castService.activeSession;
-    if (session == null) throw const PureCastException('No active cast session');
+    if (session == null)
+      throw const PureCastException('No active cast session');
     if (session is! dart_cast.ChromecastSession) {
-      throw const PureCastException('Live MKV cast requires a Chromecast session');
+      throw const PureCastException(
+        'Live MKV cast requires a Chromecast session',
+      );
     }
     try {
       await session.loadLiveMkv(
@@ -192,12 +209,15 @@ class DartCastAdapter implements ICastService {
     required String streamType,
   }) async {
     final session = _castService.activeSession;
-    if (session == null) throw const PureCastException('No active cast session');
+    if (session == null)
+      throw const PureCastException('No active cast session');
     if (session is! dart_cast.ChromecastSession) {
       throw const PureCastException(
         'Live MKV cast requires a Chromecast session',
       );
     }
+    // Drop late position events from the media session being replaced.
+    _liveTimeline.armRestart(session.mediaSessionId);
     try {
       await session.switchLiveAudio(
         filePath: filePath,
@@ -206,6 +226,7 @@ class DartCastAdapter implements ICastService {
         streamType: streamType,
       );
     } catch (e) {
+      _liveTimeline.cancel();
       throw PureCastException('Failed to switch live audio: $filePath', e);
     }
   }
@@ -220,7 +241,39 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
-  Duration get position => _castService.activeSession?.position ?? Duration.zero;
+  bool get isLiveStream {
+    final session = _castService.activeSession;
+    return session is dart_cast.ChromecastSession && session.isLive;
+  }
+
+  @override
+  List<PureCastAudioTrack> get audioTracks {
+    final session = _castService.activeSession;
+    if (session is! dart_cast.ChromecastSession || !session.isLive) {
+      return const [];
+    }
+    final streams = session.liveAudioTracks;
+    return [
+      for (var i = 0; i < streams.length; i++)
+        PureCastAudioTrack(
+          index: i,
+          language: streams[i].language ?? '',
+          codec: streams[i].codec,
+          channels: streams[i].channels,
+          isDefault: streams[i].isDefault,
+        ),
+    ];
+  }
+
+  @override
+  int get activeAudioIndex {
+    final session = _castService.activeSession;
+    return session is dart_cast.ChromecastSession ? session.liveAudioIndex : 0;
+  }
+
+  @override
+  Duration get position =>
+      _castService.activeSession?.position ?? Duration.zero;
 
   @override
   Future<void> loadLocalFile(
@@ -231,6 +284,7 @@ class DartCastAdapter implements ICastService {
     String? forcePlan,
     bool waitForFinish = false,
     bool includeDuration = false,
+    bool useLive = true,
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
@@ -238,10 +292,15 @@ class DartCastAdapter implements ICastService {
     String segments = 'ts',
   }) async {
     final session = _castService.activeSession;
-    if (session == null) throw const PureCastException('No active cast session');
+    if (session == null)
+      throw const PureCastException('No active cast session');
     try {
-      final effectiveSubtitle = subtitle ?? (subtitles != null && subtitles.isNotEmpty ? subtitles.first : null);
-      final dartSubtitle = effectiveSubtitle != null ? _mapSubtitleToDartCast(effectiveSubtitle) : null;
+      final effectiveSubtitle =
+          subtitle ??
+          (subtitles != null && subtitles.isNotEmpty ? subtitles.first : null);
+      final dartSubtitle = effectiveSubtitle != null
+          ? _mapSubtitleToDartCast(effectiveSubtitle)
+          : null;
       if (session is dart_cast.ChromecastSession) {
         await session.loadLocalFile(
           path,
@@ -254,6 +313,7 @@ class DartCastAdapter implements ICastService {
           streams: streams,
           segments: segments,
           includeDuration: includeDuration,
+          useLive: useLive,
           streamType: streamType,
           hlsSegmentFormat: hlsSegmentFormat,
           hlsVideoSegmentFormat: hlsVideoSegmentFormat,
@@ -264,13 +324,15 @@ class DartCastAdapter implements ICastService {
         );
       } else {
         // DLNA / others: direct load
-        await loadMedia(PureCastMedia(
-          uri: path,
-          type: PureCastMediaType.video,
-          title: '',
-          isLocalFile: true,
-          subtitles: subtitle != null ? [subtitle] : const [],
-        ));
+        await loadMedia(
+          PureCastMedia(
+            uri: path,
+            type: PureCastMediaType.video,
+            title: '',
+            isLocalFile: true,
+            subtitles: subtitle != null ? [subtitle] : const [],
+          ),
+        );
       }
     } catch (e) {
       // Rethrow typed dart_cast exceptions as-is so callers can inspect
@@ -281,7 +343,10 @@ class DartCastAdapter implements ICastService {
           e is dart_cast.MediaLoadFailedException) {
         rethrow;
       }
-      throw PureCastException('Failed to load local file: $path — ${e.toString()}', e);
+      throw PureCastException(
+        'Failed to load local file: $path — ${e.toString()}',
+        e,
+      );
     }
   }
 
@@ -333,13 +398,20 @@ class DartCastAdapter implements ICastService {
   Future<void> seek(Duration position) async {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
+    final chromecast = session is dart_cast.ChromecastSession ? session : null;
+    final isLive = chromecast?.isLive ?? false;
     try {
       if (session.state == dart_cast.SessionState.idle ||
           session.state == dart_cast.SessionState.disconnected) {
         throw const PureCastException('No active media session to seek');
       }
+      if (isLive) {
+        // Live seek restarts the stream; ignore late events from the old one.
+        _liveTimeline.armRestart(chromecast!.mediaSessionId);
+      }
       await session.seek(position);
     } catch (e) {
+      if (isLive) _liveTimeline.cancel();
       throw PureCastException('Failed to seek', e);
     }
   }
@@ -442,9 +514,15 @@ class DartCastAdapter implements ICastService {
     _positionSub?.cancel();
     _durationSub?.cancel();
     _bufferingDebounceTimer?.cancel();
+    _lastDurationEmitted = null;
 
     _sessionStateSub = session.stateStream.listen((state) {
       final domainState = _mapStateToDomain(state);
+
+      if (domainState == PureCastSessionState.disconnected) {
+        // No restart can complete anymore; don't keep dropping positions.
+        _liveTimeline.cancel();
+      }
 
       if (domainState == PureCastSessionState.buffering &&
           _currentState == PureCastSessionState.playing) {
@@ -462,10 +540,46 @@ class DartCastAdapter implements ICastService {
     });
 
     _positionSub = session.positionStream.listen((pos) {
+      final chromecast = session is dart_cast.ChromecastSession
+          ? session
+          : null;
+      if (chromecast != null && chromecast.isLive) {
+        // The receiver's clock restarts at ~0 on every live restart, so the
+        // real position is offset + receiver time.
+        final mapped = _liveTimeline.mapPosition(
+          receiverPosition: pos,
+          offset: chromecast.liveStartOffset,
+          mediaSessionId: chromecast.mediaSessionId,
+        );
+        if (mapped == null) return; // stale event from the replaced session
+        _positionController.add(mapped);
+        // The live stream reports no duration. Push the known source
+        // duration as soon as playback produces a position event so the UI
+        // has a seekable range.
+        final known = chromecast.liveDuration;
+        if (known != null && known != _lastDurationEmitted) {
+          _lastDurationEmitted = known;
+          _durationController.add(known);
+        }
+        return;
+      }
       _positionController.add(pos);
     });
 
     _durationSub = session.durationStream.listen((dur) {
+      final chromecast = session is dart_cast.ChromecastSession
+          ? session
+          : null;
+      if (chromecast != null && chromecast.isLive) {
+        final mapped = _liveTimeline.mapDuration(
+          reportedDuration: dur,
+          knownLiveDuration: chromecast.liveDuration,
+        );
+        _lastDurationEmitted = mapped;
+        _durationController.add(mapped);
+        return;
+      }
+      _lastDurationEmitted = dur;
       _durationController.add(dur);
     });
   }
@@ -551,7 +665,9 @@ class DartCastAdapter implements ICastService {
         imageUrl: m.thumbnailUrl,
         duration: m.duration,
         subtitles: subtitles,
-        defaultSubtitle: m.defaultSubtitle != null ? _mapSubtitleToDartCast(m.defaultSubtitle!) : null,
+        defaultSubtitle: m.defaultSubtitle != null
+            ? _mapSubtitleToDartCast(m.defaultSubtitle!)
+            : null,
       );
     } else {
       return dart_cast.CastMedia(
@@ -561,7 +677,9 @@ class DartCastAdapter implements ICastService {
         imageUrl: m.thumbnailUrl,
         duration: m.duration,
         subtitles: subtitles,
-        defaultSubtitle: m.defaultSubtitle != null ? _mapSubtitleToDartCast(m.defaultSubtitle!) : null,
+        defaultSubtitle: m.defaultSubtitle != null
+            ? _mapSubtitleToDartCast(m.defaultSubtitle!)
+            : null,
       );
     }
   }
@@ -589,7 +707,9 @@ class DartCastAdapter implements ICastService {
     // (registerMedia). Local file paths must be prefixed with 'file://' so
     // they are served through the local HTTP proxy correctly.
     final url = s.url.startsWith('/') ? 'file://${s.url}' : s.url;
-    debugPrint('[SUBDBG] _mapSubtitleToDartCast url=$url format=vtt label=${s.label}');
+    debugPrint(
+      '[SUBDBG] _mapSubtitleToDartCast url=$url format=vtt label=${s.label}',
+    );
     return dart_cast.CastSubtitle(
       url: url,
       label: s.label.isNotEmpty ? s.label : s.language,
@@ -606,7 +726,8 @@ class DartCastAdapter implements ICastService {
   static bool shouldFallbackToDirect(Object e) {
     if (e is dart_cast.ProbeFailedException) return true;
     // Handle wrapped form: PureCastException with originalError = ProbeFailedException
-    if (e is PureCastException && e.originalError is dart_cast.ProbeFailedException) {
+    if (e is PureCastException &&
+        e.originalError is dart_cast.ProbeFailedException) {
       return true;
     }
     return false;

@@ -3,7 +3,9 @@ import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart
 /// Service contract abstracting the underlying casting engine.
 abstract class ICastService {
   /// Stream of discovered devices.
-  Stream<List<PureCastDevice>> discoverDevices({Set<PureCastProtocol>? protocols});
+  Stream<List<PureCastDevice>> discoverDevices({
+    Set<PureCastProtocol>? protocols,
+  });
 
   /// Stops device discovery.
   Future<void> stopDiscovery();
@@ -37,10 +39,25 @@ abstract class ICastService {
   /// Source offset of the current live stream (zero when not restarted).
   Duration get liveStartOffset;
 
+  /// Whether the active session is playing through the live MKV path.
+  bool get isLiveStream;
+
+  /// Audio tracks of the current live stream (empty when not live).
+  ///
+  /// [PureCastAudioTrack.index] is the 0-based index among audio streams,
+  /// i.e. the `N` in `0:a:N`.
+  List<PureCastAudioTrack> get audioTracks;
+
+  /// Audio index (`0:a:N`) currently used by the live stream.
+  int get activeAudioIndex;
+
   /// Current playback position of the active session.
   Duration get position;
 
   /// Loads a local file, probing/preparing it for Chromecast when needed.
+  ///
+  /// [useLive] routes remux plans through the live MKV path (default) instead
+  /// of the HLS remux pipeline. Set it to false to compare with the old path.
   Future<void> loadLocalFile(
     String path, {
     int audioStreamIndex = 0,
@@ -49,6 +66,7 @@ abstract class ICastService {
     String? forcePlan,
     bool waitForFinish = false,
     bool includeDuration = false,
+    bool useLive = true,
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,

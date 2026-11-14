@@ -121,6 +121,44 @@ class PureCastDevice {
   int get hashCode => Object.hash(id, name, protocol, host, port, capabilities);
 }
 
+/// Audio track of the media currently loaded by the cast engine.
+///
+/// [index] is the 0-based index among audio streams (the `N` in
+/// `0:a:N`), i.e. the value accepted by the live audio switching API.
+class PureCastAudioTrack {
+  final int index;
+  final String language;
+  final String codec;
+  final int channels;
+  final bool isDefault;
+
+  const PureCastAudioTrack({
+    required this.index,
+    this.language = '',
+    this.codec = 'unknown',
+    this.channels = 2,
+    this.isDefault = false,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PureCastAudioTrack &&
+          index == other.index &&
+          language == other.language &&
+          codec == other.codec &&
+          channels == other.channels &&
+          isDefault == other.isDefault;
+
+  @override
+  int get hashCode => Object.hash(index, language, codec, channels, isDefault);
+
+  @override
+  String toString() =>
+      'PureCastAudioTrack(index: $index, language: $language, codec: $codec, '
+      'channels: $channels, isDefault: $isDefault)';
+}
+
 /// Media subtitle track domain model.
 class PureCastSubtitleTrack {
   final String id;

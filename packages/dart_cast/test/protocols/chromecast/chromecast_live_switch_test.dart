@@ -6,6 +6,7 @@ import 'package:dart_cast/src/core/cast_device.dart';
 import 'package:dart_cast/src/core/cast_exceptions.dart';
 import 'package:dart_cast/src/core/live_mkv_stream.dart';
 import 'package:dart_cast/src/core/local_tcp_source.dart';
+import 'package:dart_cast/src/core/media_probe.dart';
 import 'package:dart_cast/src/core/media_proxy.dart';
 import 'package:dart_cast/src/protocols/chromecast/cast_media_channel.dart';
 import 'package:dart_cast/src/protocols/chromecast/cast_receiver_channel.dart';
@@ -50,12 +51,7 @@ class _MockCastV2Channel {
     required String destinationId,
     required Map<String, dynamic> payload,
   }) {
-    _incoming.add(
-      _ReceivedMessage(
-        namespace: namespace,
-        payload: payload,
-      ),
-    );
+    _incoming.add(_ReceivedMessage(namespace: namespace, payload: payload));
   }
 }
 
@@ -83,8 +79,7 @@ class _ReceivedMessage {
 class _FakeTcpSource implements TcpSource {
   @override
   final int port;
-  final StreamController<List<int>> controller =
-      StreamController<List<int>>();
+  final StreamController<List<int>> controller = StreamController<List<int>>();
   int closeCount = 0;
 
   _FakeTcpSource(this.port);
@@ -132,6 +127,36 @@ class _LiveHarness {
 // ---------------------------------------------------------------------------
 // Payload helpers
 // ---------------------------------------------------------------------------
+
+/// Thrown by the test prepare starter when the HLS path is reached.
+class _PreparePathCalled implements Exception {
+  @override
+  String toString() => '_PreparePathCalled';
+}
+
+/// Minimal probe matching the shape `decide()` expects.
+MediaProbe _makeProbe({
+  String container = 'mkv',
+  String audioCodec = 'aac',
+  double? durationSeconds,
+  int audioCount = 2,
+}) {
+  return MediaProbe(
+    container: container,
+    durationSeconds: durationSeconds,
+    video: const VideoStream(codec: 'h264', level: 41, pixFmt: 'yuv420p'),
+    audio: [
+      AudioStream(
+        index: 1,
+        codec: audioCodec,
+        language: 'eng',
+        isDefault: true,
+      ),
+      if (audioCount > 1)
+        const AudioStream(index: 2, codec: 'ac3', language: 'spa'),
+    ],
+  );
+}
 
 Map<String, dynamic> _receiverStatusPayload({String transportId = 'web-4'}) {
   return {
@@ -235,6 +260,8 @@ void main() {
   late _LiveHarness harness;
   late ChromecastSession session;
   late HttpClient httpClient;
+  late MediaProbe nextProbe;
+  var probeCalls = 0;
 
   setUp(() async {
     device = CastDevice(
@@ -248,11 +275,23 @@ void main() {
     proxy = MediaProxy();
     await proxy.start();
     harness = _LiveHarness();
+    nextProbe = _makeProbe();
+    probeCalls = 0;
     session = ChromecastSession.withMocks(
       device: device,
       channel: channel,
       proxy: proxy,
       liveRuns: harness.manager,
+      probeFile: (input) async {
+        probeCalls++;
+        return nextProbe;
+      },
+      prepareStarter: ({
+        required String inputPath,
+        required List<String> Function(String outputDir) buildArgs,
+      }) async {
+        throw _PreparePathCalled();
+      },
     );
     httpClient = HttpClient();
   });
@@ -277,7 +316,9 @@ void main() {
 
   /// Loads the initial live stream and opens its receiver-side HTTP request,
   /// leaving one live run alive at [filePath] with [audioIndex].
-  Future<void> startInitialLiveStream({String filePath = '/videos/movie.mkv'}) async {
+  Future<void> startInitialLiveStream({
+    String filePath = '/videos/movie.mkv',
+  }) async {
     final loadFuture = session.loadLiveMkv(
       filePath: filePath,
       audioIndex: 0,
@@ -297,6 +338,45 @@ void main() {
       destinationId: 'sender-0',
       payload: _mediaStatusPayload(
         mediaSessionId: 10,
+        requestId: loadMsg.payload['requestId'] as int,
+      ),
+    );
+    await loadFuture;
+  }
+
+  /// Runs `loadLocalFile` through the live path and serves the request the
+  /// receiver would make, leaving one live run alive.
+  Future<void> startLiveLocalFile({
+    String path = '/videos/movie.mkv',
+    int audioStreamIndex = 0,
+    int mediaSessionId = 10,
+    double? durationSeconds,
+    String audioCodec = 'dts',
+    String container = 'mkv',
+  }) async {
+    nextProbe = _makeProbe(
+      container: container,
+      audioCodec: audioCodec,
+      durationSeconds: durationSeconds,
+    );
+    final loadFuture = session.loadLocalFile(
+      path,
+      audioStreamIndex: audioStreamIndex,
+      streamType: 'LIVE',
+    );
+    final loadMsg = await _awaitSentLoad(channel);
+    final contentId = loadMsg.payload['media']['contentId'] as String;
+    await _startLiveRequest(httpClient, contentId);
+    await _waitFor(
+      () => harness.args.length == 1,
+      reason: 'live run from loadLocalFile did not open',
+    );
+    channel.injectMessage(
+      namespace: CastMediaChannel.mediaNamespace,
+      sourceId: 'web-4',
+      destinationId: 'sender-0',
+      payload: _mediaStatusPayload(
+        mediaSessionId: mediaSessionId,
         requestId: loadMsg.payload['requestId'] as int,
       ),
     );
@@ -341,10 +421,7 @@ void main() {
         newArgs,
         containsAllInOrder(['-ss', '60.0', '-i', '/videos/movie.mkv']),
       );
-      expect(
-        newArgs.indexOf('-ss'),
-        lessThan(newArgs.indexOf('-i')),
-      );
+      expect(newArgs.indexOf('-ss'), lessThan(newArgs.indexOf('-i')));
 
       channel.injectMessage(
         namespace: CastMediaChannel.mediaNamespace,
@@ -476,69 +553,339 @@ void main() {
       expect(session.liveStartOffset, const Duration(seconds: 45));
     });
 
-    test('a failed LOAD cleans up the new run, the new URL, and the offset',
-        () async {
-      await connect();
-      await startInitialLiveStream();
+    test(
+      'a failed LOAD cleans up the new run, the new URL, and the offset',
+      () async {
+        await connect();
+        await startInitialLiveStream();
 
-      final switchFuture = session.switchLiveAudio(
-        filePath: '/videos/movie.mkv',
-        audioIndex: 2,
-        position: const Duration(seconds: 60),
-        streamType: 'LIVE',
+        final switchFuture = session.switchLiveAudio(
+          filePath: '/videos/movie.mkv',
+          audioIndex: 2,
+          position: const Duration(seconds: 60),
+          streamType: 'LIVE',
+        );
+        final loadMsg = await _awaitSentLoad(channel, skip: 1);
+        final contentId = loadMsg.payload['media']['contentId'] as String;
+        await _startLiveRequest(httpClient, contentId);
+        await _waitFor(() => harness.args.length == 2);
+
+        channel.injectMessage(
+          namespace: CastMediaChannel.mediaNamespace,
+          sourceId: 'web-4',
+          destinationId: 'sender-0',
+          payload: _mediaStatusPayload(
+            mediaSessionId: 11,
+            playerState: 'IDLE',
+            idleReason: 'ERROR',
+            requestId: loadMsg.payload['requestId'] as int,
+          ),
+        );
+
+        await expectLater(
+          switchFuture,
+          throwsA(isA<MediaLoadFailedException>()),
+        );
+
+        expect(harness.cancelsFor(1), 1); // old run
+        expect(harness.cancelsFor(2), 1); // failed new run
+        expect(harness.sources[1].closeCount, 1);
+        expect(harness.manager.activeCount, 0);
+        expect(session.liveStartOffset, Duration.zero);
+
+        // The failed URL was unregistered: the receiver gets a 404 now.
+        final client = HttpClient();
+        try {
+          final request = await client.getUrl(Uri.parse(contentId));
+          final response = await request.close();
+          expect(response.statusCode, HttpStatus.notFound);
+          await response.drain<void>();
+        } finally {
+          client.close(force: true);
+        }
+      },
+    );
+
+    test(
+      'liveStartOffset plus receiver position is the real position',
+      () async {
+        await connect();
+        await startInitialLiveStream();
+
+        final switchFuture = session.switchLiveAudio(
+          filePath: '/videos/movie.mkv',
+          audioIndex: 1,
+          position: const Duration(minutes: 1),
+          streamType: 'LIVE',
+        );
+        final loadMsg = await _awaitSentLoad(channel, skip: 1);
+        await _startLiveRequest(
+          httpClient,
+          loadMsg.payload['media']['contentId'] as String,
+        );
+        await _waitFor(() => harness.args.length == 2);
+        channel.injectMessage(
+          namespace: CastMediaChannel.mediaNamespace,
+          sourceId: 'web-4',
+          destinationId: 'sender-0',
+          payload: _mediaStatusPayload(
+            mediaSessionId: 11,
+            requestId: loadMsg.payload['requestId'] as int,
+          ),
+        );
+        await switchFuture;
+
+        final positionFuture = session.positionStream.first;
+        channel.injectMessage(
+          namespace: CastMediaChannel.mediaNamespace,
+          sourceId: 'web-4',
+          destinationId: 'sender-0',
+          payload: _mediaStatusPayload(mediaSessionId: 11, currentTime: 5.0),
+        );
+        final receiverPosition = await positionFuture;
+
+        expect(receiverPosition, const Duration(seconds: 5));
+        expect(session.liveStartOffset, const Duration(minutes: 1));
+        expect(
+          session.liveStartOffset + session.position,
+          const Duration(minutes: 1, seconds: 5),
+        );
+      },
+    );
+  });
+
+  group('ChromecastSession.loadLocalFile live routing', () {
+    test('a remux-audio plan loads through the live path and never starts '
+        'CastPrepareSession', () async {
+      await connect();
+
+      await startLiveLocalFile(audioCodec: 'dts');
+
+      expect(probeCalls, 1);
+      expect(session.isLive, isTrue);
+      expect(session.liveFilePath, '/videos/movie.mkv');
+      expect(harness.args, hasLength(1));
+      expect(harness.args.single, containsAllInOrder(['-map', '0:a:0']));
+      expect(harness.args.single, isNot(contains('-ss')));
+
+      final loads =
+          channel.sentMessages
+              .where(
+                (m) =>
+                    m.namespace == CastMediaChannel.mediaNamespace &&
+                    m.payload['type'] == 'LOAD',
+              )
+              .toList();
+      expect(loads, hasLength(1));
+      expect(
+        loads.single.payload['media']['contentId'] as String,
+        contains('/live/'),
       );
-      final loadMsg = await _awaitSentLoad(channel, skip: 1);
+    });
+
+    test('a remux-container plan also loads through the live path', () async {
+      await connect();
+
+      // AVI + compatible audio -> RemuxContainerPlan.
+      await startLiveLocalFile(container: 'avi', audioCodec: 'aac');
+
+      expect(session.isLive, isTrue);
+      expect(harness.args, hasLength(1));
+      expect(probeCalls, 1);
+    });
+
+    test('useLive: false still reaches CastPrepareSession', () async {
+      await connect();
+      nextProbe = _makeProbe(audioCodec: 'dts');
+
+      await expectLater(
+        session.loadLocalFile('/videos/movie.mkv', useLive: false),
+        throwsA(isA<_PreparePathCalled>()),
+      );
+
+      expect(probeCalls, 1);
+      expect(session.isLive, isFalse);
+      expect(harness.args, isEmpty);
+      expect(
+        channel.sentMessages.where(
+          (m) =>
+              m.namespace == CastMediaChannel.mediaNamespace &&
+              m.payload['type'] == 'LOAD',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('a forced remux plan still uses CastPrepareSession', () async {
+      await connect();
+      nextProbe = _makeProbe(audioCodec: 'dts');
+
+      await expectLater(
+        session.loadLocalFile('/videos/movie.mkv', forcePlan: 'remuxAudio'),
+        throwsA(isA<_PreparePathCalled>()),
+      );
+
+      expect(probeCalls, 1);
+      expect(session.isLive, isFalse);
+      expect(harness.args, isEmpty);
+    });
+
+    test('a DirectPlan keeps the direct load (no live URL)', () async {
+      await connect();
+      nextProbe = _makeProbe(audioCodec: 'aac', container: 'mkv');
+
+      final loadFuture = session.loadLocalFile('/videos/direct.mkv');
+      final loadMsg = await _awaitSentLoad(channel);
       final contentId = loadMsg.payload['media']['contentId'] as String;
-      await _startLiveRequest(httpClient, contentId);
-      await _waitFor(() => harness.args.length == 2);
+      expect(contentId, isNot(contains('/live/')));
 
       channel.injectMessage(
         namespace: CastMediaChannel.mediaNamespace,
         sourceId: 'web-4',
         destinationId: 'sender-0',
         payload: _mediaStatusPayload(
-          mediaSessionId: 11,
+          mediaSessionId: 10,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await loadFuture;
+
+      expect(session.isLive, isFalse);
+      expect(harness.args, isEmpty);
+      expect(probeCalls, 1);
+    });
+
+    test('a failed live load surfaces the error, cleans the run, and never '
+        'falls back to HLS', () async {
+      await connect();
+      nextProbe = _makeProbe(audioCodec: 'dts');
+
+      final loadFuture = session.loadLocalFile('/videos/movie.mkv');
+      final loadMsg = await _awaitSentLoad(channel);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 1);
+
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 10,
           playerState: 'IDLE',
           idleReason: 'ERROR',
           requestId: loadMsg.payload['requestId'] as int,
         ),
       );
 
-      await expectLater(
-        switchFuture,
-        throwsA(isA<MediaLoadFailedException>()),
-      );
+      await expectLater(loadFuture, throwsA(isA<MediaLoadFailedException>()));
 
-      expect(harness.cancelsFor(1), 1); // old run
-      expect(harness.cancelsFor(2), 1); // failed new run
-      expect(harness.sources[1].closeCount, 1);
+      expect(session.isLive, isFalse);
+      expect(session.liveFilePath, isNull);
+      expect(session.liveDuration, isNull);
       expect(harness.manager.activeCount, 0);
-      expect(session.liveStartOffset, Duration.zero);
-
-      // The failed URL was unregistered: the receiver gets a 404 now.
-      final client = HttpClient();
-      try {
-        final request = await client.getUrl(Uri.parse(contentId));
-        final response = await request.close();
-        expect(response.statusCode, HttpStatus.notFound);
-        await response.drain<void>();
-      } finally {
-        client.close(force: true);
-      }
+      expect(harness.cancelsFor(1), 1);
+      // Only the live LOAD was attempted; no HLS follow-up.
+      expect(
+        channel.sentMessages
+            .where(
+              (m) =>
+                  m.namespace == CastMediaChannel.mediaNamespace &&
+                  m.payload['type'] == 'LOAD',
+            )
+            .length,
+        1,
+      );
+      expect(probeCalls, 1);
     });
 
-    test('liveStartOffset plus receiver position is the real position',
-        () async {
+    test(
+      'probe duration reaches liveDuration without a second probe',
+      () async {
+        await connect();
+
+        await startLiveLocalFile(audioCodec: 'dts', durationSeconds: 3723.0);
+
+        expect(
+          session.liveDuration,
+          const Duration(hours: 1, minutes: 2, seconds: 3),
+        );
+        expect(probeCalls, 1);
+      },
+    );
+
+    test('audio getters reflect load, switch, and stop', () async {
       await connect();
-      await startInitialLiveStream();
+
+      expect(session.isLive, isFalse);
+      expect(session.liveAudioTracks, isEmpty);
+      expect(session.liveAudioIndex, 0);
+
+      await startLiveLocalFile(
+        audioStreamIndex: 1,
+        audioCodec: 'dts',
+        durationSeconds: 100,
+      );
+
+      expect(session.isLive, isTrue);
+      expect(session.liveAudioIndex, 1);
+      expect(session.liveAudioTracks, hasLength(2));
+      expect(session.liveAudioTracks[1].language, 'spa');
+      expect(session.liveDuration, const Duration(seconds: 100));
 
       final switchFuture = session.switchLiveAudio(
         filePath: '/videos/movie.mkv',
-        audioIndex: 1,
-        position: const Duration(minutes: 1),
+        audioIndex: 0,
+        position: const Duration(seconds: 10),
         streamType: 'LIVE',
       );
-      final loadMsg = await _awaitSentLoad(channel, skip: 1);
+      final switchLoad = await _awaitSentLoad(channel, skip: 1);
+      await _startLiveRequest(
+        httpClient,
+        switchLoad.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 2);
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 11,
+          requestId: switchLoad.payload['requestId'] as int,
+        ),
+      );
+      await switchFuture;
+
+      expect(session.liveAudioIndex, 0);
+      expect(session.liveAudioTracks, hasLength(2));
+      expect(session.liveDuration, const Duration(seconds: 100));
+
+      await session.stop();
+
+      expect(session.isLive, isFalse);
+      expect(session.liveFilePath, isNull);
+      expect(session.liveAudioTracks, isEmpty);
+      expect(session.liveAudioIndex, 0);
+      expect(session.liveDuration, isNull);
+    });
+  });
+
+  group('ChromecastSession live seek', () {
+    test('restarts at the requested position with the current audio index '
+        'and clamps to the known duration', () async {
+      await connect();
+
+      await startLiveLocalFile(
+        audioStreamIndex: 1,
+        audioCodec: 'dts',
+        durationSeconds: 100,
+      );
+
+      // Above the known duration -> clamped to 100s.
+      final seekFuture = session.seek(const Duration(seconds: 200));
+      var loadMsg = await _awaitSentLoad(channel, skip: 1);
       await _startLiveRequest(
         httpClient,
         loadMsg.payload['media']['contentId'] as String,
@@ -553,26 +900,132 @@ void main() {
           requestId: loadMsg.payload['requestId'] as int,
         ),
       );
-      await switchFuture;
+      await seekFuture;
 
-      final positionFuture = session.positionStream.first;
+      expect(harness.cancelsFor(1), 1);
+      expect(
+        harness.args[1],
+        containsAllInOrder(['-ss', '100.0', '-i', '/videos/movie.mkv']),
+      );
+      expect(harness.args[1], containsAllInOrder(['-map', '0:a:1']));
+      expect(session.liveStartOffset, const Duration(seconds: 100));
+
+      // In range.
+      final secondSeek = session.seek(const Duration(seconds: 30));
+      loadMsg = await _awaitSentLoad(channel, skip: 2);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 3);
       channel.injectMessage(
         namespace: CastMediaChannel.mediaNamespace,
         sourceId: 'web-4',
         destinationId: 'sender-0',
         payload: _mediaStatusPayload(
-          mediaSessionId: 11,
-          currentTime: 5.0,
+          mediaSessionId: 12,
+          requestId: loadMsg.payload['requestId'] as int,
         ),
       );
-      final receiverPosition = await positionFuture;
+      await secondSeek;
 
-      expect(receiverPosition, const Duration(seconds: 5));
-      expect(session.liveStartOffset, const Duration(minutes: 1));
+      expect(harness.cancelsFor(2), 1);
       expect(
-        session.liveStartOffset + session.position,
-        const Duration(minutes: 1, seconds: 5),
+        harness.args[2],
+        containsAllInOrder(['-ss', '30.0', '-i', '/videos/movie.mkv']),
       );
+      expect(harness.args[2], containsAllInOrder(['-map', '0:a:1']));
+      expect(session.liveStartOffset, const Duration(seconds: 30));
+
+      // Negative positions are clamped to zero.
+      final zeroSeek = session.seek(const Duration(seconds: -5));
+      loadMsg = await _awaitSentLoad(channel, skip: 3);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 4);
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 13,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await zeroSeek;
+
+      expect(harness.args[3], isNot(contains('-ss')));
+      expect(session.liveStartOffset, Duration.zero);
+    });
+
+    test(
+      'a concurrent live seek is rejected while one restart is loading',
+      () async {
+        await connect();
+        await startLiveLocalFile(audioCodec: 'dts', durationSeconds: 100);
+
+        final firstSeek = session.seek(const Duration(seconds: 40));
+        final loadMsg = await _awaitSentLoad(channel, skip: 1);
+
+        await expectLater(
+          session.seek(const Duration(seconds: 50)),
+          throwsA(isA<StateError>()),
+        );
+
+        await _startLiveRequest(
+          httpClient,
+          loadMsg.payload['media']['contentId'] as String,
+        );
+        await _waitFor(() => harness.args.length == 2);
+        channel.injectMessage(
+          namespace: CastMediaChannel.mediaNamespace,
+          sourceId: 'web-4',
+          destinationId: 'sender-0',
+          payload: _mediaStatusPayload(
+            mediaSessionId: 11,
+            requestId: loadMsg.payload['requestId'] as int,
+          ),
+        );
+        await firstSeek;
+
+        expect(harness.args, hasLength(2));
+        expect(harness.cancelsFor(1), 1);
+        expect(harness.cancelsFor(2), 0);
+        expect(harness.manager.activeCount, 1);
+        expect(session.liveStartOffset, const Duration(seconds: 40));
+      },
+    );
+
+    test('a non-live seek still sends the receiver SEEK', () async {
+      await connect();
+      nextProbe = _makeProbe(audioCodec: 'aac', container: 'mkv');
+
+      final loadFuture = session.loadLocalFile('/videos/direct.mkv');
+      final loadMsg = await _awaitSentLoad(channel);
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 10,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await loadFuture;
+
+      expect(session.isLive, isFalse);
+      await session.seek(const Duration(seconds: 10));
+
+      final seek = channel.sentMessages.lastWhere(
+        (m) =>
+            m.namespace == CastMediaChannel.mediaNamespace &&
+            m.payload['type'] == 'SEEK',
+      );
+      expect(seek.payload['mediaSessionId'], 10);
+      expect(seek.payload['currentTime'], 10.0);
+      expect(harness.args, isEmpty);
     });
   });
 }

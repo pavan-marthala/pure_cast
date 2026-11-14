@@ -34,6 +34,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
   bool _waitForFinish = false;
   bool _includeDuration = false;
   bool _useLive = false;
+  bool _useLivePathForRemux = true;
   String _streams = 'both';
   String _segments = 'ts';
   int _pipeAudioIdx = 0;
@@ -311,9 +312,13 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     if (res.isEmpty) return;
     final src = res.first.path;
     if (src == null) return;
-    final variant = 'streams=$_streams segments=$_segments waitForFinish=$_waitForFinish includeDuration=$_includeDuration streamType=${_useLive ? 'LIVE' : 'BUFFERED'}';
+    // With the live path enabled (default) the plan is left to the probe so
+    // remux plans take the live MKV route; disabling it forces the selected
+    // HLS plan for comparison.
+    final useLivePath = _useLivePathForRemux;
+    final variant = 'streams=$_streams segments=$_segments waitForFinish=$_waitForFinish includeDuration=$_includeDuration streamType=${_useLive ? 'LIVE' : 'BUFFERED'} useLivePath=$useLivePath';
     _logLine('[RXDBG] variant: $variant');
-    _logLine('forced plan=$plan src=$src');
+    _logLine('plan=$plan src=$src useLivePath=$useLivePath');
     final bloc = context.read<CastSessionBloc>();
     final dev = bloc.state.activeDevice;
     if (dev == null) {
@@ -326,9 +331,10 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     try {
       await service.loadLocalFile(
         src,
-        forcePlan: plan,
+        forcePlan: useLivePath ? null : plan,
         waitForFinish: _waitForFinish,
         includeDuration: _includeDuration,
+        useLive: useLivePath,
         streamType: _useLive ? 'LIVE' : 'BUFFERED',
         streams: _streams,
         segments: _segments,
@@ -514,6 +520,14 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
               await TranscodeSettings.setEnabled(v);
               setState(() => _experimentalTranscode = v);
               _logLine('experimental transcode = $v');
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Use live path for remux plans'),
+            value: _useLivePathForRemux,
+            onChanged: (v) {
+              setState(() => _useLivePathForRemux = v);
+              _logLine('use live path for remux plans = $v');
             },
           ),
           DropdownButton<String>(

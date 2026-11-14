@@ -137,11 +137,39 @@ class ChromecastSession extends CastSession {
   /// Stops the HLS [CastPrepareSession] and deletes its temp dir.
   Future<void> Function()? _stopPrepare;
 
+  /// Test seam: replaces the FFprobeKit probe inside [loadLocalFile].
+  final Future<MediaProbe> Function(String input)? _probeFile;
+
+  /// Test seam: replaces [CastPrepareSession.start].
+  final Future<CastPrepareSession> Function({
+    required String inputPath,
+    required List<String> Function(String outputDir) buildArgs,
+  })?
+  _prepareStarter;
+
   /// Token of the currently registered `/live/<token>` stream, if any.
   String? _liveToken;
 
   /// Source position where the current live stream was restarted.
   Duration _liveStartOffset = Duration.zero;
+
+  /// True while the current media is served by the live MKV path.
+  bool _isLive = false;
+
+  /// Source file of the current live stream.
+  String? _liveFilePath;
+
+  /// Audio index (`0:a:N`) currently used by the live stream.
+  int _liveAudioIndex = 0;
+
+  /// Audio tracks discovered by the probe that started the live stream.
+  List<AudioStream> _liveAudioTracks = const [];
+
+  /// Known duration of the live source, when the probe reported one.
+  Duration? _liveDuration;
+
+  /// LOAD `streamType` used for the current live stream (kept for restarts).
+  String _liveStreamType = 'LIVE';
 
   /// True while [loadLocalFile] hands its freshly prepared HLS dir to
   /// [loadMedia]; prevents the new-load cleanup from deleting it.
@@ -167,11 +195,26 @@ class ChromecastSession extends CastSession {
   MediaProxy get proxy => _proxy;
 
   /// Source offset of the current live stream (0 unless the stream was
-  /// restarted with [switchLiveAudio]).
+  /// restarted with [switchLiveAudio] or a live [seek]).
   ///
   /// The restarted stream's receiver time starts at 0, so the real position
   /// is `liveStartOffset + position`.
   Duration get liveStartOffset => _liveStartOffset;
+
+  /// Whether the current media is served by the live MKV path.
+  bool get isLive => _isLive;
+
+  /// Source file backing the current live stream, if any.
+  String? get liveFilePath => _liveFilePath;
+
+  /// Audio index (`0:a:N`, 0-based among audio streams) in use right now.
+  int get liveAudioIndex => _liveAudioIndex;
+
+  /// Audio tracks found by the probe when the live stream was started.
+  List<AudioStream> get liveAudioTracks => _liveAudioTracks;
+
+  /// Known duration of the live source (null when the probe had none).
+  Duration? get liveDuration => _liveDuration;
 
   int? get mediaSessionId => _mediaSessionId;
   String? get idleReason => _idleReason;
@@ -204,6 +247,8 @@ class ChromecastSession extends CastSession {
   }) : _channel = _RealChannelAdapter(),
        _proxy = MediaProxy(),
        _liveRuns = LiveMkvRunManager.production(),
+       _probeFile = null,
+       _prepareStarter = null,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -218,6 +263,8 @@ class ChromecastSession extends CastSession {
   /// [TsHlsMediaTransformer].
   /// [liveRuns] and [prepareStopper] are test seams for the live MKV and HLS
   /// prepare lifecycles; production code uses the defaults.
+  /// [probeFile] and [prepareStarter] are test seams for the probe and
+  /// prepare session used by [loadLocalFile].
   ChromecastSession.withMocks({
     required CastDevice device,
     required dynamic channel,
@@ -225,11 +272,19 @@ class ChromecastSession extends CastSession {
     MediaTransformer? mediaTransformer,
     LiveMkvRunManager? liveRuns,
     Future<void> Function()? prepareStopper,
+    Future<MediaProbe> Function(String input)? probeFile,
+    Future<CastPrepareSession> Function({
+      required String inputPath,
+      required List<String> Function(String outputDir) buildArgs,
+    })?
+    prepareStarter,
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _MockChannelAdapter(channel),
        _proxy = proxy ?? MediaProxy(),
        _liveRuns = liveRuns ?? LiveMkvRunManager.production(),
        _stopPrepare = prepareStopper,
+       _probeFile = probeFile,
+       _prepareStarter = prepareStarter,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -369,6 +424,15 @@ class ChromecastSession extends CastSession {
     if (!_prepareHandedToLoad) {
       await _stopPrepareSession();
     }
+    // A load that is not the current live stream leaves the live path, so
+    // drop stale live metadata. Live LOAD/restarts carry the token they just
+    // registered, so their metadata survives.
+    final mediaPath = Uri.tryParse(media.url)?.pathSegments ?? const <String>[];
+    final isCurrentLiveLoad =
+        _liveToken != null &&
+        mediaPath.isNotEmpty &&
+        mediaPath.last == _liveToken;
+    if (!isCurrentLiveLoad) _resetLiveMetadata();
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
     }
@@ -404,6 +468,7 @@ class ChromecastSession extends CastSession {
     String? forcePlan,
     bool waitForFinish = false,
     bool includeDuration = false,
+    bool useLive = true,
     String streamType = 'BUFFERED',
     String? hlsSegmentFormat,
     String? hlsVideoSegmentFormat,
@@ -422,6 +487,8 @@ class ChromecastSession extends CastSession {
     // A new load replaces any live runs / previous prepared HLS dir.
     await _cleanupCastResources();
     _releaseLiveToken();
+    // Probe failure must not leave the previous live stream's metadata behind.
+    _resetLiveMetadata();
     // Probe (with fallback)
     String input = path;
     if (input.startsWith('content://')) {
@@ -433,17 +500,22 @@ class ChromecastSession extends CastSession {
     MediaProbe? probe;
     late CastPlan plan;
     try {
-      final session = await FFprobeKit.getMediaInformation(
-        input,
-      ).timeout(const Duration(seconds: 8));
-      final info = session.getMediaInformation();
-      probe = MediaProbe.fromJson(_mediaInfoToJson(info));
-      plan = decide(probe!, caps);
+      final probeFile = _probeFile;
+      if (probeFile != null) {
+        probe = await probeFile(input);
+      } else {
+        final session = await FFprobeKit.getMediaInformation(
+          input,
+        ).timeout(const Duration(seconds: 8));
+        final info = session.getMediaInformation();
+        probe = MediaProbe.fromJson(_mediaInfoToJson(info));
+      }
+      plan = decide(probe, caps);
       debugPrint(
         '[PREPDBG] plan=${plan.runtimeType} reason=${_planReason(plan)}',
       );
       debugPrint(
-        '[PREPDBG] probe container=${probe!.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a) => '${a.codec}/${a.channels}').join(',')}',
+        '[PREPDBG] probe container=${probe.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a) => '${a.codec}/${a.channels}').join(',')}',
       );
     } catch (e) {
       debugPrint('[HLSDBG] probe failed/timeout: $e');
@@ -459,8 +531,8 @@ class ChromecastSession extends CastSession {
       plan = RemuxContainerPlan('forced', audioStreamIndex: audioIdx);
 
     if (plan is DirectPlan || plan is UncertainDirectPlan) {
-      final codec = probe?.video?.codec ?? 'video';
-      final depth = bitDepthOf(probe?.video?.pixFmt);
+      final codec = probe.video?.codec ?? 'video';
+      final depth = bitDepthOf(probe.video?.pixFmt);
       final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
       final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
       debugPrint('[PREPDBG] memory lookup key=$memKey');
@@ -494,7 +566,7 @@ class ChromecastSession extends CastSession {
           await loadMedia(
             CastMedia.file(
               filePath: path,
-              type: CastCompat.mediaTypeForContainer(probe!.container),
+              type: CastCompat.mediaTypeForContainer(probe.container),
               subtitles: subtitle != null ? [subtitle] : const [],
               defaultSubtitle: subtitle,
             ),
@@ -536,10 +608,10 @@ class ChromecastSession extends CastSession {
       }
     }
     if (plan is UnsupportedPlan) {
-      final codec = probe?.video?.codec ?? 'video';
-      final depth = bitDepthOf(probe?.video?.pixFmt);
+      final codec = probe.video?.codec ?? 'video';
+      final depth = bitDepthOf(probe.video?.pixFmt);
       final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
-      final isAv1 = (probe?.video?.codec.toLowerCase() == 'av1');
+      final isAv1 = (probe.video?.codec.toLowerCase() == 'av1');
       bool tryDirect = !(isAv1 || depth >= 10);
       final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
       if (memoryLookup != null) {
@@ -558,7 +630,7 @@ class ChromecastSession extends CastSession {
           await loadMedia(
             CastMedia.file(
               filePath: path,
-              type: CastCompat.mediaTypeForContainer(probe!.container),
+              type: CastCompat.mediaTypeForContainer(probe.container),
               subtitles: subtitle != null ? [subtitle] : const [],
               defaultSubtitle: subtitle,
             ),
@@ -591,6 +663,28 @@ class ChromecastSession extends CastSession {
       throw UnsupportedMediaException('Unsupported: ${plan.reason}');
     }
 
+    // Remux plans go to the live MKV path by default. Forced plans are the
+    // explicit HLS comparison path, so they keep the old behaviour. Routing
+    // happens before the HLS builder so a live failure surfaces to the caller
+    // instead of silently falling back to HLS; Direct/UncertainDirect/
+    // Transcode/Unsupported plans are untouched.
+    final isRemuxPlan = plan is RemuxAudioPlan || plan is RemuxContainerPlan;
+    if (isRemuxPlan && useLive && forcePlan == null) {
+      final durationSeconds = probe.durationSeconds;
+      await loadLiveMkv(
+        filePath: path,
+        audioIndex: audioIdx,
+        streamType: streamType,
+        includeDuration: false,
+        duration:
+            durationSeconds != null
+                ? Duration(milliseconds: (durationSeconds * 1000).round())
+                : null,
+        audioTracks: probe.audio,
+      );
+      return;
+    }
+
     // remux/transcode -> prepare
     List<String> Function(String) builder;
     if (plan is UncertainDirectPlan) {
@@ -610,9 +704,9 @@ class ChromecastSession extends CastSession {
               videoEncoder: 'libx264',
             );
       } else {
-        final codec = probe?.video?.codec ?? 'video';
+        final codec = probe.video?.codec ?? 'video';
         final depth =
-            (probe?.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
+            (probe.video?.pixFmt ?? '').contains('10') ? '10-bit' : '8-bit';
         throw UnsupportedMediaException(
           'This Chromecast can\'t play this video ($codec $depth)',
         );
@@ -657,10 +751,14 @@ class ChromecastSession extends CastSession {
     final args = builder('/tmp/__OUTDIR__');
     debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
     final stopwatch = Stopwatch()..start();
-    final prepare = await CastPrepareSession.start(
-      inputPath: path,
-      buildArgs: builder,
-    );
+    final prepareStarter = _prepareStarter;
+    final prepare =
+        prepareStarter != null
+            ? await prepareStarter(inputPath: path, buildArgs: builder)
+            : await CastPrepareSession.start(
+              inputPath: path,
+              buildArgs: builder,
+            );
     _stopPrepare = prepare.stop;
     onPrepareStarted?.call(prepare);
     if (waitForFinish) {
@@ -755,11 +853,18 @@ class ChromecastSession extends CastSession {
   }
 
   /// Loads a local file as a live MKV stream (no disk buffering).
+  ///
+  /// [duration] and [audioTracks] let a caller that already probed the file
+  /// (notably [loadLocalFile]) hand the probe results in, so no second
+  /// FFprobe is needed. When [duration] is null and [includeDuration] is
+  /// true, the duration is probed here.
   Future<void> loadLiveMkv({
     required String filePath,
     required int audioIndex,
     required String streamType,
     required bool includeDuration,
+    Duration? duration,
+    List<AudioStream> audioTracks = const [],
   }) async {
     debugPrint(
       '[PREPDBG] loadLiveMkv: $filePath audioIndex=$audioIndex streamType=$streamType',
@@ -767,11 +872,12 @@ class ChromecastSession extends CastSession {
     // A new live load replaces any previous live runs / prepared HLS dir.
     await _cleanupCastResources();
     _releaseLiveToken();
+    _resetLiveMetadata();
     await _proxy.start(targetDeviceIp: device.address.address);
 
-    // Probe for duration
-    double? durationSec;
-    if (includeDuration) {
+    // Probe for duration only when the caller did not supply one.
+    var effectiveDuration = duration;
+    if (effectiveDuration == null && includeDuration) {
       try {
         String input = filePath;
         if (input.startsWith('content://')) {
@@ -786,41 +892,80 @@ class ChromecastSession extends CastSession {
         final info = session.getMediaInformation();
         if (info != null) {
           final dur = info.getDuration();
-          durationSec = double.tryParse(dur ?? '');
+          final durationSec = double.tryParse(dur ?? '');
+          if (durationSec != null) {
+            effectiveDuration = Duration(
+              milliseconds: (durationSec * 1000).round(),
+            );
+          }
         }
       } catch (e) {
         debugPrint('[PREPDBG] probe failed: $e');
       }
     }
 
-    final liveUrl = _proxy.registerLiveStream(
-      open: () => _liveRuns.open(
-        filePath: filePath,
-        audioIndex: audioIndex,
-      ),
-      contentType: 'video/x-matroska',
-    );
-    _liveToken = Uri.parse(liveUrl).pathSegments.last;
-
-    debugPrint('[LIVE] live URL: $liveUrl');
-    await loadMedia(
-      CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
-      contentType: 'video/x-matroska',
-      duration:
-          durationSec != null
-              ? Duration(milliseconds: (durationSec * 1000).round())
-              : null,
-      bypassTransform: true,
+    await _startLiveStream(
+      filePath: filePath,
+      audioIndex: audioIndex,
       streamType: streamType,
+      duration: effectiveDuration,
+      audioTracks: audioTracks,
+      sendDurationInLoad: true,
     );
   }
 
-  /// Restarts the live MKV stream with a different audio track, beginning at
-  /// [position] in the source file.
+  /// Registers and LOADs one live MKV stream.
   ///
-  /// The receiver's clock for the new stream starts at 0, so the real
-  /// playback position is [liveStartOffset] + [position].
-  Future<void> switchLiveAudio({
+  /// Callers must have closed the previous live run and released its token
+  /// already. Live metadata is set before the LOAD so the adapter can map
+  /// receiver time onto the virtual timeline while the restart is in flight.
+  Future<void> _startLiveStream({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    required Duration? duration,
+    required List<AudioStream> audioTracks,
+    double? startSeconds,
+    bool sendDurationInLoad = false,
+  }) async {
+    _liveFilePath = filePath;
+    _liveAudioIndex = audioIndex;
+    _liveAudioTracks = List.unmodifiable(audioTracks);
+    _liveDuration = duration;
+    _liveStreamType = streamType;
+    _isLive = true;
+
+    final liveUrl = _proxy.registerLiveStream(
+      open:
+          () => _liveRuns.open(
+            filePath: filePath,
+            audioIndex: audioIndex,
+            startSeconds: startSeconds,
+          ),
+      contentType: 'video/x-matroska',
+    );
+    _liveToken = Uri.parse(liveUrl).pathSegments.last;
+    debugPrint('[LIVE] live URL: $liveUrl');
+
+    try {
+      await loadMedia(
+        CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
+        contentType: 'video/x-matroska',
+        duration: sendDurationInLoad ? duration : null,
+        bypassTransform: true,
+        streamType: streamType,
+      );
+    } catch (e) {
+      await _liveRuns.closeAll();
+      _releaseLiveToken();
+      _resetLiveMetadata();
+      rethrow;
+    }
+  }
+
+  /// Closes the current live stream and starts a new one at [position] with
+  /// [audioIndex], keeping the current live duration and track list.
+  Future<void> _restartLiveStream({
     required String filePath,
     required int audioIndex,
     required Duration position,
@@ -838,47 +983,54 @@ class ChromecastSession extends CastSession {
         '[LIVE-SWITCH] restarting audio=$audioIndex '
         'position=${position.inMilliseconds}ms',
       );
+      final duration = _liveDuration;
+      final audioTracks = _liveAudioTracks;
       // Close old run(s) and release the old URL before registering the new
       // stream. Do not leave the old stream half-closed.
       await _cleanupCastResources();
       _releaseLiveToken();
       _liveStartOffset = position;
       await _proxy.start(targetDeviceIp: device.address.address);
-
-      final startSeconds = position.inMilliseconds / 1000.0;
-      final liveUrl = _proxy.registerLiveStream(
-        open: () => _liveRuns.open(
-          filePath: filePath,
-          audioIndex: audioIndex,
-          startSeconds: startSeconds,
-        ),
-        contentType: 'video/x-matroska',
-      );
-      _liveToken = Uri.parse(liveUrl).pathSegments.last;
-      debugPrint('[LIVE-SWITCH] new URL: $liveUrl');
-
-      await loadMedia(
-        CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
-        contentType: 'video/x-matroska',
-        bypassTransform: true,
+      await _startLiveStream(
+        filePath: filePath,
+        audioIndex: audioIndex,
         streamType: streamType,
+        duration: duration,
+        audioTracks: audioTracks,
+        startSeconds: position.inMilliseconds / 1000.0,
       );
       debugPrint(
         '[LIVE-SWITCH] audio=$audioIndex '
         'offset=${position.inMilliseconds}ms loaded',
       );
     } catch (e) {
-      // Any failure (proxy start, registration, ffmpeg start/accept timeout
-      // surfacing as a receiver LOAD failure) must leave no half-closed
-      // stream behind.
-      debugPrint('[LIVE-SWITCH] failed: $e');
+      // Any failure before _startLiveStream owns the metadata (proxy start,
+      // registration) must not leave a half-live session behind.
       await _liveRuns.closeAll();
       _releaseLiveToken();
+      _resetLiveMetadata();
       rethrow;
     } finally {
       _switchingLiveAudio = false;
     }
   }
+
+  /// Restarts the live MKV stream with a different audio track, beginning at
+  /// [position] in the source file.
+  ///
+  /// The receiver's clock for the new stream starts at 0, so the real
+  /// playback position is [liveStartOffset] + [position].
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+  }) => _restartLiveStream(
+    filePath: filePath,
+    audioIndex: audioIndex,
+    position: position,
+    streamType: streamType,
+  );
 
   /// Closes every live run (cancelling each by its own session id) and stops
   /// the HLS prepare session, which deletes its temp dir. Safe to call
@@ -907,6 +1059,18 @@ class ChromecastSession extends CastSession {
     _liveToken = null;
     _liveStartOffset = Duration.zero;
     if (token != null) _proxy.unregisterLiveStream(token);
+  }
+
+  /// Clears every piece of live state. Called on teardown and whenever a
+  /// non-live load replaces the current media.
+  void _resetLiveMetadata() {
+    _isLive = false;
+    _liveFilePath = null;
+    _liveAudioIndex = 0;
+    _liveAudioTracks = const [];
+    _liveDuration = null;
+    _liveStreamType = 'LIVE';
+    _liveStartOffset = Duration.zero;
   }
 
   String _planReason(CastPlan p) =>
@@ -1314,6 +1478,7 @@ class ChromecastSession extends CastSession {
     // media session is already gone.
     await _cleanupCastResources();
     _releaseLiveToken();
+    _resetLiveMetadata();
     _requireMediaSession();
     CastLogger.info('Chromecast: STOP');
     _stopPositionPolling();
@@ -1322,6 +1487,30 @@ class ChromecastSession extends CastSession {
 
   @override
   Future<void> seek(Duration position) async {
+    if (_isLive) {
+      final filePath = _liveFilePath;
+      if (filePath == null) {
+        throw StateError('Live seek requested without a live source file');
+      }
+      var target = position;
+      final duration = _liveDuration;
+      if (target < Duration.zero) {
+        target = Duration.zero;
+      } else if (duration != null && target > duration) {
+        target = duration;
+      }
+      CastLogger.info(
+        'Chromecast: LIVE SEEK (restart) to '
+        '${(target.inMilliseconds / 1000.0).toStringAsFixed(1)}s',
+      );
+      await _restartLiveStream(
+        filePath: filePath,
+        audioIndex: _liveAudioIndex,
+        position: target,
+        streamType: _liveStreamType,
+      );
+      return;
+    }
     _requireMediaSession();
     final seconds = position.inMilliseconds / 1000.0;
     CastLogger.info(
@@ -1448,6 +1637,7 @@ class ChromecastSession extends CastSession {
     // Close all live runs and stop the HLS prepare session.
     await _cleanupCastResources();
     _releaseLiveToken();
+    _resetLiveMetadata();
     stateMachine.transitionTo(SessionState.disconnected);
 
     // Clean up socket and proxy with a timeout so we don't hang
@@ -1471,6 +1661,7 @@ class ChromecastSession extends CastSession {
     _mediaStatusSubscription?.cancel();
     unawaited(_cleanupCastResources());
     _releaseLiveToken();
+    _resetLiveMetadata();
     unawaited(_proxy.stop());
     super.dispose();
   }
@@ -1502,6 +1693,7 @@ class ChromecastSession extends CastSession {
     _isLoadingMedia = false;
     unawaited(_cleanupCastResources());
     _releaseLiveToken();
+    _resetLiveMetadata();
     stateMachine.transitionTo(SessionState.disconnected);
   }
 

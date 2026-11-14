@@ -15,6 +15,7 @@ class CastSeekBar extends StatefulWidget {
     required this.duration,
     required this.canSeek,
     required this.restarting,
+    this.seekPreview,
   });
 
   final Duration position;
@@ -23,6 +24,9 @@ class CastSeekBar extends StatefulWidget {
 
   /// True while a live restart (seek or audio switch) is in flight.
   final bool restarting;
+
+  /// Pending relative-seek target shown instead of [position] until committed.
+  final Duration? seekPreview;
 
   @override
   State<CastSeekBar> createState() => _CastSeekBarState();
@@ -38,7 +42,9 @@ class _CastSeekBarState extends State<CastSeekBar> {
     final maxMs = widget.duration.inMilliseconds;
     final enabled = widget.canSeek && maxMs > 0;
 
-    final currentMs = _dragValue ?? widget.position.inMilliseconds.toDouble();
+    final currentMs =
+        _dragValue ??
+        (widget.seekPreview ?? widget.position).inMilliseconds.toDouble();
     final clampedMs = maxMs > 0 ? currentMs.clamp(0, maxMs).toDouble() : 0.0;
     final shownPosition = Duration(milliseconds: clampedMs.round());
 
@@ -50,30 +56,31 @@ class _CastSeekBarState extends State<CastSeekBar> {
             trackHeight: 4,
             activeTrackColor: colors.white,
             inactiveTrackColor: colors.white.withValues(alpha: 0.2),
-            thumbColor: colors.white,
+            thumbColor: colors.primary,
             overlayColor: colors.white.withValues(alpha: 0.12),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
             trackShape: const RoundedRectSliderTrackShape(),
           ),
           child: Slider(
             value: clampedMs,
             max: maxMs > 0 ? maxMs.toDouble() : 1.0,
-            onChanged:
-                enabled ? (value) => setState(() => _dragValue = value) : null,
-            onChangeStart:
-                enabled ? (value) => setState(() => _dragValue = value) : null,
-            onChangeEnd:
-                enabled
-                    ? (value) {
-                      setState(() => _dragValue = null);
-                      context.read<CastSessionBloc>().add(
-                        CastSessionEvent.seekMedia(
-                          Duration(milliseconds: value.round()),
-                        ),
-                      );
-                    }
-                    : null,
+            onChanged: enabled
+                ? (value) => setState(() => _dragValue = value)
+                : null,
+            onChangeStart: enabled
+                ? (value) => setState(() => _dragValue = value)
+                : null,
+            onChangeEnd: enabled
+                ? (value) {
+                    setState(() => _dragValue = null);
+                    context.read<CastSessionBloc>().add(
+                      CastSessionEvent.seekMedia(
+                        Duration(milliseconds: value.round()),
+                      ),
+                    );
+                  }
+                : null,
           ),
         ),
         Row(

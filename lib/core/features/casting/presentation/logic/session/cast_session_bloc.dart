@@ -41,6 +41,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   /// are dropped instead of racing it.
   bool _restartInFlight = false;
 
+  /// Accumulates quick relative-seek taps into a single seek.
+  Timer? _seekRelativeDebounce;
+
+  /// How long relative-seek taps are collected before one seek is issued.
+  static const Duration _seekRelativeDelay = Duration(milliseconds: 600);
+
   CastSessionBloc(this._castService, this._historyRepo, this._db)
     : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
@@ -50,6 +56,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     on<PauseMediaEvent>(_onPauseMedia);
     on<StopMediaEvent>(_onStopMedia);
     on<SeekMediaEvent>(_onSeekMedia);
+    on<SeekRelativeEvent>(_onSeekRelative);
+    on<CommitSeekPreviewEvent>(_onCommitSeekPreview);
     on<SelectAudioEvent>(_onSelectAudio);
     on<SetVolumeEvent>(_onSetVolume);
     on<SetSubtitleEvent>(_onSetSubtitle);
@@ -63,7 +71,10 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   @override
   void add(CastSessionEvent event) {
     if (_restartInFlight &&
-        (event is SeekMediaEvent || event is SelectAudioEvent)) {
+        (event is SeekMediaEvent ||
+            event is SeekRelativeEvent ||
+            event is CommitSeekPreviewEvent ||
+            event is SelectAudioEvent)) {
       log(
         'Dropping ${event.runtimeType} while a live restart is in flight',
         name: 'Cast Session Bloc',
@@ -129,6 +140,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       await _castService.disconnect();
       _isLoadingMedia = false;
       _restartInFlight = false;
+      _cancelSeekPreview();
       emit(const CastSessionState());
     } catch (e) {
       emit(state.copyWith(connectionError: e.toString()));
@@ -149,17 +161,20 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       return;
     }
     _isLoadingMedia = true;
+    _cancelSeekPreview();
 
     emit(
       state.copyWith(
         playbackStatus: StateStatus.loading,
         activeMedia: event.media,
         playbackError: null,
-        // A new load invalidates any audio state from the previous media.
+        // A new load invalidates any audio/seeking state from the previous
+        // media.
         audioTracks: const [],
         activeAudioIndex: null,
         isLive: false,
         restarting: false,
+        seekPreview: null,
       ),
     );
 
@@ -275,6 +290,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     StopMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    _cancelSeekPreview();
     try {
       await _castService.stop();
     } catch (e) {
@@ -287,6 +303,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           activeAudioIndex: null,
           isLive: false,
           restarting: false,
+          seekPreview: null,
         ),
       );
     }
@@ -296,20 +313,89 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     SeekMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    // A slider drag supersedes any pending relative-seek preview.
+    _cancelSeekPreview();
     // A restart owns the stream; seeking now would race the new LOAD.
+    if (state.restarting || _restartInFlight) {
+      if (state.seekPreview != null) {
+        emit(state.copyWith(seekPreview: null));
+      }
+      return;
+    }
+    await _seekTo(event.position, emit);
+  }
+
+  /// Accumulates relative-seek taps and commits one seek after a short pause.
+  void _onSeekRelative(
+    SeekRelativeEvent event,
+    Emitter<CastSessionState> emit,
+  ) {
+    final device = state.activeDevice;
+    if (state.activeMedia == null || device == null) return;
+    if (!device.capabilities.canSeek) return;
+    if (state.duration <= Duration.zero) return;
     if (state.restarting || _restartInFlight) return;
+
+    var target = (state.seekPreview ?? state.position) + event.delta;
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > state.duration) target = state.duration;
+
+    _seekRelativeDebounce?.cancel();
+    _seekRelativeDebounce = Timer(_seekRelativeDelay, () {
+      _seekRelativeDebounce = null;
+      add(const CommitSeekPreviewEvent());
+    });
+
+    emit(state.copyWith(seekPreview: target));
+  }
+
+  Future<void> _onCommitSeekPreview(
+    CommitSeekPreviewEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final target = state.seekPreview;
+    if (target == null) return;
+    if (state.restarting || _restartInFlight) {
+      emit(state.copyWith(seekPreview: null));
+      return;
+    }
+    await _seekTo(target, emit, fromPreview: true);
+  }
+
+  /// Runs the existing seek path and clears the preview when it settles.
+  Future<void> _seekTo(
+    Duration position,
+    Emitter<CastSessionState> emit, {
+    bool fromPreview = false,
+  }) async {
+    if (state.restarting || _restartInFlight) {
+      if (fromPreview && state.seekPreview != null) {
+        emit(state.copyWith(seekPreview: null));
+      }
+      return;
+    }
 
     final live = state.isLive;
     _restartInFlight = live;
     if (live) emit(state.copyWith(restarting: true));
     try {
-      await _castService.seek(event.position);
+      await _castService.seek(position);
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
     } finally {
       _restartInFlight = false;
-      if (live) emit(state.copyWith(restarting: false));
+      emit(
+        state.copyWith(
+          restarting: live ? false : state.restarting,
+          seekPreview: fromPreview ? null : state.seekPreview,
+        ),
+      );
     }
+  }
+
+  void _cancelSeekPreview() {
+    _seekRelativeDebounce?.cancel();
+    _seekRelativeDebounce = null;
   }
 
   Future<void> _onSelectAudio(
@@ -327,7 +413,14 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     if (!state.audioTracks.any((t) => t.index == event.index)) return;
 
     _restartInFlight = true;
-    emit(state.copyWith(restarting: true, playbackError: null));
+    _cancelSeekPreview();
+    emit(
+      state.copyWith(
+        restarting: true,
+        playbackError: null,
+        seekPreview: null,
+      ),
+    );
     try {
       await _castService.switchLiveAudio(
         filePath: media.uri,
@@ -663,6 +756,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       }
       _isLoadingMedia = false;
       _restartInFlight = false;
+      _cancelSeekPreview();
       emit(const CastSessionState());
       return;
     }
@@ -703,6 +797,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   Future<void> close() {
     _isLoadingMedia = false;
     _restartInFlight = false;
+    _cancelSeekPreview();
     _stateSubscription?.cancel();
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();

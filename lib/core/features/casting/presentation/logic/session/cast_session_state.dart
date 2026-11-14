@@ -26,6 +26,9 @@ abstract class CastSessionState with _$CastSessionState {
     int? activeAudioIndex,
     @Default(false) bool isLive,
     @Default(false) bool restarting,
+    /// Accumulated target of pending relative-seek taps, shown by the seek bar
+    /// and the time labels until the debounced seek is committed.
+    Duration? seekPreview,
   }) = _CastSessionState;
   bool get isCasting =>
       activeDevice != null &&

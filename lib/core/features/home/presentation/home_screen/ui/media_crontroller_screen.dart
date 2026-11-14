@@ -1,17 +1,15 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/subtitle/subtitle_extraction_bloc.dart';
-import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_audio_controls.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_seek_bar.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
-import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_toast.dart';
 
@@ -61,50 +59,7 @@ class _MediaControllerScreenState extends State<MediaControllerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(slivers: [Header(), Body()]);
-  }
-}
-
-class Header extends StatelessWidget {
-  const Header({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SliverAppBar(
-      expandedHeight: 360,
-      centerTitle: true,
-      pinned: true,
-      stretch: true,
-      elevation: 0,
-      automaticallyImplyLeading: false,
-      scrolledUnderElevation: 20,
-      leading: BackButton(),
-      surfaceTintColor: Colors.transparent,
-      actions: [
-        IconButton(
-          onPressed: () {
-            QueueManagerScreen.show(context);
-          },
-          icon: Icon(Icons.queue_music),
-        ),
-      ],
-      flexibleSpace: LayoutBuilder(
-        builder: (context, constraints) {
-          return FlexibleSpaceBar(
-            centerTitle: true,
-            background:
-                BlocSelector<CastSessionBloc, CastSessionState, Uint8List?>(
-                  selector: (state) {
-                    return state.activeMedia?.thumbnailBytes;
-                  },
-                  builder: (context, thumbnailBytes) {
-                    return CurrentlyPlayingBG(thumbnailBytes: thumbnailBytes);
-                  },
-                ),
-          );
-        },
-      ),
-    );
+    return CustomScrollView(slivers: [Body()]);
   }
 }
 
@@ -132,6 +87,7 @@ class Body extends StatelessWidget {
         int?,
         bool,
         bool,
+        Duration?,
       )
     >(
       selector: (state) {
@@ -149,6 +105,7 @@ class Body extends StatelessWidget {
           state.activeAudioIndex,
           state.isLive,
           state.restarting,
+          state.seekPreview,
         );
       },
       builder: (context, state) {
@@ -166,6 +123,7 @@ class Body extends StatelessWidget {
           activeAudioIndex,
           isLive,
           restarting,
+          seekPreview,
         ) = state;
         if (preparing) {
           return const SliverToBoxAdapter(
@@ -176,17 +134,53 @@ class Body extends StatelessWidget {
           return SliverToBoxAdapter(child: Center(child: Text(prepareError)));
         }
         return SliverPadding(
-          padding: .symmetric(horizontal: 16),
+          padding: .symmetric(horizontal: 16, vertical: 16),
           sliver: SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: .start,
               children: [
+                Row(
+                  mainAxisAlignment: .spaceBetween,
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        context.pop();
+                      },
+                      child: Icon(
+                        Icons.keyboard_arrow_down,
+                        color: colors.white,
+                        size: 28,
+                      ),
+                    ),
+
+                    Expanded(
+                      child: Text(
+                        media?.title ?? 'Unknown Title',
+                        style: typo.titleLarge.copyWith(
+                          color: colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
                 SizedBox(height: 16),
-                Text(
-                  media?.title ?? 'Unknown Title',
-                  style: typo.titleLarge.copyWith(color: colors.white),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Container(
+                  height: 200,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: .circular(12),
+                    gradient: context.appGradients.surface,
+                    image: media?.thumbnailBytes != null
+                        ? DecorationImage(
+                            fit: .cover,
+                            image: MemoryImage(media!.thumbnailBytes!),
+                          )
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 CastSeekBar(
@@ -194,6 +188,7 @@ class Body extends StatelessWidget {
                   duration: duration,
                   canSeek: device?.capabilities.canSeek ?? false,
                   restarting: restarting,
+                  seekPreview: seekPreview,
                 ),
                 SizedBox(height: 20),
                 PlayerControls(),
@@ -235,10 +230,9 @@ class Body extends StatelessWidget {
                           SubtitleSwitcher.show(
                             context,
                             activeSubtitle: subtitle,
-                            subtitles:
-                                discoveredSubtitles.isNotEmpty
-                                    ? discoveredSubtitles
-                                    : (media?.subtitles ?? []),
+                            subtitles: discoveredSubtitles.isNotEmpty
+                                ? discoveredSubtitles
+                                : (media?.subtitles ?? []),
                             isLive: isLive,
                           );
                         },
@@ -337,12 +331,11 @@ class SubtitleSwitcher extends StatefulWidget {
       useRootNavigator: true,
       showDragHandle: true,
       backgroundColor: context.appColors.surfaceLight,
-      builder:
-          (sheetContext) => SubtitleSwitcher(
-            activeSubtitle: activeSubtitle,
-            subtitles: subtitles,
-            isLive: isLive,
-          ),
+      builder: (sheetContext) => SubtitleSwitcher(
+        activeSubtitle: activeSubtitle,
+        subtitles: subtitles,
+        isLive: isLive,
+      ),
     );
   }
 

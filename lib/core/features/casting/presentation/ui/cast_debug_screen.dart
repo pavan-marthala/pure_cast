@@ -307,6 +307,23 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
     _logLine('memory cleared');
   }
 
+  /// Logs the seek experiment sample for one second of the RXDBG poll.
+  ///
+  /// `[SEEKTEST]` shows the receiver's raw `currentTime` (the engine's
+  /// unmapped position, as printed by [ICastService.getDebugMediaStatus]) and
+  /// the mapped UI position. `supportedMediaCommands` is not exposed by the
+  /// adapter; it is visible in the raw MEDIA_STATUS payload logged by the
+  /// engine as `[RXDBG-RAW] ns=urn:x-cast:com.google.cast.media`.
+  void _logSeekTest(String status, CastSessionBloc bloc) {
+    final raw =
+        RegExp(r'position=(\S+)').firstMatch(status)?.group(1) ?? '<none>';
+    _logLine(
+      '[SEEKTEST] rawCurrentTime=$raw '
+      'mapped=${bloc.state.position.inMilliseconds}ms '
+      'supportedMediaCommands=n/a (see [RXDBG-RAW])',
+    );
+  }
+
   Future<void> _forcedPlan(String plan) async {
     final res = await FilePicker.pickFiles();
     if (res.isEmpty) return;
@@ -345,6 +362,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       for (var i = 0; i < 20; i++) {
         await Future.delayed(const Duration(seconds: 1));
         final status = await service.getDebugMediaStatus();
+        _logSeekTest(status, bloc);
         _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
       service.disableRawMessageLogging();
@@ -382,6 +400,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
       for (var i = 0; i < 20; i++) {
         await Future.delayed(const Duration(seconds: 1));
         final status = await service.getDebugMediaStatus();
+        _logSeekTest(status, bloc);
         _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
       service.disableRawMessageLogging();
@@ -435,6 +454,7 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
             'receiver=${service.position} offset=$offset',
           );
         }
+        _logSeekTest(status, bloc);
         _logLine('[RXDBG] t=${i + 1}s\n$status');
       }
       service.disableRawMessageLogging();
@@ -528,6 +548,14 @@ class _CastDebugScreenState extends State<CastDebugScreen> {
             onChanged: (v) {
               setState(() => _useLivePathForRemux = v);
               _logLine('use live path for remux plans = $v');
+            },
+          ),
+          SwitchListTile(
+            title: const Text('streamType LIVE (experiment)'),
+            value: _useLive,
+            onChanged: (v) {
+              setState(() => _useLive = v);
+              _logLine('streamType LIVE experiment = $v');
             },
           ),
           DropdownButton<String>(

@@ -45,3 +45,11 @@ class RecordingCastSessionBloc extends CastSessionBloc {
     events.add(event);
   }
 }
+
+/// A recording bloc that starts from [initial] so widgets can be tested in a
+/// specific state (duration, capabilities, restarting, preview, ...).
+class StateCastSessionBloc extends RecordingCastSessionBloc {
+  StateCastSessionBloc(CastSessionState initial) {
+    emit(initial);
+  }
+}

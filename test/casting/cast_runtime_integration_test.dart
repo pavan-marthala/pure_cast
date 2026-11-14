@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/database/app_database.dart';
@@ -1185,6 +1186,294 @@ void main() {
       expect(fakeCastService.lastSubtitle, equals(subtitle));
 
       await bloc.close();
+    });
+  });
+
+  group('CastSessionBloc - relative seek', () {
+    const device = PureCastDevice(
+      id: 'tv_rel',
+      name: 'Living Room TV',
+      protocol: PureCastProtocol.chromecast,
+      host: '192.168.1.30',
+      port: 8009,
+      capabilities: PureCastCapabilities(canSeek: true),
+    );
+    const media = PureCastMedia(
+      uri: '/videos/movie.mkv',
+      type: PureCastMediaType.mkv,
+      title: 'Movie',
+      isLocalFile: true,
+    );
+    const otherMedia = PureCastMedia(
+      uri: '/videos/other.mkv',
+      type: PureCastMediaType.mkv,
+      title: 'Other',
+      isLocalFile: true,
+    );
+
+    CastSessionBloc liveBlocIn(FakeAsync async) {
+      fakeCastService.loadShouldBeLive = true;
+      fakeCastService.liveTracksOnLoad = const [];
+      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      bloc.add(const ConnectDeviceEvent(device));
+      async.flushMicrotasks();
+      bloc.add(const LoadMediaEvent(media));
+      async.flushMicrotasks();
+      return bloc;
+    }
+
+    void setDuration(
+      FakeAsync async,
+      CastSessionBloc bloc,
+      Duration duration,
+    ) {
+      bloc.add(DurationUpdatedEvent(duration));
+      async.flushMicrotasks();
+    }
+
+    void setPosition(
+      FakeAsync async,
+      CastSessionBloc bloc,
+      Duration position,
+    ) {
+      bloc.add(PositionUpdatedEvent(position));
+      async.flushMicrotasks();
+    }
+
+    void tap(FakeAsync async, CastSessionBloc bloc, int seconds) {
+      bloc.add(SeekRelativeEvent(Duration(seconds: seconds)));
+      async.flushMicrotasks();
+    }
+
+    void close(FakeAsync async, CastSessionBloc bloc) {
+      unawaited(bloc.close());
+      async.flushMicrotasks();
+    }
+
+    test('a single tap issues exactly one seek after 600 ms', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+
+        tap(async, bloc, 10);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        async.elapse(const Duration(milliseconds: 599));
+        expect(fakeCastService.seekCalled, 0);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        async.elapse(const Duration(milliseconds: 1));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 1);
+        expect(fakeCastService.seekPosition, const Duration(seconds: 10));
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('three taps within 600 ms issue one seek with the summed delta', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+
+        tap(async, bloc, 10);
+        async.elapse(const Duration(milliseconds: 200));
+        tap(async, bloc, 10);
+        async.elapse(const Duration(milliseconds: 200));
+        tap(async, bloc, 10);
+
+        expect(bloc.state.seekPreview, const Duration(seconds: 30));
+
+        async.elapse(const Duration(milliseconds: 599));
+        expect(fakeCastService.seekCalled, 0);
+
+        async.elapse(const Duration(milliseconds: 1));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 1);
+        expect(fakeCastService.seekPosition, const Duration(seconds: 30));
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('a backward and a forward tap accumulate correctly', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+        setPosition(async, bloc, const Duration(seconds: 20));
+
+        tap(async, bloc, -10);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        async.elapse(const Duration(milliseconds: 300));
+        tap(async, bloc, 30);
+        expect(bloc.state.seekPreview, const Duration(seconds: 40));
+
+        async.elapse(const Duration(milliseconds: 600));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 1);
+        expect(fakeCastService.seekPosition, const Duration(seconds: 40));
+
+        close(async, bloc);
+      });
+    });
+
+    test('clamps the target at zero', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+        setPosition(async, bloc, const Duration(seconds: 5));
+
+        tap(async, bloc, -10);
+        expect(bloc.state.seekPreview, Duration.zero);
+
+        async.elapse(const Duration(milliseconds: 600));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekPosition, Duration.zero);
+
+        close(async, bloc);
+      });
+    });
+
+    test('clamps the target at the duration', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(seconds: 600));
+        setPosition(async, bloc, const Duration(seconds: 590));
+
+        tap(async, bloc, 30);
+        expect(bloc.state.seekPreview, const Duration(seconds: 600));
+
+        async.elapse(const Duration(milliseconds: 600));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekPosition, const Duration(seconds: 600));
+
+        close(async, bloc);
+      });
+    });
+
+    test('taps while a restart is in flight are ignored', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+        fakeCastService.seekGate = Completer<void>();
+
+        tap(async, bloc, 10);
+        async.elapse(const Duration(milliseconds: 600));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 1);
+        expect(bloc.state.restarting, isTrue);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        tap(async, bloc, 30);
+        expect(fakeCastService.seekCalled, 1);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        fakeCastService.seekGate!.complete();
+        async.flushMicrotasks();
+
+        expect(bloc.state.restarting, isFalse);
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('taps are ignored when the duration is zero', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+
+        tap(async, bloc, 10);
+        expect(bloc.state.seekPreview, isNull);
+
+        async.elapse(const Duration(milliseconds: 700));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 0);
+
+        close(async, bloc);
+      });
+    });
+
+    test('the pending timer is cancelled by stop', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+
+        tap(async, bloc, 10);
+        expect(bloc.state.seekPreview, const Duration(seconds: 10));
+
+        bloc.add(const StopMediaEvent());
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 700));
+
+        expect(fakeCastService.seekCalled, 0);
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('the pending timer is cancelled by disconnect', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+
+        tap(async, bloc, 10);
+
+        bloc.add(const DisconnectDeviceEvent());
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 700));
+
+        expect(fakeCastService.seekCalled, 0);
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('the pending timer is cancelled by a new media load', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+
+        tap(async, bloc, 10);
+
+        bloc.add(const LoadMediaEvent(otherMedia));
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 700));
+
+        expect(fakeCastService.seekCalled, 0);
+        expect(bloc.state.seekPreview, isNull);
+
+        close(async, bloc);
+      });
+    });
+
+    test('the preview is cleared after a failed seek', () {
+      fakeAsync((async) {
+        final bloc = liveBlocIn(async);
+        setDuration(async, bloc, const Duration(minutes: 10));
+        fakeCastService.seekError = Exception('seek failed');
+
+        tap(async, bloc, 10);
+        async.elapse(const Duration(milliseconds: 600));
+        async.flushMicrotasks();
+
+        expect(fakeCastService.seekCalled, 1);
+        expect(bloc.state.seekPreview, isNull);
+        expect(bloc.state.playbackError, contains('seek failed'));
+
+        close(async, bloc);
+      });
     });
   });
 }

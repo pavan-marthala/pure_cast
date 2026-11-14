@@ -121,4 +121,30 @@ void main() {
     // fake-async zone (broadcast stream done event is not delivered).
     unawaited(bloc.close());
   });
+
+  testWidgets('shows the pending seek preview in the slider and the label', (
+    tester,
+  ) async {
+    final bloc = RecordingCastSessionBloc();
+    await tester.pumpWidget(
+      _wrap(
+        bloc: bloc,
+        child: const CastSeekBar(
+          position: Duration(seconds: 10),
+          duration: Duration(seconds: 100),
+          canSeek: true,
+          restarting: false,
+          seekPreview: Duration(seconds: 42),
+        ),
+      ),
+    );
+
+    final slider = tester.widget<Slider>(find.byType(Slider));
+    expect(slider.value, 42000);
+    expect(find.text('00:42'), findsOneWidget);
+    expect(find.text('00:10'), findsNothing);
+    expect(find.text('01:40'), findsOneWidget);
+
+    unawaited(bloc.close());
+  });
 }

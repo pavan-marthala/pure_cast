@@ -42,12 +42,26 @@ class CurrentlyPlaying extends StatelessWidget {
           child: ClipRRect(
             borderRadius: .circular(12),
             child: SizedBox(
-              height: 260,
+              height: 240,
               width: double.infinity,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
                   CurrentlyPlayingBG(
                     thumbnailBytes: sessionState.activeMedia?.thumbnailBytes,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.25),
+                          Colors.black.withValues(alpha: 0.45),
+                          Colors.black.withValues(alpha: 0.85),
+                        ],
+                      ),
+                    ),
                   ),
                   Padding(
                     padding: .all(20),
@@ -118,7 +132,9 @@ class CurrentlyPlaying extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 media?.title ?? "Unknown Title",
-                                style: typo.titleLarge.copyWith(
+                                style: typo.titleMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
                                   color: colors.white,
                                 ),
                                 maxLines: 1,
@@ -127,17 +143,15 @@ class CurrentlyPlaying extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 6),
                         CastSeekBar(
                           position: sessionState.position,
                           duration: sessionState.duration,
                           canSeek:
-                              sessionState
-                                  .activeDevice
-                                  ?.capabilities
-                                  .canSeek ??
+                              sessionState.activeDevice?.capabilities.canSeek ??
                               false,
                           restarting: sessionState.restarting,
+                          seekPreview: sessionState.seekPreview,
                         ),
                       ],
                     ),

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/dart_cast_adapter.dart';
@@ -287,6 +288,55 @@ void main() {
       );
     });
 
+    test('a pending restart is disarmed after 5 seconds without a new '
+        'session, so positions can never be dropped forever', () {
+      fakeAsync((async) {
+        final mapper = LiveTimelineMapper();
+        mapper.armRestart(10);
+        expect(mapper.isRestartPending, isTrue);
+
+        async.elapse(const Duration(seconds: 4));
+        expect(mapper.isRestartPending, isTrue);
+
+        async.elapse(const Duration(seconds: 1));
+        expect(mapper.isRestartPending, isFalse);
+        expect(async.nonPeriodicTimerCount, 0);
+
+        // Events from the old id are accepted again.
+        expect(
+          mapper.mapPosition(
+            receiverPosition: const Duration(seconds: 2),
+            offset: Duration.zero,
+            mediaSessionId: 10,
+          ),
+          const Duration(seconds: 2),
+        );
+
+        mapper.dispose();
+      });
+    });
+
+    test('the first event of the new session cancels the fail-safe timer', () {
+      fakeAsync((async) {
+        final mapper = LiveTimelineMapper()..armRestart(10);
+        expect(async.nonPeriodicTimerCount, 1);
+
+        expect(
+          mapper.mapPosition(
+            receiverPosition: const Duration(seconds: 1),
+            offset: const Duration(minutes: 1),
+            mediaSessionId: 11,
+          ),
+          const Duration(minutes: 1, seconds: 1),
+        );
+        expect(mapper.isRestartPending, isFalse);
+        expect(async.nonPeriodicTimerCount, 0);
+
+        async.elapse(const Duration(seconds: 10));
+        mapper.dispose();
+      });
+    });
+
     test('duration fallback uses the known live duration', () {
       final mapper = LiveTimelineMapper();
       expect(
@@ -567,6 +617,83 @@ void main() {
 
       expect(positions, [const Duration(seconds: 3)]);
       await sub.cancel();
+    });
+
+    test('switching from a direct load enters live and keeps the supplied '
+        'duration and audio tracks', () async {
+      await connect();
+
+      final directFuture = session.loadMedia(
+        CastMedia(
+          url: 'http://192.168.1.100/video.mkv',
+          type: CastMediaType.mkv,
+        ),
+      );
+      final directLoad = await _awaitSentLoad(channel);
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(
+          mediaSessionId: 5,
+          requestId: directLoad.payload['requestId'] as int,
+        ),
+      );
+      await directFuture;
+      await _settle();
+
+      expect(adapter.isLiveStream, isFalse);
+      expect(adapter.audioTracks, isEmpty);
+
+      final durations = <Duration>[];
+      final durationSub = adapter.durationStream.listen(durations.add);
+
+      const tracks = [
+        PureCastAudioTrack(
+          index: 0,
+          language: 'eng',
+          codec: 'ac3',
+          channels: 6,
+          isDefault: true,
+        ),
+        PureCastAudioTrack(
+          index: 1,
+          language: 'spa',
+          codec: 'ac3',
+          channels: 2,
+        ),
+      ];
+
+      final switchFuture = adapter.switchLiveAudio(
+        filePath: '/videos/movie.mkv',
+        audioIndex: 1,
+        position: const Duration(seconds: 30),
+        streamType: 'BUFFERED',
+        duration: const Duration(minutes: 90),
+        audioTracks: tracks,
+      );
+      final loadMsg = await _awaitSentLoad(channel, skip: 1);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 1);
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(
+          mediaSessionId: 11,
+          currentTime: 0.0,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await switchFuture;
+      await _settle();
+
+      expect(adapter.isLiveStream, isTrue);
+      expect(adapter.liveStartOffset, const Duration(seconds: 30));
+      expect(adapter.activeAudioIndex, 1);
+      expect(adapter.audioTracks, equals(tracks));
+      expect(durations, contains(const Duration(minutes: 90)));
+
+      await durationSub.cancel();
     });
   });
 }

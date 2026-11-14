@@ -11,6 +11,7 @@ abstract class CastSessionEvent with _$CastSessionEvent {
   const factory CastSessionEvent.pauseMedia() = PauseMediaEvent;
   const factory CastSessionEvent.stopMedia() = StopMediaEvent;
   const factory CastSessionEvent.seekMedia(Duration position) = SeekMediaEvent;
+  const factory CastSessionEvent.selectAudio(int index) = SelectAudioEvent;
   const factory CastSessionEvent.setVolume(double volume) = SetVolumeEvent;
   const factory CastSessionEvent.setSubtitle(PureCastSubtitleTrack? subtitle) =
       SetSubtitleEvent;

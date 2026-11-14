@@ -29,12 +29,23 @@ abstract class ICastService {
 
   /// Restarts the live MKV stream with another audio track, resuming at
   /// [position] in the source file.
+  ///
+  /// [duration] and [audioTracks] describe the source file. Supply them when
+  /// switching away from a direct (non-live) load, which has no live metadata
+  /// to preserve.
   Future<void> switchLiveAudio({
     required String filePath,
     required int audioIndex,
     required Duration position,
     required String streamType,
+    Duration? duration,
+    List<PureCastAudioTrack>? audioTracks,
   });
+
+  /// Probes a local file and returns its audio tracks.
+  ///
+  /// [PureCastAudioTrack.index] is the 0-based index among audio streams.
+  Future<List<PureCastAudioTrack>> probeAudioTracks(String filePath);
 
   /// Source offset of the current live stream (zero when not restarted).
   Duration get liveStartOffset;

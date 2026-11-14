@@ -18,6 +18,13 @@ part 'cast_session_event.dart';
 part 'cast_session_state.dart';
 part 'cast_session_bloc.freezed.dart';
 
+/// Message emitted when the user tries to change subtitles on the live stream.
+///
+/// The live MKV path does not carry subtitle tracks yet; restarting the media
+/// to attach one would reset the audio track and the position.
+const String kLiveSubtitlesUnavailableMessage =
+    "Subtitles aren't available for this stream yet";
+
 @injectable
 class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   final ICastService _castService;
@@ -29,6 +36,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   StreamSubscription<Duration>? _durationSubscription;
   bool _isLoadingMedia = false;
 
+  /// True while a live restart (audio switch or seek) is awaiting the engine.
+  /// Checked when an event is enqueued so commands issued during the restart
+  /// are dropped instead of racing it.
+  bool _restartInFlight = false;
+
   CastSessionBloc(this._castService, this._historyRepo, this._db)
     : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
@@ -38,6 +50,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     on<PauseMediaEvent>(_onPauseMedia);
     on<StopMediaEvent>(_onStopMedia);
     on<SeekMediaEvent>(_onSeekMedia);
+    on<SelectAudioEvent>(_onSelectAudio);
     on<SetVolumeEvent>(_onSetVolume);
     on<SetSubtitleEvent>(_onSetSubtitle);
     on<ExtractAndSetSubtitleEvent>(_onExtractAndSetSubtitle);
@@ -45,6 +58,19 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     on<PositionUpdatedEvent>(_onPositionUpdated);
     on<DurationUpdatedEvent>(_onDurationUpdated);
     _listenToStreams();
+  }
+
+  @override
+  void add(CastSessionEvent event) {
+    if (_restartInFlight &&
+        (event is SeekMediaEvent || event is SelectAudioEvent)) {
+      log(
+        'Dropping ${event.runtimeType} while a live restart is in flight',
+        name: 'Cast Session Bloc',
+      );
+      return;
+    }
+    super.add(event);
   }
 
   void _listenToStreams() {
@@ -102,6 +128,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     try {
       await _castService.disconnect();
       _isLoadingMedia = false;
+      _restartInFlight = false;
       emit(const CastSessionState());
     } catch (e) {
       emit(state.copyWith(connectionError: e.toString()));
@@ -128,6 +155,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         playbackStatus: StateStatus.loading,
         activeMedia: event.media,
         playbackError: null,
+        // A new load invalidates any audio state from the previous media.
+        audioTracks: const [],
+        activeAudioIndex: null,
+        isLive: false,
+        restarting: false,
       ),
     );
 
@@ -150,7 +182,30 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       if (event.media.isLocalFile) {
         emit(state.copyWith(preparing: false));
       }
-      emit(state.copyWith(playbackStatus: StateStatus.loaded));
+
+      // Fill the audio state from the engine. Remux plans are live and expose
+      // their tracks directly; a direct load has no live metadata, so probe
+      // the file (best effort — failures never block playback).
+      final isLive = _castService.isLiveStream;
+      var tracks = _castService.audioTracks;
+      int? activeIndex = isLive ? _castService.activeAudioIndex : null;
+      if (!isLive && event.media.isLocalFile) {
+        final probed = await _probeAudioTracks(event.media.uri);
+        if (probed != null) {
+          tracks = probed;
+          activeIndex = _defaultAudioTrackIndex(probed);
+        }
+      }
+
+      emit(
+        state.copyWith(
+          playbackStatus: StateStatus.loaded,
+          audioTracks: tracks,
+          activeAudioIndex: activeIndex,
+          isLive: isLive,
+          restarting: false,
+        ),
+      );
 
       // dart_cast LOAD already sets autoplay: true — the receiver should
       // start playing automatically. Only send PLAY if the session isn't
@@ -224,6 +279,16 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       await _castService.stop();
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
+    } finally {
+      _restartInFlight = false;
+      emit(
+        state.copyWith(
+          audioTracks: const [],
+          activeAudioIndex: null,
+          isLive: false,
+          restarting: false,
+        ),
+      );
     }
   }
 
@@ -231,10 +296,67 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     SeekMediaEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    // A restart owns the stream; seeking now would race the new LOAD.
+    if (state.restarting || _restartInFlight) return;
+
+    final live = state.isLive;
+    _restartInFlight = live;
+    if (live) emit(state.copyWith(restarting: true));
     try {
       await _castService.seek(event.position);
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
+    } finally {
+      _restartInFlight = false;
+      if (live) emit(state.copyWith(restarting: false));
+    }
+  }
+
+  Future<void> _onSelectAudio(
+    SelectAudioEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final media = state.activeMedia;
+    final device = state.activeDevice;
+
+    if (media == null || device == null) return;
+    if (state.restarting || _restartInFlight) return;
+    if (event.index == state.activeAudioIndex) return;
+    if (device.protocol != PureCastProtocol.chromecast) return;
+    if (!device.capabilities.canChangeAudioTrack) return;
+    if (!state.audioTracks.any((t) => t.index == event.index)) return;
+
+    _restartInFlight = true;
+    emit(state.copyWith(restarting: true, playbackError: null));
+    try {
+      await _castService.switchLiveAudio(
+        filePath: media.uri,
+        audioIndex: event.index,
+        position: state.position,
+        // The app's normal load path uses the adapter default.
+        streamType: 'BUFFERED',
+        duration: state.duration,
+        audioTracks: state.audioTracks,
+      );
+
+      final refreshed = _castService.audioTracks;
+      emit(
+        state.copyWith(
+          audioTracks: refreshed.isNotEmpty ? refreshed : state.audioTracks,
+          activeAudioIndex: event.index,
+          isLive: _castService.isLiveStream,
+          restarting: false,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          restarting: false,
+          playbackError: e.toString(),
+        ),
+      );
+    } finally {
+      _restartInFlight = false;
     }
   }
 
@@ -254,6 +376,17 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     SetSubtitleEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    // The live MKV path does not carry subtitles. Attaching one would reload
+    // the media, reset the audio track and jump back to the start.
+    if (state.isLive && event.subtitle != null) {
+      emit(
+        state.copyWith(
+          prepareSubtitlesError: kLiveSubtitlesUnavailableMessage,
+        ),
+      );
+      return;
+    }
+
     try {
       var subtitle = event.subtitle;
 
@@ -365,6 +498,29 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     }
   }
 
+  Future<List<PureCastAudioTrack>?> _probeAudioTracks(String filePath) async {
+    try {
+      return await _castService
+          .probeAudioTracks(filePath)
+          .timeout(const Duration(seconds: 8));
+    } catch (e) {
+      log(
+        'Audio track probe failed for $filePath',
+        error: e,
+        name: 'Cast Session Bloc',
+      );
+      return null;
+    }
+  }
+
+  int? _defaultAudioTrackIndex(List<PureCastAudioTrack> tracks) {
+    if (tracks.isEmpty) return null;
+    for (final track in tracks) {
+      if (track.isDefault) return track.index;
+    }
+    return tracks.first.index;
+  }
+
   bool _isExtractedSubtitle(PureCastSubtitleTrack subtitle) {
     // Check if the URL points to an extracted subtitle file (not the media file)
     return subtitle.url.contains('pure_cast_subtitles') ||
@@ -383,6 +539,15 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   ) async {
     final media = state.activeMedia;
     if (media == null) return;
+
+    if (state.isLive) {
+      emit(
+        state.copyWith(
+          prepareSubtitlesError: kLiveSubtitlesUnavailableMessage,
+        ),
+      );
+      return;
+    }
 
     try {
       final extractionService = getIt<SubtitleExtractionService>();
@@ -496,6 +661,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         emit(state.copyWith(sessionState: event.newState));
         return;
       }
+      _isLoadingMedia = false;
+      _restartInFlight = false;
       emit(const CastSessionState());
       return;
     }
@@ -535,6 +702,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   @override
   Future<void> close() {
     _isLoadingMedia = false;
+    _restartInFlight = false;
     _stateSubscription?.cancel();
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();

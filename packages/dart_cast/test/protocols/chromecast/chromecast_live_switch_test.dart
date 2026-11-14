@@ -439,6 +439,81 @@ void main() {
       expect(harness.cancelsFor(1), 1);
     });
 
+    test('switching away from a direct load uses the supplied duration and '
+        'tracks, because a direct load has no live metadata', () async {
+      await connect();
+
+      // Direct (non-live) load: h264/aac mkv plans to DirectPlan.
+      nextProbe = _makeProbe(
+        audioCodec: 'aac',
+        container: 'mkv',
+        durationSeconds: 100,
+      );
+      final directFuture = session.loadLocalFile(
+        '/videos/movie.mkv',
+        streamType: 'BUFFERED',
+      );
+      final directLoad = await _awaitSentLoad(channel);
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 5,
+          requestId: directLoad.payload['requestId'] as int,
+        ),
+      );
+      await directFuture;
+
+      expect(session.isLive, isFalse);
+      expect(session.liveAudioTracks, isEmpty);
+      expect(session.liveDuration, isNull);
+
+      const suppliedDuration = Duration(minutes: 90);
+      const suppliedTracks = [
+        AudioStream(
+          index: 1,
+          codec: 'ac3',
+          channels: 6,
+          language: 'eng',
+          isDefault: true,
+        ),
+        AudioStream(index: 2, codec: 'aac', language: 'spa'),
+      ];
+
+      final switchFuture = session.switchLiveAudio(
+        filePath: '/videos/movie.mkv',
+        audioIndex: 1,
+        position: const Duration(seconds: 30),
+        streamType: 'BUFFERED',
+        duration: suppliedDuration,
+        audioTracks: suppliedTracks,
+      );
+
+      final loadMsg = await _awaitSentLoad(channel, skip: 1);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 1);
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: 11,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await switchFuture;
+
+      expect(session.isLive, isTrue);
+      expect(session.liveStartOffset, const Duration(seconds: 30));
+      expect(session.liveAudioIndex, 1);
+      expect(session.liveDuration, suppliedDuration);
+      expect(session.liveAudioTracks, equals(suppliedTracks));
+    });
+
     test('two switches in a row leave only the newest run alive', () async {
       await connect();
       await startInitialLiveStream();

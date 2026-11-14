@@ -22,6 +22,10 @@ abstract class CastSessionState with _$CastSessionState {
     String? prepareSubtitlesError,
     @Default(Duration.zero) Duration duration,
     @Default(1.0) double volume,
+    @Default(<PureCastAudioTrack>[]) List<PureCastAudioTrack> audioTracks,
+    int? activeAudioIndex,
+    @Default(false) bool isLive,
+    @Default(false) bool restarting,
   }) = _CastSessionState;
   bool get isCasting =>
       activeDevice != null &&

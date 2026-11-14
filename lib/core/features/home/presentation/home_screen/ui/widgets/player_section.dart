@@ -5,8 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/media_crontroller_screen.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_seek_bar.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
-import 'package:pure_cast/core/utils/app_utils.dart';
 
 class PlayerSection extends StatelessWidget {
   const PlayerSection({super.key});
@@ -128,35 +128,16 @@ class CurrentlyPlaying extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        LinearProgressIndicator(
-                          value: sessionState.duration.inMilliseconds > 0
-                              ? sessionState.position.inMilliseconds /
-                                    sessionState.duration.inMilliseconds
-                              : 0.0,
-                          backgroundColor: colors.white.withValues(alpha: 0.2),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            colors.white,
-                          ),
-                          minHeight: 4,
-                          borderRadius: .circular(2),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              formatDuration(sessionState.position),
-                              style: typo.labelSmall.copyWith(
-                                color: colors.white,
-                              ),
-                            ),
-                            Text(
-                              formatDuration(sessionState.duration),
-                              style: typo.labelSmall.copyWith(
-                                color: colors.white,
-                              ),
-                            ),
-                          ],
+                        CastSeekBar(
+                          position: sessionState.position,
+                          duration: sessionState.duration,
+                          canSeek:
+                              sessionState
+                                  .activeDevice
+                                  ?.capabilities
+                                  .canSeek ??
+                              false,
+                          restarting: sessionState.restarting,
                         ),
                       ],
                     ),

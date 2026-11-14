@@ -8,10 +8,12 @@ import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/subtitle/subtitle_extraction_bloc.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/queue_manager_screen.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_audio_controls.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_seek_bar.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_section.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
-import 'package:pure_cast/core/utils/app_utils.dart';
+import 'package:pure_cast/core/utils/app_toast.dart';
 
 class MediaControllerScreen extends StatefulWidget {
   const MediaControllerScreen({super.key});
@@ -126,6 +128,10 @@ class Body extends StatelessWidget {
         bool,
         String?,
         String?,
+        List<PureCastAudioTrack>,
+        int?,
+        bool,
+        bool,
       )
     >(
       selector: (state) {
@@ -139,6 +145,10 @@ class Body extends StatelessWidget {
           state.preparingSubtitles,
           state.prepareError,
           state.prepareSubtitlesError,
+          state.audioTracks,
+          state.activeAudioIndex,
+          state.isLive,
+          state.restarting,
         );
       },
       builder: (context, state) {
@@ -152,6 +162,10 @@ class Body extends StatelessWidget {
           preparingSubtitles,
           prepareError,
           prepareSubtitlesError,
+          audioTracks,
+          activeAudioIndex,
+          isLive,
+          restarting,
         ) = state;
         if (preparing) {
           return const SliverToBoxAdapter(
@@ -175,28 +189,11 @@ class Body extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 16),
-                LinearProgressIndicator(
-                  value: duration.inMilliseconds > 0
-                      ? position.inMilliseconds / duration.inMilliseconds
-                      : 0.0,
-                  backgroundColor: colors.white.withValues(alpha: 0.2),
-                  valueColor: AlwaysStoppedAnimation<Color>(colors.white),
-                  minHeight: 4,
-                  borderRadius: .circular(2),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      formatDuration(position),
-                      style: typo.labelSmall.copyWith(color: colors.white),
-                    ),
-                    Text(
-                      formatDuration(duration),
-                      style: typo.labelSmall.copyWith(color: colors.white),
-                    ),
-                  ],
+                CastSeekBar(
+                  position: position,
+                  duration: duration,
+                  canSeek: device?.capabilities.canSeek ?? false,
+                  restarting: restarting,
                 ),
                 SizedBox(height: 20),
                 PlayerControls(),
@@ -209,33 +206,14 @@ class Body extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: () {},
-                        child: Padding(
-                          padding: .symmetric(horizontal: 16, vertical: 16),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Audio',
-                                  style: typo.titleMedium.copyWith(
-                                    color: colors.white,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                'N/A',
-                                style: typo.labelMedium.copyWith(
-                                  color: colors.textSecondary,
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: colors.textSecondary,
-                              ),
-                            ],
-                          ),
-                        ),
+                      AudioTrackRow(
+                        tracks: audioTracks,
+                        activeIndex: activeAudioIndex,
+                        canChange:
+                            device != null &&
+                            device.protocol == PureCastProtocol.chromecast &&
+                            device.capabilities.canChangeAudioTrack,
+                        restarting: restarting,
                       ),
                       Divider(),
                       GestureDetector(
@@ -257,9 +235,11 @@ class Body extends StatelessWidget {
                           SubtitleSwitcher.show(
                             context,
                             activeSubtitle: subtitle,
-                            subtitles: discoveredSubtitles.isNotEmpty
-                                ? discoveredSubtitles
-                                : (media?.subtitles ?? []),
+                            subtitles:
+                                discoveredSubtitles.isNotEmpty
+                                    ? discoveredSubtitles
+                                    : (media?.subtitles ?? []),
+                            isLive: isLive,
                           );
                         },
                         child: Padding(
@@ -337,15 +317,18 @@ class SubtitleSwitcher extends StatefulWidget {
     super.key,
     this.activeSubtitle,
     required this.subtitles,
+    this.isLive = false,
   });
 
   final PureCastSubtitleTrack? activeSubtitle;
   final List<PureCastSubtitleTrack> subtitles;
+  final bool isLive;
 
   static Future<void> show(
     BuildContext context, {
     PureCastSubtitleTrack? activeSubtitle,
     required List<PureCastSubtitleTrack> subtitles,
+    bool isLive = false,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -354,10 +337,12 @@ class SubtitleSwitcher extends StatefulWidget {
       useRootNavigator: true,
       showDragHandle: true,
       backgroundColor: context.appColors.surfaceLight,
-      builder: (sheetContext) => SubtitleSwitcher(
-        activeSubtitle: activeSubtitle,
-        subtitles: subtitles,
-      ),
+      builder:
+          (sheetContext) => SubtitleSwitcher(
+            activeSubtitle: activeSubtitle,
+            subtitles: subtitles,
+            isLive: isLive,
+          ),
     );
   }
 
@@ -391,6 +376,11 @@ class _SubtitleSwitcherState extends State<SubtitleSwitcher> {
                     ? Icon(Icons.check, color: context.appColors.primary)
                     : null,
                 onTap: () {
+                  if (widget.isLive) {
+                    showInfoToast(message: kLiveSubtitlesUnavailableMessage);
+                    Navigator.of(context).pop();
+                    return;
+                  }
                   context.read<CastSessionBloc>().add(
                     SetSubtitleEvent(subtitle),
                   );

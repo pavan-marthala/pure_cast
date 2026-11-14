@@ -970,6 +970,8 @@ class ChromecastSession extends CastSession {
     required int audioIndex,
     required Duration position,
     required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
   }) async {
     if (_transportId == null) {
       throw StateError('Not connected. Call connect() first.');
@@ -983,8 +985,11 @@ class ChromecastSession extends CastSession {
         '[LIVE-SWITCH] restarting audio=$audioIndex '
         'position=${position.inMilliseconds}ms',
       );
-      final duration = _liveDuration;
-      final audioTracks = _liveAudioTracks;
+      // Callers switching away from a direct (non-live) load must supply the
+      // probe metadata: a direct load has already cleared the live duration
+      // and track list.
+      final effectiveDuration = duration ?? _liveDuration;
+      final effectiveAudioTracks = audioTracks ?? _liveAudioTracks;
       // Close old run(s) and release the old URL before registering the new
       // stream. Do not leave the old stream half-closed.
       await _cleanupCastResources();
@@ -995,8 +1000,8 @@ class ChromecastSession extends CastSession {
         filePath: filePath,
         audioIndex: audioIndex,
         streamType: streamType,
-        duration: duration,
-        audioTracks: audioTracks,
+        duration: effectiveDuration,
+        audioTracks: effectiveAudioTracks,
         startSeconds: position.inMilliseconds / 1000.0,
       );
       debugPrint(
@@ -1020,16 +1025,25 @@ class ChromecastSession extends CastSession {
   ///
   /// The receiver's clock for the new stream starts at 0, so the real
   /// playback position is [liveStartOffset] + [position].
+  ///
+  /// [duration] and [audioTracks] describe the source file. They are required
+  /// when switching away from a direct (non-live) load, because a direct load
+  /// has no live metadata to keep. When omitted, the current live metadata is
+  /// preserved (the normal live-to-live switch).
   Future<void> switchLiveAudio({
     required String filePath,
     required int audioIndex,
     required Duration position,
     required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
   }) => _restartLiveStream(
     filePath: filePath,
     audioIndex: audioIndex,
     position: position,
     streamType: streamType,
+    duration: duration,
+    audioTracks: audioTracks,
   );
 
   /// Closes every live run (cancelling each by its own session id) and stops

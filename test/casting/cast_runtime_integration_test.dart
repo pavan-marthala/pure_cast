@@ -47,6 +47,38 @@ class FakeCastService implements ICastService {
   bool disconnectCalled = false;
   PureCastMedia? loadedMedia;
 
+  // Live/audio state, writable by tests.
+  bool isLive = false;
+  List<PureCastAudioTrack> tracks = const [];
+  int activeIndex = 0;
+
+  // Direct-load probing.
+  List<PureCastAudioTrack> probedTracks = const [];
+  Object? probeError;
+  String? lastProbedPath;
+
+  // Optional live state applied by loadMedia (remux plans).
+  bool loadShouldBeLive = false;
+  List<PureCastAudioTrack> liveTracksOnLoad = const [];
+  int activeIndexOnLoad = 0;
+
+  // Audio switching.
+  int switchCalled = 0;
+  String? switchFilePath;
+  int? switchAudioIndex;
+  Duration? switchPosition;
+  String? switchStreamType;
+  Duration? switchDuration;
+  List<PureCastAudioTrack>? switchAudioTracks;
+  Object? switchError;
+  Completer<void>? switchGate;
+
+  // Seeking.
+  int seekCalled = 0;
+  Duration? seekPosition;
+  Object? seekError;
+  Completer<void>? seekGate;
+
   @override
   Stream<List<PureCastDevice>> discoverDevices({Set<PureCastProtocol>? protocols}) {
     return discoveryController.stream;
@@ -72,6 +104,15 @@ class FakeCastService implements ICastService {
   @override
   Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false}) async {
     loadedMedia = media;
+    if (loadShouldBeLive) {
+      isLive = true;
+      tracks = liveTracksOnLoad;
+      activeIndex = activeIndexOnLoad;
+    } else {
+      isLive = false;
+      tracks = const [];
+      activeIndex = 0;
+    }
     sessionStateController.add(PureCastSessionState.playing);
   }
 
@@ -86,19 +127,41 @@ class FakeCastService implements ICastService {
     required int audioIndex,
     required Duration position,
     required String streamType,
-  }) async {}
+    Duration? duration,
+    List<PureCastAudioTrack>? audioTracks,
+  }) async {
+    switchCalled++;
+    switchFilePath = filePath;
+    switchAudioIndex = audioIndex;
+    switchPosition = position;
+    switchStreamType = streamType;
+    switchDuration = duration;
+    switchAudioTracks = audioTracks;
+    if (switchGate != null) await switchGate!.future;
+    if (switchError != null) throw switchError!;
+    isLive = true;
+    tracks = audioTracks ?? tracks;
+    activeIndex = audioIndex;
+  }
+
+  @override
+  Future<List<PureCastAudioTrack>> probeAudioTracks(String filePath) async {
+    lastProbedPath = filePath;
+    if (probeError != null) throw probeError!;
+    return probedTracks;
+  }
 
   @override
   Duration get liveStartOffset => Duration.zero;
 
   @override
-  bool get isLiveStream => false;
+  bool get isLiveStream => isLive;
 
   @override
-  List<PureCastAudioTrack> get audioTracks => const [];
+  List<PureCastAudioTrack> get audioTracks => tracks;
 
   @override
-  int get activeAudioIndex => 0;
+  int get activeAudioIndex => activeIndex;
 
   @override
   Duration get position => Duration.zero;
@@ -118,16 +181,31 @@ class FakeCastService implements ICastService {
   Future<void> pause() async {}
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    isLive = false;
+    tracks = const [];
+    activeIndex = 0;
+  }
 
   @override
-  Future<void> seek(Duration position) async {}
+  Future<void> seek(Duration position) async {
+    seekCalled++;
+    seekPosition = position;
+    if (seekGate != null) await seekGate!.future;
+    if (seekError != null) throw seekError!;
+  }
 
   @override
   Future<void> setVolume(double volume) async {}
 
+  int setSubtitleCalls = 0;
+  PureCastSubtitleTrack? lastSubtitle;
+
   @override
-  Future<void> setSubtitle(PureCastSubtitleTrack? subtitle) async {}
+  Future<void> setSubtitle(PureCastSubtitleTrack? subtitle) async {
+    setSubtitleCalls++;
+    lastSubtitle = subtitle;
+  }
 
   @override
   Stream<PureCastSessionState> get sessionStateStream => sessionStateController.stream;
@@ -798,6 +876,315 @@ void main() {
       expect(discoveryBloc.state.autoReconnectDevice, equals(savedDevice));
 
       await discoveryBloc.close();
+    });
+  });
+
+  group('CastSessionBloc - live audio & subtitles', () {
+    const device = PureCastDevice(
+      id: 'tv_live',
+      name: 'Living Room TV',
+      protocol: PureCastProtocol.chromecast,
+      host: '192.168.1.20',
+      port: 8009,
+      capabilities: PureCastCapabilities(
+        canChangeAudioTrack: true,
+        canSeek: true,
+      ),
+    );
+    const media = PureCastMedia(
+      uri: '/videos/movie.mkv',
+      type: PureCastMediaType.mkv,
+      title: 'Movie',
+      isLocalFile: true,
+    );
+    const otherMedia = PureCastMedia(
+      uri: '/videos/other.mkv',
+      type: PureCastMediaType.mkv,
+      title: 'Other',
+      isLocalFile: true,
+    );
+    const tracks = [
+      PureCastAudioTrack(
+        index: 0,
+        language: 'eng',
+        codec: 'ac3',
+        channels: 6,
+        isDefault: true,
+      ),
+      PureCastAudioTrack(
+        index: 1,
+        language: 'spa',
+        codec: 'ac3',
+        channels: 2,
+      ),
+    ];
+
+    Future<CastSessionBloc> connectBloc() async {
+      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      bloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+      expect(bloc.state.activeDevice, equals(device));
+      return bloc;
+    }
+
+    Future<CastSessionBloc> liveBloc() async {
+      fakeCastService.loadShouldBeLive = true;
+      fakeCastService.liveTracksOnLoad = tracks;
+      fakeCastService.activeIndexOnLoad = 0;
+      final bloc = await connectBloc();
+      bloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+      return bloc;
+    }
+
+    Future<CastSessionBloc> directBloc({
+      List<PureCastAudioTrack> probed = tracks,
+    }) async {
+      fakeCastService.loadShouldBeLive = false;
+      fakeCastService.probedTracks = probed;
+      final bloc = await connectBloc();
+      bloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+      return bloc;
+    }
+
+    test('live load fills audio state from the adapter', () async {
+      final bloc = await liveBloc();
+
+      expect(bloc.state.audioTracks, equals(tracks));
+      expect(bloc.state.activeAudioIndex, 0);
+      expect(bloc.state.isLive, isTrue);
+      expect(bloc.state.restarting, isFalse);
+
+      await bloc.close();
+    });
+
+    test('direct load probes audio tracks and selects the default', () async {
+      final bloc = await directBloc();
+
+      expect(fakeCastService.lastProbedPath, media.uri);
+      expect(bloc.state.audioTracks, equals(tracks));
+      expect(bloc.state.activeAudioIndex, 0);
+      expect(bloc.state.isLive, isFalse);
+
+      await bloc.close();
+    });
+
+    test('direct load ignores probe errors without failing playback', () async {
+      fakeCastService.probeError = Exception('ffprobe unavailable');
+      final bloc = await directBloc(probed: const []);
+
+      expect(bloc.state.playbackStatus, equals(StateStatus.loaded));
+      expect(bloc.state.audioTracks, isEmpty);
+      expect(bloc.state.activeAudioIndex, isNull);
+      expect(bloc.state.playbackError, isNull);
+
+      await bloc.close();
+    });
+
+    test('selectAudio restarts live at the current position with the known '
+        'duration and tracks', () async {
+      final bloc = await liveBloc();
+      bloc.add(const PositionUpdatedEvent(Duration(seconds: 42)));
+      bloc.add(const DurationUpdatedEvent(Duration(minutes: 90)));
+      await pumpEventQueue();
+
+      bloc.add(const SelectAudioEvent(1));
+      await pumpEventQueue();
+
+      expect(fakeCastService.switchCalled, 1);
+      expect(fakeCastService.switchFilePath, media.uri);
+      expect(fakeCastService.switchAudioIndex, 1);
+      expect(fakeCastService.switchPosition, const Duration(seconds: 42));
+      expect(fakeCastService.switchStreamType, 'BUFFERED');
+      expect(fakeCastService.switchDuration, const Duration(minutes: 90));
+      expect(fakeCastService.switchAudioTracks, equals(tracks));
+
+      expect(bloc.state.activeAudioIndex, 1);
+      expect(bloc.state.isLive, isTrue);
+      expect(bloc.state.restarting, isFalse);
+      expect(bloc.state.playbackError, isNull);
+
+      await bloc.close();
+    });
+
+    test('selectAudio ignores the already active index', () async {
+      final bloc = await liveBloc();
+
+      bloc.add(const SelectAudioEvent(0));
+      await pumpEventQueue();
+
+      expect(fakeCastService.switchCalled, 0);
+      expect(bloc.state.activeAudioIndex, 0);
+
+      await bloc.close();
+    });
+
+    test('selectAudio and seek are dropped while a restart is in flight', () async {
+      final bloc = await liveBloc();
+      fakeCastService.switchGate = Completer<void>();
+
+      bloc.add(const SelectAudioEvent(1));
+      await pumpEventQueue();
+
+      // The switch is now awaiting the engine.
+      expect(bloc.state.restarting, isTrue);
+
+      bloc.add(const SelectAudioEvent(0));
+      bloc.add(const SeekMediaEvent(Duration(seconds: 5)));
+      await pumpEventQueue();
+
+      expect(fakeCastService.switchCalled, 1);
+      expect(fakeCastService.seekCalled, 0);
+      expect(bloc.state.activeAudioIndex, 0);
+
+      fakeCastService.switchGate!.complete();
+      await pumpEventQueue();
+
+      expect(bloc.state.activeAudioIndex, 1);
+      expect(bloc.state.restarting, isFalse);
+
+      await bloc.close();
+    });
+
+    test('seek on a live stream shows restarting while the engine works', () async {
+      final bloc = await liveBloc();
+      fakeCastService.seekGate = Completer<void>();
+
+      bloc.add(const SeekMediaEvent(Duration(seconds: 10)));
+      await pumpEventQueue();
+
+      expect(fakeCastService.seekCalled, 1);
+      expect(fakeCastService.seekPosition, const Duration(seconds: 10));
+      expect(bloc.state.restarting, isTrue);
+
+      fakeCastService.seekGate!.complete();
+      await pumpEventQueue();
+
+      expect(bloc.state.restarting, isFalse);
+
+      await bloc.close();
+    });
+
+    test('selectAudio error clears restarting and keeps the active index', () async {
+      final bloc = await liveBloc();
+      fakeCastService.switchError = Exception('restart failed');
+
+      bloc.add(const SelectAudioEvent(1));
+      await pumpEventQueue();
+
+      expect(bloc.state.activeAudioIndex, 0);
+      expect(bloc.state.restarting, isFalse);
+      expect(bloc.state.playbackError, contains('restart failed'));
+
+      await bloc.close();
+    });
+
+    test('stop resets audio state', () async {
+      final bloc = await liveBloc();
+      expect(bloc.state.audioTracks, isNotEmpty);
+
+      bloc.add(const StopMediaEvent());
+      await pumpEventQueue();
+
+      expect(bloc.state.audioTracks, isEmpty);
+      expect(bloc.state.activeAudioIndex, isNull);
+      expect(bloc.state.isLive, isFalse);
+      expect(bloc.state.restarting, isFalse);
+
+      await bloc.close();
+    });
+
+    test('disconnect resets audio state', () async {
+      final bloc = await liveBloc();
+
+      bloc.add(const DisconnectDeviceEvent());
+      await pumpEventQueue();
+
+      expect(bloc.state.audioTracks, isEmpty);
+      expect(bloc.state.activeAudioIndex, isNull);
+      expect(bloc.state.isLive, isFalse);
+
+      await bloc.close();
+    });
+
+    test('a new load resets audio state from the previous media', () async {
+      final bloc = await liveBloc();
+      expect(bloc.state.audioTracks, isNotEmpty);
+
+      fakeCastService.loadShouldBeLive = false;
+      fakeCastService.probeError = Exception('no probe');
+      bloc.add(const LoadMediaEvent(otherMedia));
+      await pumpEventQueue();
+
+      expect(bloc.state.audioTracks, isEmpty);
+      expect(bloc.state.activeAudioIndex, isNull);
+      expect(bloc.state.isLive, isFalse);
+
+      await bloc.close();
+    });
+
+    test('the live position is the one recorded to history', () async {
+      final bloc = await liveBloc();
+      bloc.add(const PositionUpdatedEvent(Duration(seconds: 42)));
+      bloc.add(const DurationUpdatedEvent(Duration(minutes: 90)));
+      await pumpEventQueue();
+
+      fakeCastService.sessionStateController.add(PureCastSessionState.completed);
+      await pumpEventQueue();
+
+      final companion = fakeDb.recordedHistoryCompanion;
+      expect(companion, isNotNull);
+      expect(companion!.lastPositionMs.value, 42000);
+      expect(companion.totalDurationMs.value, 5400000);
+
+      await bloc.close();
+    });
+
+    test('subtitle pick while live is blocked with a message and leaves '
+        'playback untouched', () async {
+      final bloc = await liveBloc();
+      const subtitle = PureCastSubtitleTrack(
+        id: 'movie:1',
+        label: 'English',
+        language: 'eng',
+        url: '/tmp/english.vtt',
+        format: 'vtt',
+      );
+
+      bloc.add(const SetSubtitleEvent(subtitle));
+      await pumpEventQueue();
+
+      expect(
+        bloc.state.prepareSubtitlesError,
+        kLiveSubtitlesUnavailableMessage,
+      );
+      expect(bloc.state.activeSubtitle, isNull);
+      expect(fakeCastService.setSubtitleCalls, 0);
+      expect(fakeCastService.loadedMedia, equals(media));
+
+      await bloc.close();
+    });
+
+    test('subtitle pick while not live still runs the existing path', () async {
+      final bloc = await directBloc();
+      const subtitle = PureCastSubtitleTrack(
+        id: 'movie:2',
+        label: 'English',
+        language: 'eng',
+        url: '/tmp/english.vtt',
+        format: 'vtt',
+      );
+
+      bloc.add(const SetSubtitleEvent(subtitle));
+      await pumpEventQueue();
+
+      expect(bloc.state.prepareSubtitlesError, isNull);
+      expect(bloc.state.activeSubtitle, equals(subtitle));
+      expect(fakeCastService.setSubtitleCalls, 1);
+      expect(fakeCastService.lastSubtitle, equals(subtitle));
+
+      await bloc.close();
     });
   });
 }

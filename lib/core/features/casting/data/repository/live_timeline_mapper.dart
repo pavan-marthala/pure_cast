@@ -1,3 +1,5 @@
+import 'dart:async';
+
 /// Maps raw receiver positions of a live MKV stream onto the source-file
 /// ("virtual") timeline, and guards the restart race.
 ///
@@ -14,12 +16,23 @@
 /// That first event is guaranteed to belong to the new stream — it already
 /// carries the restarted clock — so it is accepted even if the receiver has
 /// not reported `PLAYING` yet.
+///
+/// The guard is a fail-safe: if no event from the new media session arrives
+/// within [restartTimeout] (5 seconds by default), it disarms itself so
+/// positions can never be dropped forever.
 class LiveTimelineMapper {
+  LiveTimelineMapper({this.restartTimeout = const Duration(seconds: 5)});
+
+  /// How long the guard waits for the first event of the new media session
+  /// before disarming itself.
+  final Duration restartTimeout;
+
   bool _restartPending = false;
   int? _restartedFromMediaSessionId;
+  Timer? _restartTimer;
 
   /// True between [armRestart] and the first position event of the new media
-  /// session (or [cancel]).
+  /// session (or [cancel], or the [restartTimeout] fail-safe).
   bool get isRestartPending => _restartPending;
 
   /// The media session id being replaced by the pending restart.
@@ -32,12 +45,22 @@ class LiveTimelineMapper {
   void armRestart(int? currentMediaSessionId) {
     _restartPending = true;
     _restartedFromMediaSessionId = currentMediaSessionId;
+    _restartTimer?.cancel();
+    _restartTimer = Timer(restartTimeout, cancel);
   }
 
   /// Disarms the guard (the restart failed and no new session will report).
   void cancel() {
+    _restartTimer?.cancel();
+    _restartTimer = null;
     _restartPending = false;
     _restartedFromMediaSessionId = null;
+  }
+
+  /// Releases the fail-safe timer. Safe to call more than once.
+  void dispose() {
+    _restartTimer?.cancel();
+    _restartTimer = null;
   }
 
   /// Returns the virtual position for [receiverPosition], or `null` when the

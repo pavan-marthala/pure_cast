@@ -6,6 +6,7 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
+import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
@@ -13,9 +14,14 @@ import 'package:pure_cast/core/features/casting/data/data_source/transcode_setti
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
 import 'package:pure_cast/core/features/casting/data/repository/live_timeline_mapper.dart';
 
+/// Probes a local file and returns the media information needed to map audio
+/// tracks. Injectable so tests can avoid starting FFmpeg.
+typedef DartCastMediaProbe = Future<dart_cast.MediaProbe?> Function(String path);
+
 /// Concrete adapter wrapping dart_cast package services.
 class DartCastAdapter implements ICastService {
   final dart_cast.CastService _castService;
+  final DartCastMediaProbe _mediaProbe;
 
   StreamSubscription<dart_cast.SessionState>? _sessionStateSub;
   StreamSubscription<Duration>? _positionSub;
@@ -43,25 +49,28 @@ class DartCastAdapter implements ICastService {
   PureCastSessionState _currentState = PureCastSessionState.disconnected;
 
   @factoryMethod
-  DartCastAdapter({dart_cast.CastService? castService})
-    : _castService =
-          castService ??
-          dart_cast.CastService(
-            discoveryProviders: [
-              dart_cast.ChromecastDiscoveryProvider(),
-              dart_cast.DlnaDiscoveryProvider(),
-            ],
-            sessionFactory: (device) {
-              switch (device.protocol) {
-                case dart_cast.CastProtocol.chromecast:
-                  return dart_cast.ChromecastSession(device: device);
-                case dart_cast.CastProtocol.dlna:
-                  return dart_cast.DlnaSession.fromDevice(device);
-                case dart_cast.CastProtocol.airplay:
-                  throw UnsupportedError('AirPlay is not enabled for V1');
-              }
-            },
-          );
+  DartCastAdapter({
+    dart_cast.CastService? castService,
+    DartCastMediaProbe? mediaProbe,
+  }) : _castService =
+           castService ??
+           dart_cast.CastService(
+             discoveryProviders: [
+               dart_cast.ChromecastDiscoveryProvider(),
+               dart_cast.DlnaDiscoveryProvider(),
+             ],
+             sessionFactory: (device) {
+               switch (device.protocol) {
+                 case dart_cast.CastProtocol.chromecast:
+                   return dart_cast.ChromecastSession(device: device);
+                 case dart_cast.CastProtocol.dlna:
+                   return dart_cast.DlnaSession.fromDevice(device);
+                 case dart_cast.CastProtocol.airplay:
+                   throw UnsupportedError('AirPlay is not enabled for V1');
+               }
+             },
+           ),
+       _mediaProbe = mediaProbe ?? _probeWithFfprobe;
 
   @override
   Stream<List<PureCastDevice>> discoverDevices({
@@ -207,6 +216,8 @@ class DartCastAdapter implements ICastService {
     required int audioIndex,
     required Duration position,
     required String streamType,
+    Duration? duration,
+    List<PureCastAudioTrack>? audioTracks,
   }) async {
     final session = _castService.activeSession;
     if (session == null)
@@ -224,11 +235,91 @@ class DartCastAdapter implements ICastService {
         audioIndex: audioIndex,
         position: position,
         streamType: streamType,
+        duration: duration,
+        audioTracks: audioTracks
+            ?.map(
+              (t) => dart_cast.AudioStream(
+                index: t.index,
+                codec: t.codec,
+                channels: t.channels,
+                language: t.language.isEmpty ? null : t.language,
+                isDefault: t.isDefault,
+              ),
+            )
+            .toList(growable: false),
       );
     } catch (e) {
       _liveTimeline.cancel();
       throw PureCastException('Failed to switch live audio: $filePath', e);
     }
+  }
+
+  @override
+  Future<List<PureCastAudioTrack>> probeAudioTracks(String filePath) async {
+    final probe = await _mediaProbe(filePath);
+    if (probe == null) return const [];
+    return [
+      for (var i = 0; i < probe.audio.length; i++)
+        PureCastAudioTrack(
+          index: i,
+          language: probe.audio[i].language ?? '',
+          codec: probe.audio[i].codec,
+          channels: probe.audio[i].channels,
+          isDefault: probe.audio[i].isDefault,
+        ),
+    ];
+  }
+
+  /// Default probe used in production. FFprobeKit is asynchronous, so the
+  /// caller's UI thread is never blocked.
+  static Future<dart_cast.MediaProbe?> _probeWithFfprobe(String path) async {
+    var input = path;
+    if (input.startsWith('file://')) {
+      input = Uri.parse(input).toFilePath();
+    }
+    final session = await FFprobeKit.getMediaInformation(input);
+    final info = session.getMediaInformation();
+    if (info == null) return null;
+    return dart_cast.MediaProbe.fromJson(_mediaInfoToJson(info));
+  }
+
+  static Map<String, dynamic> _mediaInfoToJson(
+    dynamic info,
+  ) {
+    if (info == null) return const {};
+    // Build a minimal JSON map compatible with MediaProbe.fromJson.
+    final streams = <Map<String, dynamic>>[];
+    for (final s in info.getStreams()) {
+      final tags = s.getTags();
+      final allProps = s.getAllProperties();
+      final disp =
+          (allProps != null && allProps['disposition'] is Map)
+              ? (allProps['disposition'] as Map)['default']
+              : null;
+      final channels =
+          allProps != null ? (allProps['channels'] as num?)?.toInt() : null;
+      streams.add({
+        'codec_type': s.getType(),
+        'codec_name': s.getCodec(),
+        'profile': allProps != null ? allProps['profile'] as String? : null,
+        'level': s.getNumberProperty('level'),
+        'pix_fmt': s.getStringProperty('pix_fmt'),
+        'width': s.getWidth(),
+        'height': s.getHeight(),
+        'r_frame_rate': s.getAverageFrameRate(),
+        'index': s.getIndex(),
+        'channels': channels,
+        'tags': tags,
+        'disposition': {'default': disp == 1 ? 1 : 0},
+      });
+    }
+    return {
+      'format': {
+        'format_name': info.getFormat(),
+        'duration': info.getDuration(),
+      },
+      'streams': streams,
+    };
   }
 
   @override
@@ -496,6 +587,7 @@ class DartCastAdapter implements ICastService {
   @override
   Future<void> dispose() async {
     _bufferingDebounceTimer?.cancel();
+    _liveTimeline.dispose();
     _sessionStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();

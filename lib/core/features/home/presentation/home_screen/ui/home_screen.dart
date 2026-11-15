@@ -1,7 +1,5 @@
 import 'package:dotlottie_flutter/dotlottie_flutter.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
@@ -38,11 +36,6 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          if (kDebugMode)
-            IconButton(
-              onPressed: () => context.push('/cast-debug'),
-              icon: Icon(Icons.bug_report),
-            ),
           BlocSelector<CastSessionBloc, CastSessionState, StateStatus>(
             selector: (state) {
               return state.connectionStatus;

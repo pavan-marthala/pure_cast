@@ -184,33 +184,6 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
-  Future<void> loadLiveMkv({
-    required String filePath,
-    required int audioIndex,
-    required String streamType,
-    required bool includeDuration,
-  }) async {
-    final session = _castService.activeSession;
-    if (session == null)
-      throw const PureCastException('No active cast session');
-    if (session is! dart_cast.ChromecastSession) {
-      throw const PureCastException(
-        'Live MKV cast requires a Chromecast session',
-      );
-    }
-    try {
-      await session.loadLiveMkv(
-        filePath: filePath,
-        audioIndex: audioIndex,
-        streamType: streamType,
-        includeDuration: includeDuration,
-      );
-    } catch (e) {
-      throw PureCastException('Failed to load live MKV: $filePath', e);
-    }
-  }
-
-  @override
   Future<void> switchLiveAudio({
     required String filePath,
     required int audioIndex,
@@ -372,15 +345,7 @@ class DartCastAdapter implements ICastService {
     int audioStreamIndex = 0,
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
-    String? forcePlan,
-    bool waitForFinish = false,
-    bool includeDuration = false,
-    bool useLive = true,
     String streamType = 'BUFFERED',
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
-    String streams = 'both',
-    String segments = 'ts',
   }) async {
     final session = _castService.activeSession;
     if (session == null)
@@ -398,16 +363,8 @@ class DartCastAdapter implements ICastService {
           audioStreamIndex: audioStreamIndex,
           // Detect FFmpeg capabilities at runtime instead of hardcoding false.
           caps: await _detectCaps(),
-          forcePlan: forcePlan,
           subtitle: dartSubtitle,
-          waitForFinish: waitForFinish,
-          streams: streams,
-          segments: segments,
-          includeDuration: includeDuration,
-          useLive: useLive,
           streamType: streamType,
-          hlsSegmentFormat: hlsSegmentFormat,
-          hlsVideoSegmentFormat: hlsVideoSegmentFormat,
           memoryLookup: (receiverId, codecKey) =>
               ReceiverCodecMemory.lookup(receiverId, codecKey),
           memoryRecord: (receiverId, codecKey, directOk) =>
@@ -533,38 +490,6 @@ class DartCastAdapter implements ICastService {
     } catch (e) {
       log('PureCast: setSubtitle error: $e');
       throw PureCastException('Failed to set subtitle', e);
-    }
-  }
-
-  @override
-  Future<String> getDebugMediaStatus() async {
-    final session = _castService.activeSession;
-    if (session == null) return 'no session';
-    final buf = StringBuffer();
-    buf.writeln('sessionState=${session.state}');
-    buf.writeln('position=${session.position}');
-    buf.writeln('duration=${session.duration}');
-    if (session is dart_cast.ChromecastSession) {
-      buf.writeln('mediaSessionId=${session.mediaSessionId}');
-      buf.writeln('playerState=${session.lastPlayerState ?? "<none>"}');
-      buf.writeln('idleReason=${session.idleReason ?? "<none>"}');
-    }
-    return buf.toString();
-  }
-
-  @override
-  void enableRawMessageLogging() {
-    final session = _castService.activeSession;
-    if (session is dart_cast.ChromecastSession) {
-      session.enableRawMessageLogging();
-    }
-  }
-
-  @override
-  void disableRawMessageLogging() {
-    final session = _castService.activeSession;
-    if (session is dart_cast.ChromecastSession) {
-      session.disableRawMessageLogging();
     }
   }
 

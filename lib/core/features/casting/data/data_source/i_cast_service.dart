@@ -19,14 +19,6 @@ abstract class ICastService {
   /// Loads media onto the connected receiver device.
   Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false});
 
-  /// Loads a local file as a live MKV stream (no disk buffering).
-  Future<void> loadLiveMkv({
-    required String filePath,
-    required int audioIndex,
-    required String streamType,
-    required bool includeDuration,
-  });
-
   /// Restarts the live MKV stream with another audio track, resuming at
   /// [position] in the source file.
   ///
@@ -66,23 +58,12 @@ abstract class ICastService {
   Duration get position;
 
   /// Loads a local file, probing/preparing it for Chromecast when needed.
-  ///
-  /// [useLive] routes remux plans through the live MKV path (default) instead
-  /// of the HLS remux pipeline. Set it to false to compare with the old path.
   Future<void> loadLocalFile(
     String path, {
     int audioStreamIndex = 0,
     PureCastSubtitleTrack? subtitle,
     List<PureCastSubtitleTrack>? subtitles,
-    String? forcePlan,
-    bool waitForFinish = false,
-    bool includeDuration = false,
-    bool useLive = true,
     String streamType = 'BUFFERED',
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
-    String streams = 'both',
-    String segments = 'ts',
   });
 
   /// Starts or resumes media playback.
@@ -102,16 +83,6 @@ abstract class ICastService {
 
   /// Sets the active subtitle track (null to disable subtitles).
   Future<void> setSubtitle(PureCastSubtitleTrack? subtitle);
-
-  /// Returns a debug string of the receiver's current media status.
-  /// Only meaningful for Chromecast sessions.
-  Future<String> getDebugMediaStatus();
-
-  /// Enables raw message logging on the active Chromecast session.
-  void enableRawMessageLogging();
-
-  /// Disables raw message logging on the active Chromecast session.
-  void disableRawMessageLogging();
 
   /// Stream of session state changes.
   Stream<PureCastSessionState> get sessionStateStream;

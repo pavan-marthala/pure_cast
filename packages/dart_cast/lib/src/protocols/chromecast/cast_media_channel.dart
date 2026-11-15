@@ -107,8 +107,6 @@ class CastMediaChannel {
     List<CastMediaTrack>? subtitles,
     List<int>? activeTrackIds,
     String streamType = 'BUFFERED',
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
   }) {
     final media = <String, dynamic>{
       'contentId': contentId,
@@ -117,12 +115,6 @@ class CastMediaChannel {
     };
     if (duration != null) {
       media['duration'] = duration;
-    }
-    if (hlsSegmentFormat != null) {
-      media['hlsSegmentFormat'] = hlsSegmentFormat;
-    }
-    if (hlsVideoSegmentFormat != null) {
-      media['hlsVideoSegmentFormat'] = hlsVideoSegmentFormat;
     }
 
     // Metadata

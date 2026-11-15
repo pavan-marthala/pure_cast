@@ -431,7 +431,6 @@ void main() {
         filePath: '/videos/movie.mkv',
         audioIndex: 0,
         streamType: 'LIVE',
-        includeDuration: false,
         duration: duration,
         audioTracks: const [
           AudioStream(index: 1, codec: 'dts', language: 'eng', isDefault: true),

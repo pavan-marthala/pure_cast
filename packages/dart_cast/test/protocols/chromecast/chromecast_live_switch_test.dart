@@ -323,7 +323,6 @@ void main() {
       filePath: filePath,
       audioIndex: 0,
       streamType: 'LIVE',
-      includeDuration: false,
     );
     final loadMsg = await _awaitSentLoad(channel);
     final contentId = loadMsg.payload['media']['contentId'] as String;
@@ -767,42 +766,6 @@ void main() {
       expect(session.isLive, isTrue);
       expect(harness.args, hasLength(1));
       expect(probeCalls, 1);
-    });
-
-    test('useLive: false still reaches CastPrepareSession', () async {
-      await connect();
-      nextProbe = _makeProbe(audioCodec: 'dts');
-
-      await expectLater(
-        session.loadLocalFile('/videos/movie.mkv', useLive: false),
-        throwsA(isA<_PreparePathCalled>()),
-      );
-
-      expect(probeCalls, 1);
-      expect(session.isLive, isFalse);
-      expect(harness.args, isEmpty);
-      expect(
-        channel.sentMessages.where(
-          (m) =>
-              m.namespace == CastMediaChannel.mediaNamespace &&
-              m.payload['type'] == 'LOAD',
-        ),
-        isEmpty,
-      );
-    });
-
-    test('a forced remux plan still uses CastPrepareSession', () async {
-      await connect();
-      nextProbe = _makeProbe(audioCodec: 'dts');
-
-      await expectLater(
-        session.loadLocalFile('/videos/movie.mkv', forcePlan: 'remuxAudio'),
-        throwsA(isA<_PreparePathCalled>()),
-      );
-
-      expect(probeCalls, 1);
-      expect(session.isLive, isFalse);
-      expect(harness.args, isEmpty);
     });
 
     test('a DirectPlan keeps the direct load (no live URL)', () async {

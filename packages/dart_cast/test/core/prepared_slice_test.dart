@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:dart_cast/src/core/cast_decision.dart';
-import 'package:dart_cast/src/core/cast_ffmpeg_commands.dart';
 import 'package:dart_cast/src/core/media_probe.dart';
 import 'package:test/test.dart';
 
@@ -78,20 +77,6 @@ void main() {
   test('mediaTypeForContainer', () {
     expect(CastCompat.mediaTypeForContainer('matroska'), isNotNull);
     expect(CastCompat.mediaTypeForContainer('mp4').name, 'mp4');
-  });
-  test('command builders include audioStreamIndex', () {
-    final a = CastFfmpegCommands.remuxAudio(
-      input: 'in.mkv',
-      outputDir: '/tmp/out',
-      audioStreamIndex: 2,
-    );
-    expect(a.join(' '), contains('0:a:2'));
-    final c = CastFfmpegCommands.remuxContainer(
-      input: 'in.avi',
-      outputDir: '/tmp/out',
-      audioStreamIndex: 1,
-    );
-    expect(c.join(' '), contains('0:a:1'));
   });
   test('probe parsing multiple audio streams', () {
     final p = MediaProbe.fromJson(

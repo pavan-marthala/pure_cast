@@ -7,7 +7,6 @@ library;
 import 'package:flutter/foundation.dart';
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
 
 import '../../core/cast_device.dart';
@@ -81,9 +80,6 @@ class ChromecastSession extends CastSession {
   String? _transportId;
   String? _sessionId; // Used for STOP app via receiver namespace.
   int? _mediaSessionId;
-  String? _idleReason;
-  String? _lastPlayerState;
-  bool _rawMessageLogging = false;
 
   /// Fingerprint of the last logged MEDIA_STATUS, used to elide the payload
   /// of unchanged 1 Hz poll answers from the debug log.
@@ -217,11 +213,6 @@ class ChromecastSession extends CastSession {
   Duration? get liveDuration => _liveDuration;
 
   int? get mediaSessionId => _mediaSessionId;
-  String? get idleReason => _idleReason;
-  String? get lastPlayerState => _lastPlayerState;
-  bool get rawMessageLogging => _rawMessageLogging;
-  void enableRawMessageLogging() => _rawMessageLogging = true;
-  void disableRawMessageLogging() => _rawMessageLogging = false;
   Timer? _heartbeatTimer;
   StreamSubscription<dynamic>? _messageSubscription;
 
@@ -415,8 +406,6 @@ class ChromecastSession extends CastSession {
     String? streamType,
     Duration? duration,
     bool bypassTransform = false,
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
   }) async {
     // Release live runs from a previous load, and the previous HLS prepare
     // session unless this call is the prepared load itself.
@@ -451,8 +440,6 @@ class ChromecastSession extends CastSession {
         bypassTransform: bypassTransform,
         streamType: streamType,
         duration: duration,
-        hlsSegmentFormat: hlsSegmentFormat,
-        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
       );
     } finally {
       _isLoadingMedia = false;
@@ -465,20 +452,10 @@ class ChromecastSession extends CastSession {
     int audioStreamIndex = 0,
     CastDeviceCaps caps = const CastDeviceCaps(),
     CastSubtitle? subtitle,
-    String? forcePlan,
-    bool waitForFinish = false,
-    bool includeDuration = false,
-    bool useLive = true,
     String streamType = 'BUFFERED',
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
-    String streams = 'both',
-    String segments = 'ts',
     Future<bool?> Function(String receiverId, String codecKey)? memoryLookup,
     Future<void> Function(String receiverId, String codecKey, bool directOk)?
     memoryRecord,
-    void Function(CastPrepareSession?)? onPrepareStarted,
-    void Function()? onPrepareFinished,
   }) async {
     debugPrint('[PREPDBG] receiver=${device.name} id=${device.id}');
     debugPrint(
@@ -525,10 +502,6 @@ class ChromecastSession extends CastSession {
         audioStreamIndex == 0
             ? _defaultAudioIndex(probe.audio)
             : audioStreamIndex;
-    if (forcePlan == 'remuxAudio')
-      plan = RemuxAudioPlan('forced', audioStreamIndex: audioIdx);
-    if (forcePlan == 'remuxContainer')
-      plan = RemuxContainerPlan('forced', audioStreamIndex: audioIdx);
 
     if (plan is DirectPlan || plan is UncertainDirectPlan) {
       final codec = probe.video?.codec ?? 'video';
@@ -663,19 +636,17 @@ class ChromecastSession extends CastSession {
       throw UnsupportedMediaException('Unsupported: ${plan.reason}');
     }
 
-    // Remux plans go to the live MKV path by default. Forced plans are the
-    // explicit HLS comparison path, so they keep the old behaviour. Routing
-    // happens before the HLS builder so a live failure surfaces to the caller
-    // instead of silently falling back to HLS; Direct/UncertainDirect/
-    // Transcode/Unsupported plans are untouched.
+    // Remux plans always go to the live MKV path. Routing happens before the
+    // HLS builder so a live failure surfaces to the caller instead of silently
+    // falling back to HLS; Direct/UncertainDirect/Transcode/Unsupported plans
+    // are untouched.
     final isRemuxPlan = plan is RemuxAudioPlan || plan is RemuxContainerPlan;
-    if (isRemuxPlan && useLive && forcePlan == null) {
+    if (isRemuxPlan) {
       final durationSeconds = probe.durationSeconds;
       await loadLiveMkv(
         filePath: path,
         audioIndex: audioIdx,
         streamType: streamType,
-        includeDuration: false,
         duration:
             durationSeconds != null
                 ? Duration(milliseconds: (durationSeconds * 1000).round())
@@ -685,7 +656,7 @@ class ChromecastSession extends CastSession {
       return;
     }
 
-    // remux/transcode -> prepare
+    // transcode -> prepare
     List<String> Function(String) builder;
     if (plan is UncertainDirectPlan) {
       if (caps.hasH264Mediacodec) {
@@ -711,20 +682,6 @@ class ChromecastSession extends CastSession {
           'This Chromecast can\'t play this video ($codec $depth)',
         );
       }
-    } else if (plan is RemuxAudioPlan) {
-      builder =
-          (out) => CastFfmpegCommands.remuxAudio(
-            input: path,
-            outputDir: out,
-            audioStreamIndex: audioIdx,
-          );
-    } else if (plan is RemuxContainerPlan) {
-      builder =
-          (out) => CastFfmpegCommands.remuxContainer(
-            input: path,
-            outputDir: out,
-            audioStreamIndex: audioIdx,
-          );
     } else if (plan is TranscodeVideoPlan) {
       if (caps.hasH264Mediacodec) {
         builder =
@@ -745,12 +702,13 @@ class ChromecastSession extends CastSession {
         throw UnsupportedMediaException('Unsupported: no usable H.264 encoder');
       }
     } else {
-      throw UnsupportedMediaException('Unknown plan');
+      throw UnsupportedMediaException(
+        'Plan ${plan.runtimeType} is not supported by the prepare path',
+      );
     }
 
     final args = builder('/tmp/__OUTDIR__');
     debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
-    final stopwatch = Stopwatch()..start();
     final prepareStarter = _prepareStarter;
     final prepare =
         prepareStarter != null
@@ -760,37 +718,10 @@ class ChromecastSession extends CastSession {
               buildArgs: builder,
             );
     _stopPrepare = prepare.stop;
-    onPrepareStarted?.call(prepare);
-    if (waitForFinish) {
-      // Wait for ffmpeg to fully complete so the playlist gets #EXT-X-ENDLIST.
-      await prepare.stateStream.firstWhere(
-        (s) => s == PrepareState.ready || s == PrepareState.failed,
-      );
-      // Give ffmpeg time to finish writing all segments and the endlist.
-      await Future.delayed(const Duration(seconds: 2));
-    } else {
-      // wait for ready (first 2 segments)
-      await prepare.stateStream.firstWhere(
-        (s) => s == PrepareState.ready || s == PrepareState.failed,
-      );
-    }
-    // Log truthful finish line.
-    stopwatch.stop();
-    final segCount =
-        prepare.tempDir
-            .listSync()
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.ts') || f.path.endsWith('.m4s'))
-            .length;
-    final hasEndlist =
-        File('${prepare.tempDir.path}/index.m3u8').existsSync() &&
-        File(
-          '${prepare.tempDir.path}/index.m3u8',
-        ).readAsStringSync().contains('#EXT-X-ENDLIST');
-    debugPrint(
-      '[RXDBG] ffmpeg finished: waited=true rc=${prepare.returnCode} segments=$segCount endlist=$hasEndlist elapsedMs=${stopwatch.elapsedMilliseconds}',
+    // wait for ready (first 2 segments)
+    await prepare.stateStream.firstWhere(
+      (s) => s == PrepareState.ready || s == PrepareState.failed,
     );
-    onPrepareFinished?.call();
     if (prepare.state != PrepareState.ready) {
       try {
         debugPrint(
@@ -836,16 +767,8 @@ class ChromecastSession extends CastSession {
           defaultSubtitle: subtitle,
         ),
         contentType: 'application/x-mpegURL',
-        duration:
-            includeDuration && probe.durationSeconds != null
-                ? Duration(
-                  milliseconds: (probe.durationSeconds! * 1000).round(),
-                )
-                : null,
         bypassTransform: true,
         streamType: streamType,
-        hlsSegmentFormat: hlsSegmentFormat,
-        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
       );
     } finally {
       _prepareHandedToLoad = false;
@@ -856,13 +779,11 @@ class ChromecastSession extends CastSession {
   ///
   /// [duration] and [audioTracks] let a caller that already probed the file
   /// (notably [loadLocalFile]) hand the probe results in, so no second
-  /// FFprobe is needed. When [duration] is null and [includeDuration] is
-  /// true, the duration is probed here.
+  /// FFprobe is needed.
   Future<void> loadLiveMkv({
     required String filePath,
     required int audioIndex,
     required String streamType,
-    required bool includeDuration,
     Duration? duration,
     List<AudioStream> audioTracks = const [],
   }) async {
@@ -875,34 +796,7 @@ class ChromecastSession extends CastSession {
     _resetLiveMetadata();
     await _proxy.start(targetDeviceIp: device.address.address);
 
-    // Probe for duration only when the caller did not supply one.
-    var effectiveDuration = duration;
-    if (effectiveDuration == null && includeDuration) {
-      try {
-        String input = filePath;
-        if (input.startsWith('content://')) {
-          final saf = await FFmpegKitConfig.getSafParameterForRead(input);
-          if (saf != null) input = saf;
-        } else if (input.startsWith('file://')) {
-          input = Uri.parse(input).toFilePath();
-        }
-        final session = await FFprobeKit.getMediaInformation(
-          input,
-        ).timeout(const Duration(seconds: 8));
-        final info = session.getMediaInformation();
-        if (info != null) {
-          final dur = info.getDuration();
-          final durationSec = double.tryParse(dur ?? '');
-          if (durationSec != null) {
-            effectiveDuration = Duration(
-              milliseconds: (durationSec * 1000).round(),
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('[PREPDBG] probe failed: $e');
-      }
-    }
+    final effectiveDuration = duration;
 
     await _startLiveStream(
       filePath: filePath,
@@ -1155,8 +1049,6 @@ class ChromecastSession extends CastSession {
     bool bypassTransform = false,
     String? streamType,
     Duration? duration,
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
   }) async {
     stateMachine.transitionTo(SessionState.loading);
 
@@ -1191,8 +1083,6 @@ class ChromecastSession extends CastSession {
         attemptLabel: 'prepared-hls',
         duration: duration,
         streamType: streamType ?? 'BUFFERED',
-        hlsSegmentFormat: hlsSegmentFormat,
-        hlsVideoSegmentFormat: hlsVideoSegmentFormat,
       );
       return;
     }
@@ -1316,8 +1206,6 @@ class ChromecastSession extends CastSession {
     required String attemptLabel,
     Duration? duration,
     String streamType = 'BUFFERED',
-    String? hlsSegmentFormat,
-    String? hlsVideoSegmentFormat,
   }) async {
     // Extract token to keep across cleanup. The token is consistently
     // the second path segment regardless of route shape:
@@ -1385,8 +1273,6 @@ class ChromecastSession extends CastSession {
       subtitles: subtitles.isNotEmpty ? subtitles : null,
       activeTrackIds: defaultTrackId != null ? [defaultTrackId] : null,
       streamType: streamType,
-      hlsSegmentFormat: hlsSegmentFormat,
-      hlsVideoSegmentFormat: hlsVideoSegmentFormat,
     );
 
     final loadRequestId =
@@ -1763,16 +1649,6 @@ class ChromecastSession extends CastSession {
     final payload = _getPayload(msg);
     if (payload == null) return;
 
-    // Raw message logging for diagnostics (enabled by debug panel).
-    if (_rawMessageLogging) {
-      final raw = payload.toString();
-      final ns = namespace ?? '?';
-      for (var i = 0; i < raw.length; i += 800) {
-        final end = (i + 800 < raw.length) ? i + 800 : raw.length;
-        debugPrint('[RXDBG-RAW] ns=$ns chunk: ${raw.substring(i, end)}');
-      }
-    }
-
     // Receiver-bound message firehose for diagnostics. Equivalent to the
     // stream CaC Tool renders — every namespaced message the receiver
     // sends back. PING/PONG heartbeats are dropped to keep the log
@@ -1875,8 +1751,6 @@ class ChromecastSession extends CastSession {
   }
 
   void _updateState(String playerState, String? idleReason) {
-    _idleReason = idleReason;
-    _lastPlayerState = playerState;
     final targetState = switch (playerState) {
       'PLAYING' => SessionState.playing,
       'PAUSED' => SessionState.paused,

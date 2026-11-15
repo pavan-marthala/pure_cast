@@ -103,7 +103,9 @@ class LiveMkvRunManager {
         output: 'tcp://127.0.0.1:${source.port}',
         startSeconds: startSeconds,
       );
-      debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
+      if (kDebugMode) {
+        debugPrint('[LIVE] open: ffmpeg args: ${args.join(' ')}');
+      }
       final sessionId = await _start(args);
       run = LiveMkvRun(sessionId: sessionId, source: source, cancel: _cancel);
       _runs.add(run);

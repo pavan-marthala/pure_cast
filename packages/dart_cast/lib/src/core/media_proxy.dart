@@ -835,8 +835,6 @@ class MediaProxy {
       // Handle CORS preflight (OPTIONS) requests — Chromecast's HLS player
       // sends these before fetching segments from a different origin/path.
       if (request.method == 'OPTIONS') {
-        final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
-        debugPrint('[HLSDBG] ${request.uri.path} 204 $remoteIp');
         _addCorsHeaders(request.response, request.headers.value('Origin'));
         request.response.statusCode = HttpStatus.noContent;
         await request.response.close();
@@ -1644,9 +1642,7 @@ class MediaProxy {
       await Future.delayed(const Duration(milliseconds: 200));
       waited += 200;
     }
-    final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
     if (!await file.exists()) {
-      debugPrint('[HLSDBG] ${request.method} $path 404 $remoteIp');
       request.response.statusCode = HttpStatus.notFound;
       _addCorsHeaders(request.response, request.headers.value('Origin'));
       await request.response.close();
@@ -1676,7 +1672,6 @@ class MediaProxy {
           request.response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
           request.response.headers.set('Content-Range', 'bytes */$fileSize');
           await request.response.close();
-          debugPrint('[HLSDBG] ${request.method} $path 416 $remoteIp');
           return;
         }
         final contentLength = end - start + 1;
@@ -1701,7 +1696,6 @@ class MediaProxy {
           }
         }
         await request.response.close();
-        debugPrint('[HLSDBG] ${request.method} $path 206 $remoteIp');
         return;
       }
     }
@@ -1713,7 +1707,6 @@ class MediaProxy {
       request.response.add(bytes);
     }
     await request.response.close();
-    debugPrint('[HLSDBG] ${request.method} $path 200 $remoteIp');
   }
 
   Future<void> _handleLiveStreamRequest(
@@ -1723,17 +1716,14 @@ class MediaProxy {
     final entry = _liveStreams[token];
     final remoteIp = request.connectionInfo?.remoteAddress.address ?? '?';
     if (entry == null) {
-      debugPrint('[LIVE] ${request.method} ${request.uri.path} 404 $remoteIp');
+      if (kDebugMode) {
+        debugPrint(
+          '[LIVE] ${request.method} ${request.uri.path} 404 $remoteIp',
+        );
+      }
       request.response.statusCode = HttpStatus.notFound;
       await request.response.close();
       return;
-    }
-
-    final rangeHeader = request.headers.value('Range');
-    if (rangeHeader != null) {
-      debugPrint(
-        '[LIVE] ${request.method} ${request.uri.path} Range=$rangeHeader ignored (streaming from start)',
-      );
     }
 
     final userAgent = request.headers.value('User-Agent') ?? '?';
@@ -1756,7 +1746,9 @@ class MediaProxy {
     try {
       run = await entry.open();
     } catch (e) {
-      debugPrint('[LIVE] open failed: $e');
+      if (kDebugMode) {
+        debugPrint('[LIVE] open failed: $e');
+      }
       try {
         request.response.statusCode = HttpStatus.internalServerError;
         await request.response.close();
@@ -1766,9 +1758,11 @@ class MediaProxy {
     final activeRun = run;
 
     try {
-      debugPrint(
-        '[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp UA=$userAgent',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          '[LIVE] ${request.method} ${request.uri.path} 200 $remoteIp UA=$userAgent',
+        );
+      }
       _addCorsHeaders(request.response, request.headers.value('Origin'));
       request.response.statusCode = HttpStatus.ok;
       request.response.headers.contentType = ContentType.parse(
@@ -1777,9 +1771,6 @@ class MediaProxy {
       request.response.headers.set('Accept-Ranges', 'none');
       final countedStream = activeRun.stream.map((chunk) {
         bytesSent += chunk.length;
-        if (bytesSent % (5 * 1024 * 1024) < chunk.length) {
-          debugPrint('[LIVE] bytes sent=$bytesSent');
-        }
         return chunk;
       });
       await request.response.addStream(countedStream);
@@ -1794,9 +1785,13 @@ class MediaProxy {
           msg.contains('Broken pipe') ||
           msg.contains('SocketException')) {
         clientClosed = true;
-        debugPrint('[LIVE] client closed: $e');
+        if (kDebugMode) {
+          debugPrint('[LIVE] client closed: $e');
+        }
       } else {
-        debugPrint('[LIVE] error: $e');
+        if (kDebugMode) {
+          debugPrint('[LIVE] error: $e');
+        }
       }
     } finally {
       await closeOnce();

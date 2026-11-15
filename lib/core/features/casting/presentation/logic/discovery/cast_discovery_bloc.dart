@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/database/app_database.dart';
+import 'package:dart_cast/dart_cast.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
@@ -118,7 +119,7 @@ class CastDiscoveryBloc extends Bloc<CastDiscoveryEvent, CastDiscoveryState> {
     DiscoveryErrorEvent event,
     Emitter<CastDiscoveryState> emit,
   ) {
-    print('Discovery Error: ${event.message}');
+    CastLogger.error('Discovery Error: ${event.message}');
     emit(
       state.copyWith(
         discoveryStatus: StateStatus.error,

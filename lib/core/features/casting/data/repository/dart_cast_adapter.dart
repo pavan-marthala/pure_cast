@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import 'dart:developer';
 import 'dart:io';
 
@@ -99,7 +97,9 @@ class DartCastAdapter implements ICastService {
 
       _subscribeToSession(session);
     } catch (e) {
-      print("Error connecting to device ${device.name}: $e");
+      dart_cast.CastLogger.error(
+        'PureCast: connect failed to ${device.name}: $e',
+      );
       throw PureCastException('Failed to connect to ${device.name}', e);
     }
   }
@@ -724,9 +724,6 @@ class DartCastAdapter implements ICastService {
     // (registerMedia). Local file paths must be prefixed with 'file://' so
     // they are served through the local HTTP proxy correctly.
     final url = s.url.startsWith('/') ? 'file://${s.url}' : s.url;
-    debugPrint(
-      '[SUBDBG] _mapSubtitleToDartCast url=$url format=vtt label=${s.label}',
-    );
     return dart_cast.CastSubtitle(
       url: url,
       label: s.label.isNotEmpty ? s.label : s.language,

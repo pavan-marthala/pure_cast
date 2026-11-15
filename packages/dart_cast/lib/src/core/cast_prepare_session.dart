@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new_min/return_code.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -63,12 +62,11 @@ class CastPrepareSession {
       if (freeBytes != null && freeBytes < required) {
         throw Exception('Insufficient free space for prepare session');
       }
-      if (freeBytes == null) {
-        debugPrint('[HLSDBG] free-space could not be determined; continuing');
-      }
     } catch (e) {
       if (e.toString().contains('Insufficient free space')) rethrow;
-      debugPrint('[HLSDBG] free-space check skipped/failed: $e');
+      if (kDebugMode) {
+        debugPrint('[HLSDBG] free-space check skipped/failed: $e');
+      }
     }
     final sessionDir = Directory(
       '${dir.path}/cast_prepare_${DateTime.now().millisecondsSinceEpoch}',
@@ -127,42 +125,6 @@ class CastPrepareSession {
           final seg0 = File('${tempDir.path}/seg_00000.ts');
           final seg1 = File('${tempDir.path}/seg_00001.ts');
           if (await seg0.exists() && await seg1.exists()) {
-            // [HLSDBG] diagnostics
-            try {
-              final lines =
-                  await File('${tempDir.path}/index.m3u8').readAsLines();
-              for (final l in lines.take(20)) {
-                debugPrint('[HLSDBG] $l');
-              }
-            } catch (_) {}
-            // Segment sizes
-            for (var i = 0; i < 3; i++) {
-              final seg = File(
-                '${tempDir.path}/seg_${i.toString().padLeft(5, '0')}.ts',
-              );
-              if (await seg.exists()) {
-                debugPrint(
-                  '[HLSDBG] seg_${i.toString().padLeft(5, '0')}.ts size=${await seg.length()}',
-                );
-              }
-            }
-            // ffprobe seg_00000.ts
-            try {
-              final segSession = await FFprobeKit.getMediaInformation(
-                seg0.path,
-              );
-              final info = segSession.getMediaInformation();
-              if (info != null) {
-                for (final st in info.getStreams()) {
-                  final props = st.getAllProperties();
-                  debugPrint(
-                    '[HLSDBG] stream codec=${st.getCodec()} profile=${props?['profile']} level=${props?['level']} pix_fmt=${st.getFormat()} width=${st.getWidth()} height=${st.getHeight()} fps=${st.getAverageFrameRate()} bit_rate=${props?['bit_rate']} channels=${props?['channels']} sample_rate=${props?['sample_rate']} start_time=${st.getStringProperty('start_time')}',
-                  );
-                }
-              }
-            } catch (e) {
-              debugPrint('[HLSDBG] ffprobe segment error: $e');
-            }
             _emit(PrepareState.ready);
             return;
           }
@@ -183,7 +145,7 @@ class CastPrepareSession {
   }
 
   void _chunkLog(String? text) {
-    if (text == null) return;
+    if (!kDebugMode || text == null) return;
     final lines = text.split('\n');
     final tail = lines.length > 60 ? lines.sublist(lines.length - 60) : lines;
     final joined = tail.join('\n');

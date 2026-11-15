@@ -156,8 +156,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// 1st in Load file event need to chack there iis any active event or not
-  /// 2nd
   @override
   Widget build(BuildContext context) {
     final MediaBloc mediaBloc = getIt<MediaBloc>();

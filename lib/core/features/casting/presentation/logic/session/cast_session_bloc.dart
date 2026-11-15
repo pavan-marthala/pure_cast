@@ -538,7 +538,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       // the loaded media before activating it. Reload at the current position.
       final media = state.activeMedia;
       if (subtitle != null && state.activeDevice != null && media != null) {
-        debugPrint('[SUBDBG] reloading media with subtitles:');
         final updatedSubtitles = [...media.subtitles];
         final idx = updatedSubtitles.indexWhere((s) => s.id == subtitle!.id);
         if (idx >= 0) {
@@ -546,15 +545,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         } else {
           updatedSubtitles.add(subtitle);
         }
-        for (final t in updatedSubtitles) {
-          debugPrint('[SUBDBG]   track id=${t.id} url=${t.url}');
-        }
         final updatedMedia = media.copyWith(
           subtitles: updatedSubtitles,
           defaultSubtitle: subtitle,
         );
         try {
-          debugPrint('[SUBDBG] loadMedia start');
           if (updatedMedia.isLocalFile) {
             emit(state.copyWith(preparingSubtitles: true, prepareError: null));
           }
@@ -562,28 +557,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           if (updatedMedia.isLocalFile) {
             emit(state.copyWith(preparingSubtitles: false));
           }
-          debugPrint('[SUBDBG] loadMedia done');
           emit(state.copyWith(activeMedia: updatedMedia));
         } catch (e) {
           // Fall through; setSubtitle may still work if track was declared.
         }
       }
 
-      // [SUBDBG] diagnostics
-      if (subtitle != null) {
-        try {
-          final f = File(subtitle.url);
-          final size = await f.length();
-          final lines = await f.readAsLines();
-          debugPrint('[SUBDBG] final subtitle url=${subtitle.url} size=$size');
-          for (final l in lines.take(5)) {
-            debugPrint('[SUBDBG]   VTT> $l');
-          }
-        } catch (e) {
-          debugPrint('[SUBDBG] could not read subtitle file: $e');
-        }
-      }
-      debugPrint('[SUBDBG] calling setSubtitle with url=${subtitle?.url}');
       await _castService.setSubtitle(subtitle);
       emit(state.copyWith(activeSubtitle: subtitle));
     } catch (e) {

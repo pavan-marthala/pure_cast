@@ -56,9 +56,8 @@ class CastFfmpegCapabilities {
       );
       _cached = caps;
       return caps;
-    } catch (e, st) {
+    } catch (e) {
       debugPrint('[FFDBG] capability detection failed: $e');
-      debugPrint('$st');
       // Conservative fallback: do NOT cache so the next call retries.
       return const CastDeviceCaps();
     }
@@ -113,27 +112,8 @@ class CastFfmpegCapabilities {
   static bool _contains(String haystack, String needle) =>
       haystack.toLowerCase().contains(needle.toLowerCase());
 
-  /// Prints diagnostic output explaining why each capability is enabled or
-  /// disabled. Safe to call at app startup in debug mode.
+  /// Warms the capability cache used by the app at startup.
   static Future<void> dumpDiagnostics() async {
-    final caps = await detect();
-    debugPrint('[FFDBG] CastDeviceCaps:');
-    debugPrint(
-      '[FFDBG]   supportsHevc=${caps.supportsHevc} '
-      '(receiver HEVC support; default false)',
-    );
-    debugPrint(
-      '[FFDBG]   hasH264Encoder=${caps.hasH264Encoder} '
-      '(libx264 or h264_mediacodec encoder present)',
-    );
-    debugPrint(
-      '[FFDBG]   hasH264Mediacodec=${caps.hasH264Mediacodec} '
-      '(h264_mediacodec encoder present)',
-    );
-    debugPrint(
-      '[FFDBG]   transcodeEnabled=${caps.transcodeEnabled} '
-      '(any H.264 encoder available)',
-    );
-    debugPrint('[FFDBG]   modelName=${caps.modelName ?? '<none>'}');
+    await detect();
   }
 }

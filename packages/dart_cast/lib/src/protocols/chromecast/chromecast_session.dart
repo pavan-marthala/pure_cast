@@ -34,9 +34,9 @@ import 'proto/cast_channel.dart';
 /// Strategy used for a single LOAD attempt against the Chromecast.
 ///
 /// Iterated by [ChromecastSession._loadMediaInternal] as a bisect-style
-/// retry — the leanest variant is tried first so we can see whether the
-/// experimental transforms (alt-audio muxer, DVB-table stripper) are
-/// actually needed for a given source.
+/// retry: the leanest variant is tried first, and if the receiver rejects
+/// it the alt-audio muxer + DVB-table stripper variant is tried as the
+/// fallback.
 enum _LoadMode {
   /// `registerMedia` pass-through with DVB stripper disabled and no
   /// alt-audio muxer. This is the leanest variant.
@@ -44,7 +44,7 @@ enum _LoadMode {
 
   /// `registerAltAudioMuxed` (with `registerMedia` fallback if the
   /// source has no alt-audio) and the DVB stripper enabled on TS
-  /// segments. This is the previous default.
+  /// segments. This is the fallback for sources that need either piece.
   muxed('muxed alt-audio + DVB stripper');
 
   const _LoadMode(this.label);
@@ -457,10 +457,6 @@ class ChromecastSession extends CastSession {
     Future<void> Function(String receiverId, String codecKey, bool directOk)?
     memoryRecord,
   }) async {
-    debugPrint('[PREPDBG] receiver=${device.name} id=${device.id}');
-    debugPrint(
-      '[PREPDBG] caps: hasH264Encoder=${caps.hasH264Encoder} hasH264Mediacodec=${caps.hasH264Mediacodec} transcodeEnabled=${caps.transcodeEnabled} supportsHevc=${caps.supportsHevc}',
-    );
     // A new load replaces any live runs / previous prepared HLS dir.
     await _cleanupCastResources();
     _releaseLiveToken();
@@ -488,14 +484,7 @@ class ChromecastSession extends CastSession {
         probe = MediaProbe.fromJson(_mediaInfoToJson(info));
       }
       plan = decide(probe, caps);
-      debugPrint(
-        '[PREPDBG] plan=${plan.runtimeType} reason=${_planReason(plan)}',
-      );
-      debugPrint(
-        '[PREPDBG] probe container=${probe.container} video=${probe.video?.codec}/${probe.video?.profile}/${probe.video?.level}/${probe.video?.pixFmt} audio=${probe.audio.map((a) => '${a.codec}/${a.channels}').join(',')}',
-      );
     } catch (e) {
-      debugPrint('[HLSDBG] probe failed/timeout: $e');
       throw ProbeFailedException('Probe failed: $e', e);
     }
     final audioIdx =
@@ -508,7 +497,6 @@ class ChromecastSession extends CastSession {
       final depth = bitDepthOf(probe.video?.pixFmt);
       final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
       final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
-      debugPrint('[PREPDBG] memory lookup key=$memKey');
       // Check receiver memory before attempting direct playback.
       bool? memResult;
       if (memoryLookup != null) {
@@ -518,12 +506,8 @@ class ChromecastSession extends CastSession {
           memResult = null; // unknown on lookup failure
         }
       }
-      debugPrint('[PREPDBG] memory result for $memKey: $memResult');
       if (memResult == false) {
         // Known to fail on this receiver — skip direct, go to fallback/transcode.
-        debugPrint(
-          '[PREPDBG] memory says directFailed for $memKey; skipping direct attempt',
-        );
         if (plan is UncertainDirectPlan &&
             (caps.hasH264Encoder || caps.hasH264Mediacodec) &&
             caps.transcodeEnabled) {
@@ -544,7 +528,6 @@ class ChromecastSession extends CastSession {
               defaultSubtitle: subtitle,
             ),
           );
-          debugPrint('[PREPDBG] direct load OK for $memKey');
           // Record positive result.
           if (memoryRecord != null) {
             try {
@@ -553,7 +536,6 @@ class ChromecastSession extends CastSession {
           }
           return;
         } catch (e) {
-          debugPrint('[PREPDBG] direct load FAILED for $memKey: $e');
           final isMediaLoadFailed = e is MediaLoadFailedException;
           if (DirectAttemptPolicy.shouldRecordDirectFailed(
             isMediaLoadFailed: isMediaLoadFailed,
@@ -561,7 +543,6 @@ class ChromecastSession extends CastSession {
             hasSubtitle: subtitle != null,
             isDirectAttempt: true,
           )) {
-            debugPrint('[PREPDBG] recording directFailed for $memKey');
             if (memoryRecord != null) {
               try {
                 await memoryRecord(device.id, memKey, false);
@@ -592,9 +573,6 @@ class ChromecastSession extends CastSession {
           final memResult = await memoryLookup(device.id, memKey);
           if (memResult == false) {
             tryDirect = false;
-            debugPrint(
-              '[PREPDBG] memory says directFailed for $memKey; skipping direct',
-            );
           }
         } catch (_) {}
       }
@@ -708,7 +686,9 @@ class ChromecastSession extends CastSession {
     }
 
     final args = builder('/tmp/__OUTDIR__');
-    debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
+    if (kDebugMode) {
+      debugPrint('[PREPDBG] ffmpeg args: ${args.join(' ')}');
+    }
     final prepareStarter = _prepareStarter;
     final prepare =
         prepareStarter != null
@@ -723,12 +703,9 @@ class ChromecastSession extends CastSession {
       (s) => s == PrepareState.ready || s == PrepareState.failed,
     );
     if (prepare.state != PrepareState.ready) {
-      try {
-        debugPrint(
-          '[PREPDBG] dir contents: ${prepare.tempDir.listSync().map((f) => f.path.split('/').last).join(', ')}',
-        );
-      } catch (_) {}
-      debugPrint('[PREPDBG] ffmpeg logs: ${prepare.logs}');
+      if (kDebugMode) {
+        debugPrint('[PREPDBG] prepare failed: ${prepare.error}');
+      }
       // Do not leave the failed prepare's temp dir / ffmpeg session behind.
       await _cleanupCastResources();
       throw PrepareFailedException('Prepare failed: ${prepare.error}');
@@ -741,19 +718,9 @@ class ChromecastSession extends CastSession {
       prepare.sessionId,
       prepare.tempDir.path,
     );
-    debugPrint('[HLSDBG] final URL: $hlsUrl');
-    // Log whether the host is a private LAN IP.
-    try {
-      final uri = Uri.parse(hlsUrl);
-      final host = uri.host;
-      final isPrivate =
-          host.startsWith('10.') ||
-          host.startsWith('172.') ||
-          host.startsWith('192.168.') ||
-          host == '127.0.0.1' ||
-          host == 'localhost';
-      debugPrint('[HLSDBG] host=$host isPrivateLAN=$isPrivate');
-    } catch (_) {}
+    if (kDebugMode) {
+      debugPrint('[HLSDBG] final URL: $hlsUrl');
+    }
     // load via proxy url through loadMedia? loadMedia expects CastMedia. Use a remote media with hls url.
     // This prepare session belongs to this load — keep loadMedia's new-load
     // cleanup from deleting the temp dir we just prepared.
@@ -787,9 +754,6 @@ class ChromecastSession extends CastSession {
     Duration? duration,
     List<AudioStream> audioTracks = const [],
   }) async {
-    debugPrint(
-      '[PREPDBG] loadLiveMkv: $filePath audioIndex=$audioIndex streamType=$streamType',
-    );
     // A new live load replaces any previous live runs / prepared HLS dir.
     await _cleanupCastResources();
     _releaseLiveToken();
@@ -839,7 +803,9 @@ class ChromecastSession extends CastSession {
       contentType: 'video/x-matroska',
     );
     _liveToken = Uri.parse(liveUrl).pathSegments.last;
-    debugPrint('[LIVE] live URL: $liveUrl');
+    if (kDebugMode) {
+      debugPrint('[LIVE] live URL: $liveUrl');
+    }
 
     try {
       await loadMedia(
@@ -981,19 +947,6 @@ class ChromecastSession extends CastSession {
     _liveStartOffset = Duration.zero;
   }
 
-  String _planReason(CastPlan p) =>
-      p is DirectPlan
-          ? 'direct'
-          : p is RemuxAudioPlan
-          ? 'remuxAudio'
-          : p is RemuxContainerPlan
-          ? 'remuxContainer'
-          : p is TranscodeVideoPlan
-          ? 'transcodeVideo'
-          : p is UnsupportedPlan
-          ? 'unsupported: ${p.reason}'
-          : 'unknown';
-
   int _defaultAudioIndex(List<AudioStream> audio) {
     for (var i = 0; i < audio.length; i++) {
       if (audio[i].isDefault) return i;
@@ -1074,8 +1027,6 @@ class ChromecastSession extends CastSession {
     // pass the proxy URL straight to the receiver. The transformer would
     // re-proxy the /hls/... URL (double proxy) and corrupt the playlist.
     if (bypassTransform) {
-      debugPrint('[HLSDBG] bypassTransform: loading prepared HLS directly');
-      debugPrint('[HLSDBG] final URL: ${media.url}');
       await _attemptLoad(
         media: media,
         proxyUrl: media.url,
@@ -1099,13 +1050,12 @@ class ChromecastSession extends CastSession {
       return;
     }
 
-    // Remote HLS — bisect via a two-attempt retry loop:
+    // Remote HLS — two-attempt retry loop:
     //   attempt 1 (BARE) — registerMedia with the DVB-table stripper
-    //     and alt-audio muxer both disabled. Pure pass-through. If the
-    //     source plays fine, the experimental code is dead weight.
+    //     and alt-audio muxer both disabled. Pure pass-through, for
+    //     sources the receiver can already play unmodified.
     //   attempt 2 (MUXED) — alt-audio muxer + DVB stripper enabled.
-    //     This is the previous default; kept as the fallback for
-    //     sources that genuinely need either piece.
+    //     Fallback for sources that need either transform.
     //
     // The retry triggers only on MediaLoadFailedException (LOAD_FAILED
     // or 15s timeout). Anything else propagates immediately.
@@ -1282,25 +1232,6 @@ class ChromecastSession extends CastSession {
       'Chromecast: LOAD contentId=$proxyUrl contentType=$contentType '
       'requestId=$loadRequestId',
     );
-    CastLogger.debug(
-      'Chromecast: LOAD details — '
-      'attempt=$attemptLabel, '
-      'subtitleTracks=${subtitles.length}, '
-      'hasMetadata=${media.title != null}, '
-      'hasImageUrl=${media.imageUrl != null}, '
-      'startPosition=${media.startPosition?.inMilliseconds ?? 0}ms, '
-      'originalMediaType=${media.type.name}, '
-      'effectiveType=${effectiveType.name}',
-    );
-    CastLogger.debug('Chromecast: LOAD payload = $loadPayload');
-    // [HLSDBG] Log the exact LOAD payload JSON in chunks for diagnosis.
-    final payloadStr = loadPayload;
-    for (var i = 0; i < payloadStr.length; i += 800) {
-      final end = (i + 800 < payloadStr.length) ? i + 800 : payloadStr.length;
-      debugPrint(
-        '[HLSDBG] LOAD payload chunk: ${payloadStr.substring(i, end)}',
-      );
-    }
 
     final priorMediaSessionId = _mediaSessionId;
 

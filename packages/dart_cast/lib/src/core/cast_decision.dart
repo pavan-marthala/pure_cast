@@ -124,10 +124,12 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   );
 
   if (isAv1 || is10bit) {
-    if (!caps.hasLibx264 && !caps.hasH264Mediacodec)
+    if (!caps.hasLibx264 && !caps.hasH264Mediacodec) {
       return UnsupportedPlan('no usable H.264 encoder');
-    if (!caps.transcodeEnabled)
+    }
+    if (!caps.transcodeEnabled) {
       return UnsupportedPlan('video transcode is disabled');
+    }
     return TranscodeVideoPlan(
       'video codec ${v.codec} needs transcode',
       audioStreamIndex: audioIdx,
@@ -141,10 +143,12 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
     );
   }
   if (!videoCompatible) {
-    if (!caps.hasLibx264 && !caps.hasH264Mediacodec)
+    if (!caps.hasLibx264 && !caps.hasH264Mediacodec) {
       return UnsupportedPlan('no usable H.264 encoder');
-    if (!caps.transcodeEnabled)
+    }
+    if (!caps.transcodeEnabled) {
       return UnsupportedPlan('video transcode is disabled');
+    }
     return TranscodeVideoPlan(
       'video codec ${v.codec} needs transcode',
       audioStreamIndex: audioIdx,
@@ -152,7 +156,7 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   }
   if (audioIncompatible) {
     return RemuxAudioPlan(
-      'audio codec ${audio!.codec} needs remux to AAC',
+      'audio codec ${audio.codec} needs remux to AAC',
       audioStreamIndex: audioIdx,
     );
   }
@@ -164,7 +168,7 @@ CastPlan decide(MediaProbe probe, CastDeviceCaps caps) {
   }
   if (!audioCompatible && !audioIncompatible) {
     return RemuxAudioPlan(
-      'unknown audio codec ${audio?.codec}',
+      'unknown audio codec ${audio.codec}',
       audioStreamIndex: audioIdx,
     );
   }

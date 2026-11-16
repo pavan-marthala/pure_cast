@@ -193,8 +193,9 @@ class DartCastAdapter implements ICastService {
     List<PureCastAudioTrack>? audioTracks,
   }) async {
     final session = _castService.activeSession;
-    if (session == null)
+    if (session == null) {
       throw const PureCastException('No active cast session');
+    }
     if (session is! dart_cast.ChromecastSession) {
       throw const PureCastException(
         'Live MKV cast requires a Chromecast session',
@@ -348,8 +349,9 @@ class DartCastAdapter implements ICastService {
     String streamType = 'BUFFERED',
   }) async {
     final session = _castService.activeSession;
-    if (session == null)
+    if (session == null) {
       throw const PureCastException('No active cast session');
+    }
     try {
       final effectiveSubtitle =
           subtitle ??

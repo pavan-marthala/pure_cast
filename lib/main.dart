@@ -32,8 +32,10 @@ void main() async {
   await configureDependencies();
   await CastPrepareSession.cleanupLeftovers();
   if (kDebugMode) {
-    CastFfmpegDiagnostics.dumpCapabilities();
-    CastFfmpegCapabilities.dumpDiagnostics();
+    CastLogger.setCallback((level, message) {
+      if (level == 'DEBUG') return;
+      debugPrint('[$level] $message');
+    });
   }
   if (PlatformChecker.isAndroid() || PlatformChecker.isIOS()) {
     _initBackgroundService();

@@ -495,7 +495,7 @@ class ChromecastSession extends CastSession {
     if (plan is DirectPlan || plan is UncertainDirectPlan) {
       final codec = probe.video?.codec ?? 'video';
       final depth = bitDepthOf(probe.video?.pixFmt);
-      final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
+      final depthStr = depth >= 10 ? '$depth-bit' : '8-bit';
       final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
       // Check receiver memory before attempting direct playback.
       bool? memResult;
@@ -564,7 +564,7 @@ class ChromecastSession extends CastSession {
     if (plan is UnsupportedPlan) {
       final codec = probe.video?.codec ?? 'video';
       final depth = bitDepthOf(probe.video?.pixFmt);
-      final depthStr = depth >= 10 ? '${depth}-bit' : '8-bit';
+      final depthStr = depth >= 10 ? '$depth-bit' : '8-bit';
       final isAv1 = (probe.video?.codec.toLowerCase() == 'av1');
       bool tryDirect = !(isAv1 || depth >= 10);
       final memKey = '${device.metadata['md'] ?? device.id}_${codec}_$depthStr';
@@ -1592,7 +1592,7 @@ class ChromecastSession extends CastSession {
         (type == 'PING' || type == 'PONG');
     if (!isHeartbeat) {
       if (enableReceiverDebugNamespaces) {
-        CastLogger.info('Chromecast: RX ns=$namespace type=$type — $payload');
+        CastLogger.debug('Chromecast: RX ns=$namespace type=$type — $payload');
       } else if (namespace == CastMediaChannel.mediaNamespace &&
           type == 'MEDIA_STATUS') {
         // The 1 Hz position poll answers with a full MEDIA_STATUS every

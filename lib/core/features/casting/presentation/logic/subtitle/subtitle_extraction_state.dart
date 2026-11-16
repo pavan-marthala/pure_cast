@@ -9,7 +9,6 @@ enum SubtitleExtractionStatus {
   extracted,
   partialFailure,
   error,
-  cancelled,
 }
 
 @freezed

@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart';
-import 'package:dart_cast/src/core/ts_hls_media_transformer.dart';
 import 'package:test/test.dart';
 
 void main() {

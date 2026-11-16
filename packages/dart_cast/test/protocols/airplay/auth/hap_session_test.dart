@@ -474,7 +474,7 @@ void main() {
 
     /// Helper: creates a server + client HapSession pair with matching keys.
     /// Returns the server socket so the caller can listen for connections.
-    Future<({ServerSocket server, HapSession client})> _createPair({
+    Future<({ServerSocket server, HapSession client})> createPair({
       String? sessionId,
     }) async {
       final key = Uint8List(32);
@@ -495,7 +495,7 @@ void main() {
     }
 
     /// Helper: creates a server-side HapSession from an accepted socket.
-    HapSession _serverSession(Socket sock, int port) {
+    HapSession serverSession(Socket sock, int port) {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -510,13 +510,13 @@ void main() {
     }
 
     test('uses RTSP/1.0 protocol line, not HTTP/1.1', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       String? receivedRequest;
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           final data = await srvSession.readDecryptedData();
           receivedRequest = utf8.decode(data);
@@ -543,13 +543,13 @@ void main() {
     });
 
     test('CSeq header auto-increments', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       final receivedRequests = <String>[];
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           for (int i = 0; i < 3; i++) {
             final data = await srvSession.readDecryptedData();
@@ -580,13 +580,13 @@ void main() {
     });
 
     test('includes X-Apple-Session-ID header', () async {
-      final pair = await _createPair(sessionId: 'my-unique-session-42');
+      final pair = await createPair(sessionId: 'my-unique-session-42');
       server = pair.server;
       clientSession = pair.client;
 
       String? receivedRequest;
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           final data = await srvSession.readDecryptedData();
           receivedRequest = utf8.decode(data);
@@ -613,13 +613,13 @@ void main() {
     });
 
     test('User-Agent is AirPlay/550.10', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       String? receivedRequest;
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           final data = await srvSession.readDecryptedData();
           receivedRequest = utf8.decode(data);
@@ -643,13 +643,13 @@ void main() {
     });
 
     test('includes body and Content-Length when body is provided', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       Uint8List? receivedRaw;
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           final data = await srvSession.readDecryptedData();
           receivedRaw = data;
@@ -687,13 +687,13 @@ void main() {
     });
 
     test('omits Content-Length when no body is provided', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       String? receivedRequest;
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           final data = await srvSession.readDecryptedData();
           receivedRequest = utf8.decode(data);
@@ -721,7 +721,7 @@ void main() {
     late ServerSocket server;
     late HapSession clientSession;
 
-    Future<({ServerSocket server, HapSession client})> _createPair() async {
+    Future<({ServerSocket server, HapSession client})> createPair() async {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -739,7 +739,7 @@ void main() {
       return (server: srv, client: client);
     }
 
-    HapSession _serverSession(Socket sock, int port) {
+    HapSession serverSession(Socket sock, int port) {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -754,12 +754,12 @@ void main() {
     }
 
     test('parses RTSP/1.0 200 OK response', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -786,12 +786,12 @@ void main() {
     });
 
     test('parses RTSP/1.0 response with no reason phrase', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -815,7 +815,7 @@ void main() {
     });
 
     test('parses response with binary body', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
@@ -830,7 +830,7 @@ void main() {
       ]);
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -861,12 +861,12 @@ void main() {
     });
 
     test('parses RTSP/1.0 with non-200 status code', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -897,7 +897,7 @@ void main() {
     late ServerSocket server;
     late HapSession clientSession;
 
-    Future<({ServerSocket server, HapSession client})> _createPair() async {
+    Future<({ServerSocket server, HapSession client})> createPair() async {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -915,7 +915,7 @@ void main() {
       return (server: srv, client: client);
     }
 
-    HapSession _serverSession(Socket sock, int port) {
+    HapSession serverSession(Socket sock, int port) {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -930,14 +930,14 @@ void main() {
     }
 
     test('response with Content-Length waits for full body', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       final bodyContent = 'A' * 100; // 100-byte body
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -962,12 +962,12 @@ void main() {
     });
 
     test('response with no Content-Length and no body completes', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -991,12 +991,12 @@ void main() {
     });
 
     test('response with chunked transfer encoding completes', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           await srvSession.readDecryptedData();
 
@@ -1027,7 +1027,7 @@ void main() {
     late ServerSocket server;
     late HapSession clientSession;
 
-    Future<({ServerSocket server, HapSession client})> _createPair() async {
+    Future<({ServerSocket server, HapSession client})> createPair() async {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -1045,7 +1045,7 @@ void main() {
       return (server: srv, client: client);
     }
 
-    HapSession _serverSession(Socket sock, int port) {
+    HapSession serverSession(Socket sock, int port) {
       final key = Uint8List(32);
       for (int i = 0; i < 32; i++) {
         key[i] = i;
@@ -1060,14 +1060,14 @@ void main() {
     }
 
     test('resetRtspSession resets sessionId and CSeq counter', () async {
-      final pair = await _createPair();
+      final pair = await createPair();
       server = pair.server;
       clientSession = pair.client;
 
       final originalSessionId = clientSession.sessionId;
 
       server.listen((sock) async {
-        final srvSession = _serverSession(sock, server.port);
+        final srvSession = serverSession(sock, server.port);
         try {
           // Handle multiple requests
           while (true) {
@@ -1122,14 +1122,14 @@ void main() {
     test(
       'resetRtspSession causes next setupRtspSession to re-run SETUP+RECORD',
       () async {
-        final pair = await _createPair();
+        final pair = await createPair();
         server = pair.server;
         clientSession = pair.client;
 
         int requestCount = 0;
 
         server.listen((sock) async {
-          final srvSession = _serverSession(sock, server.port);
+          final srvSession = serverSession(sock, server.port);
           try {
             while (true) {
               final data = await srvSession.readDecryptedData();

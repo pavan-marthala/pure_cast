@@ -90,10 +90,10 @@ void main() {
 
     test('MediaLoadFailedException type check', () {
       final ex = MediaLoadFailedException('Receiver returned LOAD_FAILED');
-      expect(ex is MediaLoadFailedException, isTrue);
+      expect(ex, isA<MediaLoadFailedException>());
       expect(
         DirectAttemptPolicy.shouldRecordDirectFailed(
-          isMediaLoadFailed: ex is MediaLoadFailedException,
+          isMediaLoadFailed: true,
           codec: 'vp9',
           hasSubtitle: false,
           isDirectAttempt: true,

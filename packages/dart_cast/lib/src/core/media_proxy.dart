@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'hls_alt_audio_proxy.dart';
 import 'hls_parser.dart';
@@ -1318,7 +1317,7 @@ class MediaProxy {
           token,
         );
 
-        CastLogger.info(
+        CastLogger.debug(
           'MediaProxy: rewritten HLS playlist (${rewritten.length} chars)',
         );
         CastLogger.debug('MediaProxy: rewritten HLS playlist:\n$rewritten');
@@ -1410,7 +1409,7 @@ class MediaProxy {
           'firstPids=[$arrival] '
           'url=${_summarizeUrl(targetUrl)}';
       if (stripper.packetsDropped > 0) {
-        CastLogger.info(line);
+        CastLogger.debug(line);
       } else {
         CastLogger.debug(line);
       }

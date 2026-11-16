@@ -97,6 +97,3 @@ void main() {
     expect(p.audio, isEmpty);
   });
 }
-
-// audio index mapping sanity
-void _audioIndexSanity() {}

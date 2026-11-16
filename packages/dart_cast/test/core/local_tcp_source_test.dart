@@ -34,7 +34,7 @@ void main() {
       final src = LocalTcpSource();
       await src.bind();
       final client = await Socket.connect('127.0.0.1', src.port);
-      final stream = await src.accept(timeout: const Duration(seconds: 5));
+      await src.accept(timeout: const Duration(seconds: 5));
       await src.close();
       // After close, accepting should fail
       expect(

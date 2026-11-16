@@ -111,9 +111,4 @@ class CastFfmpegCapabilities {
 
   static bool _contains(String haystack, String needle) =>
       haystack.toLowerCase().contains(needle.toLowerCase());
-
-  /// Warms the capability cache used by the app at startup.
-  static Future<void> dumpDiagnostics() async {
-    await detect();
-  }
 }

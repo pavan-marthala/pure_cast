@@ -17,7 +17,6 @@ class SubtitleExtractionBloc
     on<InspectSubtitlesEvent>(_onInspectSubtitles);
     on<ExtractSingleTrackEvent>(_onExtractSingleTrack);
     on<ExtractAllTracksEvent>(_onExtractAllTracks);
-    on<CancelExtractionEvent>(_onCancelExtraction);
     on<ClearResultsEvent>(_onClearResults);
   }
 
@@ -178,18 +177,6 @@ class SubtitleExtractionBloc
         ),
       );
     }
-  }
-
-  void _onCancelExtraction(
-    CancelExtractionEvent event,
-    Emitter<SubtitleExtractionState> emit,
-  ) async {
-    await _extractionService.cancelAllExtractions();
-    emit(
-      state.copyWith(
-        status: SubtitleExtractionStatus.cancelled,
-      ),
-    );
   }
 
   void _onClearResults(

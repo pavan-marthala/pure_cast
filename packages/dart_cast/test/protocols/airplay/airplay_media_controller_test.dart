@@ -71,7 +71,9 @@ Future<void> _respondOk(
 /// Creates an encrypted client/server pair with a fixed known key.
 Future<({ServerSocket server, HapSession client})> createEncryptedPair() async {
   final key = Uint8List(32);
-  for (int i = 0; i < 32; i++) key[i] = i;
+  for (int i = 0; i < 32; i++) {
+    key[i] = i;
+  }
   final srv = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final sock = await Socket.connect('127.0.0.1', srv.port);
   final client = HapSession(

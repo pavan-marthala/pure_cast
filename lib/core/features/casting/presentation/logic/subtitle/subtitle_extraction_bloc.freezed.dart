@@ -56,14 +56,13 @@ extension SubtitleExtractionEventPatterns on SubtitleExtractionEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( InspectSubtitlesEvent value)?  inspectSubtitles,TResult Function( ExtractSingleTrackEvent value)?  extractSingleTrack,TResult Function( ExtractAllTracksEvent value)?  extractAllTracks,TResult Function( CancelExtractionEvent value)?  cancelExtraction,TResult Function( ClearResultsEvent value)?  clearResults,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( InspectSubtitlesEvent value)?  inspectSubtitles,TResult Function( ExtractSingleTrackEvent value)?  extractSingleTrack,TResult Function( ExtractAllTracksEvent value)?  extractAllTracks,TResult Function( ClearResultsEvent value)?  clearResults,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent() when inspectSubtitles != null:
 return inspectSubtitles(_that);case ExtractSingleTrackEvent() when extractSingleTrack != null:
 return extractSingleTrack(_that);case ExtractAllTracksEvent() when extractAllTracks != null:
-return extractAllTracks(_that);case CancelExtractionEvent() when cancelExtraction != null:
-return cancelExtraction(_that);case ClearResultsEvent() when clearResults != null:
+return extractAllTracks(_that);case ClearResultsEvent() when clearResults != null:
 return clearResults(_that);case _:
   return orElse();
 
@@ -82,14 +81,13 @@ return clearResults(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( InspectSubtitlesEvent value)  inspectSubtitles,required TResult Function( ExtractSingleTrackEvent value)  extractSingleTrack,required TResult Function( ExtractAllTracksEvent value)  extractAllTracks,required TResult Function( CancelExtractionEvent value)  cancelExtraction,required TResult Function( ClearResultsEvent value)  clearResults,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( InspectSubtitlesEvent value)  inspectSubtitles,required TResult Function( ExtractSingleTrackEvent value)  extractSingleTrack,required TResult Function( ExtractAllTracksEvent value)  extractAllTracks,required TResult Function( ClearResultsEvent value)  clearResults,}){
 final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent():
 return inspectSubtitles(_that);case ExtractSingleTrackEvent():
 return extractSingleTrack(_that);case ExtractAllTracksEvent():
-return extractAllTracks(_that);case CancelExtractionEvent():
-return cancelExtraction(_that);case ClearResultsEvent():
+return extractAllTracks(_that);case ClearResultsEvent():
 return clearResults(_that);case _:
   throw StateError('Unexpected subclass');
 
@@ -107,14 +105,13 @@ return clearResults(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( InspectSubtitlesEvent value)?  inspectSubtitles,TResult? Function( ExtractSingleTrackEvent value)?  extractSingleTrack,TResult? Function( ExtractAllTracksEvent value)?  extractAllTracks,TResult? Function( CancelExtractionEvent value)?  cancelExtraction,TResult? Function( ClearResultsEvent value)?  clearResults,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( InspectSubtitlesEvent value)?  inspectSubtitles,TResult? Function( ExtractSingleTrackEvent value)?  extractSingleTrack,TResult? Function( ExtractAllTracksEvent value)?  extractAllTracks,TResult? Function( ClearResultsEvent value)?  clearResults,}){
 final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent() when inspectSubtitles != null:
 return inspectSubtitles(_that);case ExtractSingleTrackEvent() when extractSingleTrack != null:
 return extractSingleTrack(_that);case ExtractAllTracksEvent() when extractAllTracks != null:
-return extractAllTracks(_that);case CancelExtractionEvent() when cancelExtraction != null:
-return cancelExtraction(_that);case ClearResultsEvent() when clearResults != null:
+return extractAllTracks(_that);case ClearResultsEvent() when clearResults != null:
 return clearResults(_that);case _:
   return null;
 
@@ -132,13 +129,12 @@ return clearResults(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String filePath,  int fileSize,  DateTime lastModified)?  inspectSubtitles,TResult Function( SubtitleStreamInfo stream,  String sourcePath)?  extractSingleTrack,TResult Function( String sourcePath)?  extractAllTracks,TResult Function()?  cancelExtraction,TResult Function()?  clearResults,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String filePath,  int fileSize,  DateTime lastModified)?  inspectSubtitles,TResult Function( SubtitleStreamInfo stream,  String sourcePath)?  extractSingleTrack,TResult Function( String sourcePath)?  extractAllTracks,TResult Function()?  clearResults,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent() when inspectSubtitles != null:
 return inspectSubtitles(_that.filePath,_that.fileSize,_that.lastModified);case ExtractSingleTrackEvent() when extractSingleTrack != null:
 return extractSingleTrack(_that.stream,_that.sourcePath);case ExtractAllTracksEvent() when extractAllTracks != null:
-return extractAllTracks(_that.sourcePath);case CancelExtractionEvent() when cancelExtraction != null:
-return cancelExtraction();case ClearResultsEvent() when clearResults != null:
+return extractAllTracks(_that.sourcePath);case ClearResultsEvent() when clearResults != null:
 return clearResults();case _:
   return orElse();
 
@@ -157,13 +153,12 @@ return clearResults();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String filePath,  int fileSize,  DateTime lastModified)  inspectSubtitles,required TResult Function( SubtitleStreamInfo stream,  String sourcePath)  extractSingleTrack,required TResult Function( String sourcePath)  extractAllTracks,required TResult Function()  cancelExtraction,required TResult Function()  clearResults,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String filePath,  int fileSize,  DateTime lastModified)  inspectSubtitles,required TResult Function( SubtitleStreamInfo stream,  String sourcePath)  extractSingleTrack,required TResult Function( String sourcePath)  extractAllTracks,required TResult Function()  clearResults,}) {final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent():
 return inspectSubtitles(_that.filePath,_that.fileSize,_that.lastModified);case ExtractSingleTrackEvent():
 return extractSingleTrack(_that.stream,_that.sourcePath);case ExtractAllTracksEvent():
-return extractAllTracks(_that.sourcePath);case CancelExtractionEvent():
-return cancelExtraction();case ClearResultsEvent():
+return extractAllTracks(_that.sourcePath);case ClearResultsEvent():
 return clearResults();case _:
   throw StateError('Unexpected subclass');
 
@@ -181,13 +176,12 @@ return clearResults();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String filePath,  int fileSize,  DateTime lastModified)?  inspectSubtitles,TResult? Function( SubtitleStreamInfo stream,  String sourcePath)?  extractSingleTrack,TResult? Function( String sourcePath)?  extractAllTracks,TResult? Function()?  cancelExtraction,TResult? Function()?  clearResults,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String filePath,  int fileSize,  DateTime lastModified)?  inspectSubtitles,TResult? Function( SubtitleStreamInfo stream,  String sourcePath)?  extractSingleTrack,TResult? Function( String sourcePath)?  extractAllTracks,TResult? Function()?  clearResults,}) {final _that = this;
 switch (_that) {
 case InspectSubtitlesEvent() when inspectSubtitles != null:
 return inspectSubtitles(_that.filePath,_that.fileSize,_that.lastModified);case ExtractSingleTrackEvent() when extractSingleTrack != null:
 return extractSingleTrack(_that.stream,_that.sourcePath);case ExtractAllTracksEvent() when extractAllTracks != null:
-return extractAllTracks(_that.sourcePath);case CancelExtractionEvent() when cancelExtraction != null:
-return cancelExtraction();case ClearResultsEvent() when clearResults != null:
+return extractAllTracks(_that.sourcePath);case ClearResultsEvent() when clearResults != null:
 return clearResults();case _:
   return null;
 
@@ -405,38 +399,6 @@ as String,
 
 
 }
-
-/// @nodoc
-
-
-class CancelExtractionEvent implements SubtitleExtractionEvent {
-  const CancelExtractionEvent();
-  
-
-
-
-
-
-
-@override
-bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is CancelExtractionEvent);
-}
-
-
-@override
-int get hashCode => runtimeType.hashCode;
-
-@override
-String toString() {
-    return 'SubtitleExtractionEvent.cancelExtraction()';
-}
-
-
-}
-
-
-
 
 /// @nodoc
 

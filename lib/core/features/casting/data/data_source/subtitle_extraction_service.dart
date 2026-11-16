@@ -356,11 +356,6 @@ class SubtitleExtractionService {
     return extractSubtitle(sourcePath: sourcePath, stream: stream);
   }
 
-  Future<void> cancelAllExtractions() async {
-    await FFmpegKit.cancel();
-    _activeExtractions.clear();
-  }
-
   Future<void> cleanupOrphanedCache(List<String> activeMediaPaths) async {
     if (_disposed) return;
     final active = activeMediaPaths.map(_keyPrefix).toSet();

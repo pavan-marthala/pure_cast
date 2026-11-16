@@ -119,7 +119,7 @@ void main() {
     });
 
     test('stop deletes session dir', () async {
-      final url = proxy.registerHlsDirectory('sess7', tmpDir.path);
+      proxy.registerHlsDirectory('sess7', tmpDir.path);
       await proxy.stop();
       expect(
         await Directory(tmpDir.path).exists(),

@@ -17,7 +17,5 @@ abstract class SubtitleExtractionEvent with _$SubtitleExtractionEvent {
     required String sourcePath,
   }) = ExtractAllTracksEvent;
 
-  const factory SubtitleExtractionEvent.cancelExtraction() = CancelExtractionEvent;
-
   const factory SubtitleExtractionEvent.clearResults() = ClearResultsEvent;
 }

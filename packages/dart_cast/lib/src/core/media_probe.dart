@@ -1,5 +1,3 @@
-import 'dart:convert' as convert;
-
 class MediaProbe {
   final String container;
   final double? durationSeconds;
@@ -27,11 +25,11 @@ class MediaProbe {
       if (s is! Map) continue;
       final type = s['codec_type'] as String?;
       if (type == 'video' && video == null) {
-        video = VideoStream.fromJson((s as Map).cast<String, dynamic>());
+        video = VideoStream.fromJson(s.cast<String, dynamic>());
       } else if (type == 'audio') {
-        audio.add(AudioStream.fromJson((s as Map).cast<String, dynamic>()));
+        audio.add(AudioStream.fromJson(s.cast<String, dynamic>()));
       } else if (type == 'subtitle') {
-        subs.add(SubtitleStream.fromJson((s as Map).cast<String, dynamic>()));
+        subs.add(SubtitleStream.fromJson(s.cast<String, dynamic>()));
       }
     }
     final dur = format['duration'];

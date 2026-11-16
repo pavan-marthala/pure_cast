@@ -1,11 +1,7 @@
-import 'dart:convert' as convert;
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min/return_code.dart';
+import 'package:dart_cast/dart_cast.dart' as dart_cast;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:injectable/injectable.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -127,65 +123,61 @@ class SubtitleBatchExtractionResult {
   bool get partialSuccess => results.isNotEmpty && successCount > 0 && failureCount > 0;
 }
 
-/// Service for detecting embedded subtitle streams and extracting them using FFmpeg/FFprobe.
+/// Service for detecting embedded subtitle streams and extracting them using
+/// the `dart_cast` package.
 @lazySingleton
 class SubtitleExtractionService {
-  static const _imageBasedCodecs = {
-    'dvd_subtitle',
-    'hdmv_pgs_subtitle',
-    'dvb_subtitle',
-    'xsub',
-  };
-
-  static ({String ext, List<String> codecArgs}) _outputPlan(SubtitleStreamInfo s) {
-    switch (s.codecName.toLowerCase()) {
-      case 'subrip':
-        return (ext: 'srt', codecArgs: ['-c:s', 'copy']);
-      case 'webvtt':
-        return (ext: 'vtt', codecArgs: ['-c:s', 'copy']);
-      case 'ass':
-        return (ext: 'ass', codecArgs: ['-c:s', 'copy']);
-      case 'ssa':
-        return (ext: 'ssa', codecArgs: ['-c:s', 'copy']);
-      case 'hdmv_pgs_subtitle':
-        return (ext: 'sup', codecArgs: ['-c:s', 'copy']);
-      default:
-        if (s.isImageBased) {
-          return (ext: 'mks', codecArgs: ['-c:s', 'copy']);
-        }
-        return (ext: 'srt', codecArgs: ['-c:s', 'srt']);
-    }
-  }
-
-  Directory? _tempDir;
-  final Set<String> _activeExtractions = {};
-  bool _disposed = false;
   final SubtitleMetadataCache _metadataCache;
+  final dart_cast.MediaProber _prober;
+  final dart_cast.FfmpegRunner _runner;
+  final Future<Directory> Function() _cacheDirectory;
 
-  SubtitleExtractionService(this._metadataCache);
+  Future<dart_cast.SubtitleCache>? _cacheFuture;
+  Future<dart_cast.SubtitleExtractor>? _extractorFuture;
+  bool _disposed = false;
 
-  Future<Directory> getTempDir() async {
-    if (_tempDir != null) return _tempDir!;
+  SubtitleExtractionService(this._metadataCache)
+    : _prober = const dart_cast.FfprobeMediaProber(),
+      _runner = const dart_cast.FFmpegKitRunner(),
+      _cacheDirectory = _defaultCacheDirectory;
+
+  /// Creates a service with injected dependencies.
+  @visibleForTesting
+  SubtitleExtractionService.withDependencies({
+    required SubtitleMetadataCache metadataCache,
+    required dart_cast.MediaProber prober,
+    required dart_cast.FfmpegRunner runner,
+    required Future<Directory> Function() cacheDirectory,
+  }) : this._(metadataCache, prober, runner, cacheDirectory);
+
+  SubtitleExtractionService._(
+    this._metadataCache,
+    this._prober,
+    this._runner,
+    this._cacheDirectory,
+  );
+
+  static Future<Directory> _defaultCacheDirectory() async {
     final baseDir = await getApplicationSupportDirectory();
-    final subtitlesDir = Directory('${baseDir.path}/pure_cast_subtitles');
-    if (!await subtitlesDir.exists()) {
-      await subtitlesDir.create(recursive: true);
+    final cacheDir = Directory('${baseDir.path}/pure_cast_subtitle_cache_v2');
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
     }
-    _tempDir = subtitlesDir;
-    return subtitlesDir;
+    return cacheDir;
   }
 
-  Future<void> clearTempFiles() async {
-    final dir = _tempDir;
-    if (dir == null) return;
-    try {
-      final files = await dir.list().toList();
-      for (final file in files) {
-        if (file is File) {
-          await file.delete();
-        }
-      }
-    } catch (_) {}
+  Future<dart_cast.SubtitleCache> get _cache =>
+      _cacheFuture ??= _createCache();
+
+  Future<dart_cast.SubtitleCache> _createCache() async {
+    return dart_cast.SubtitleCache(directory: await _cacheDirectory());
+  }
+
+  Future<dart_cast.SubtitleExtractor> get _extractor =>
+      _extractorFuture ??= _createExtractor();
+
+  Future<dart_cast.SubtitleExtractor> _createExtractor() async {
+    return dart_cast.SubtitleExtractor(runner: _runner, cache: await _cache);
   }
 
   Future<SubtitleProbeResult> probeAndCacheSubtitles({
@@ -225,55 +217,81 @@ class SubtitleExtractionService {
       return const SubtitleProbeResult([]);
     }
 
-    final input = await _resolveInputPath(filePath);
-    if (input == null) {
+    final String input;
+    try {
+      input = await _runner.resolveInput(filePath);
+    } catch (_) {
+      return const SubtitleProbeResult([]);
+    }
+
+    if (filePath.startsWith('content://')) {
+      if (input == filePath) {
+        return const SubtitleProbeResult([]);
+      }
+    } else if (!await _sourceExists(filePath)) {
       return const SubtitleProbeResult([]);
     }
 
     try {
-      final session = await FFprobeKit.getMediaInformation(input);
-      final info = session.getMediaInformation();
-      if (info == null) {
-        return const SubtitleProbeResult([]);
-      }
-
-      final result = <SubtitleStreamInfo>[];
-      var track = 0;
-      for (final s in info.getStreams()) {
-        if (s.getType() != 'subtitle') continue;
-        final codec = (s.getCodec() ?? 'unknown').toLowerCase();
-        final tags = s.getTags() ?? const {};
-        result.add(SubtitleStreamInfo(
-          streamIndex: s.getIndex() ?? -1,
-          trackIndex: track++,
-          codecName: codec,
-          language: tags['language'] as String?,
-          title: tags['title'] as String?,
-          isImageBased: _imageBasedCodecs.contains(codec),
-        ));
-      }
-      return SubtitleProbeResult(result);
+      final probe = await _prober.probe(
+        input,
+        timeout: const Duration(seconds: 30),
+      );
+      return SubtitleProbeResult([
+        for (final s in probe.subtitles)
+          SubtitleStreamInfo(
+            streamIndex: s.index,
+            trackIndex: s.trackIndex,
+            codecName: s.codec.toLowerCase(),
+            language: s.language,
+            title: s.title,
+            isImageBased: s.isImageBased,
+          ),
+      ]);
     } catch (_) {
       return const SubtitleProbeResult([]);
     }
   }
 
-  Future<String?> _resolveInputPath(String path) async {
-    if (path.startsWith('content://')) {
-      if (!Platform.isAndroid) return null;
-      return await FFmpegKitConfig.getSafParameterForRead(path);
-    }
+  Future<bool> _sourceExists(String path) {
     final clean = path.startsWith('file://') ? Uri.parse(path).toFilePath() : path;
-    return await File(clean).exists() ? clean : null;
+    return File(clean).exists();
   }
 
-  String _keyPrefix(String path) =>
-      sha1.convert(convert.utf8.encode(path)).toString().substring(0, 16);
+  Future<dart_cast.MediaFileIdentity?> _identityFor(String sourcePath) async {
+    if (sourcePath.startsWith('content://')) {
+      // content:// sources are not stat-able, so their cache entries are never
+      // invalidated by source changes. Known limitation: the UI only reaches
+      // extraction for plain local files today.
+      return dart_cast.MediaFileIdentity(
+        path: sourcePath,
+        sizeBytes: 0,
+        modified: DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    }
 
-  Future<String> _cachePathFor(String sourcePath, SubtitleStreamInfo s) async {
-    final dir = await _getExtractionCacheDir();
-    final plan = _outputPlan(s);
-    return '${dir.path}/${_keyPrefix(sourcePath)}_${s.streamIndex}.${plan.ext}';
+    final clean = sourcePath.startsWith('file://')
+        ? Uri.parse(sourcePath).toFilePath()
+        : sourcePath;
+    final file = File(clean);
+    if (!await file.exists()) return null;
+    final stat = await file.stat();
+    return dart_cast.MediaFileIdentity(
+      path: clean,
+      sizeBytes: stat.size,
+      modified: stat.modified,
+    );
+  }
+
+  dart_cast.SubtitleStream _toPackageStream(SubtitleStreamInfo stream) {
+    return dart_cast.SubtitleStream(
+      index: stream.streamIndex,
+      trackIndex: stream.trackIndex,
+      codec: stream.codecName,
+      language: stream.language,
+      title: stream.title,
+      isImageBased: stream.isImageBased,
+    );
   }
 
   Future<SubtitleExtractionResult> extractSubtitle({
@@ -285,86 +303,23 @@ class SubtitleExtractionService {
           stream, const SubtitleExtractionError(message: 'Service disposed'));
     }
 
-    final outPath = await _cachePathFor(sourcePath, stream);
-    final outFile = File(outPath);
-    if (await outFile.exists() && await outFile.length() > 0) {
-      return SubtitleExtractionResult.success(stream, outPath);
-    }
-
-    final input = await _resolveInputPath(sourcePath);
-    if (input == null) {
-      return SubtitleExtractionResult.failure(
-          stream, const SubtitleExtractionError(message: 'Cannot resolve source'));
-    }
-
-    final key = '$sourcePath:${stream.streamIndex}';
-    if (!_activeExtractions.add(key)) {
-      return SubtitleExtractionResult.failure(
-          stream, const SubtitleExtractionError(message: 'Already in progress'));
-    }
-
-    final plan = _outputPlan(stream);
-    final tmpPath = '$outPath.part.${plan.ext}';
     try {
-      final args = [
-        '-y', '-hide_banner', '-nostdin',
-        '-i', input,
-        '-map', '0:${stream.streamIndex}',
-        '-vn', '-an', '-dn',
-        ...plan.codecArgs,
-        tmpPath,
-      ];
-
-      final session = await FFmpegKit.executeWithArguments(args);
-      final rc = await session.getReturnCode();
-
-      if (!ReturnCode.isSuccess(rc)) {
-        final logs = await session.getAllLogsAsString();
+      final identity = await _identityFor(sourcePath);
+      if (identity == null) {
         return SubtitleExtractionResult.failure(
-          stream,
-          SubtitleExtractionError(
-            message: ReturnCode.isCancel(rc) ? 'Cancelled' : 'FFmpeg failed',
-            ffmpegLogs: logs,
-            returnCode: rc?.getValue(),
-          ),
-        );
+            stream, const SubtitleExtractionError(message: 'Cannot resolve source'));
       }
-
-      final tmp = File(tmpPath);
-      if (!await tmp.exists() || await tmp.length() == 0) {
-        return SubtitleExtractionResult.failure(
-            stream, const SubtitleExtractionError(message: 'Empty output'));
-      }
-
-      await tmp.rename(outPath);
-      return SubtitleExtractionResult.success(stream, outPath);
+      final extractor = await _extractor;
+      final result = await extractor.extract(
+        source: identity,
+        track: _toPackageStream(stream),
+      );
+      return SubtitleExtractionResult.success(stream, result.file.path);
+    } on dart_cast.MediaTrackException catch (error) {
+      return SubtitleExtractionResult.failure(stream, _errorFor(error));
     } catch (e) {
       return SubtitleExtractionResult.failure(
           stream, SubtitleExtractionError(message: 'Exception: $e'));
-    } finally {
-      _activeExtractions.remove(key);
-      final tmp = File(tmpPath);
-      if (await tmp.exists()) await tmp.delete();
-    }
-  }
-
-  Future<SubtitleExtractionResult> extractSubtitleTrackFromPath({
-    required String sourcePath,
-    required SubtitleStreamInfo stream,
-    required String outputPath,
-  }) async {
-    return extractSubtitle(sourcePath: sourcePath, stream: stream);
-  }
-
-  Future<void> cleanupOrphanedCache(List<String> activeMediaPaths) async {
-    if (_disposed) return;
-    final active = activeMediaPaths.map(_keyPrefix).toSet();
-    final dir = await _getExtractionCacheDir();
-    if (!await dir.exists()) return;
-    await for (final f in dir.list()) {
-      if (f is! File) continue;
-      final prefix = f.uri.pathSegments.last.split('_').first;
-      if (!active.contains(prefix)) await f.delete();
     }
   }
 
@@ -393,55 +348,27 @@ class SubtitleExtractionService {
     return SubtitleBatchExtractionResult(results: results);
   }
 
-  Future<String?> getCachedExtractionPath(
-    String sourcePath,
-    SubtitleStreamInfo stream,
-  ) async {
-    final path = await _cachePathFor(sourcePath, stream);
-    final f = File(path);
-    if (await f.exists() && await f.length() > 0) {
-      return path;
-    }
-    return null;
-  }
-
-  Future<Directory> _getExtractionCacheDir() async {
-    final baseDir = await getApplicationSupportDirectory();
-    final cacheDir = Directory('${baseDir.path}/pure_cast_subtitle_cache');
-    if (!await cacheDir.exists()) {
-      await cacheDir.create(recursive: true);
-    }
-    return cacheDir;
-  }
-
   Future<int> getExtractionCacheSize() async {
     if (_disposed) return 0;
-    final dir = await _getExtractionCacheDir();
-    if (!await dir.exists()) return 0;
-    final files = await dir.list().toList();
-    int total = 0;
-    for (final file in files) {
-      if (file is File) {
-        try {
-          total += await file.length();
-        } catch (_) {}
-      }
-    }
-    return total;
+    final cache = await _cache;
+    final stats = await cache.stats();
+    return stats.totalBytes;
   }
 
   Future<void> clearExtractionCache() async {
     if (_disposed) return;
-    final dir = await _getExtractionCacheDir();
-    if (!await dir.exists()) return;
-    final files = await dir.list().toList();
-    for (final file in files) {
-      if (file is File) {
-        try {
-          await file.delete();
-        } catch (_) {}
-      }
-    }
+    final cache = await _cache;
+    final extractor = await _extractor;
+    await cache.clear(protectedPaths: extractor.inFlightPaths);
+  }
+
+  /// Deletes expired and over-limit cache files, keeping in-flight extractions.
+  ///
+  /// Not called by the app yet; Stage 6 wires it at startup.
+  Future<dart_cast.SubtitleCacheCleanupResult> cleanupExtractionCache() async {
+    final cache = await _cache;
+    final extractor = await _extractor;
+    return cache.cleanup(protectedPaths: extractor.inFlightPaths);
   }
 
   /// Extracts a cast-ready WebVTT subtitle for a stream.
@@ -463,72 +390,62 @@ class SubtitleExtractionService {
               message: 'Image-based subtitles can\'t be cast'));
     }
 
-    final dir = await _getExtractionCacheDir();
-    final outPath = '${dir.path}/${_keyPrefix(sourcePath)}_${stream.streamIndex}_cast.vtt';
-    final outFile = File(outPath);
-    if (await outFile.exists() && await outFile.length() > 0) {
-      return SubtitleExtractionResult.success(stream, outPath);
-    }
-
-    final input = await _resolveInputPath(sourcePath);
-    if (input == null) {
-      return SubtitleExtractionResult.failure(
-          stream, const SubtitleExtractionError(message: 'Cannot resolve source'));
-    }
-
-    final key = '$sourcePath:${stream.streamIndex}:cast';
-    if (!_activeExtractions.add(key)) {
-      return SubtitleExtractionResult.failure(
-          stream, const SubtitleExtractionError(message: 'Already in progress'));
-    }
-
-    final tmpPath = '$outPath.part.vtt';
     try {
-      final args = [
-        '-y', '-hide_banner', '-nostdin',
-        '-i', input,
-        '-map', '0:${stream.streamIndex}',
-        '-vn', '-an', '-dn',
-        '-c:s', 'webvtt',
-        tmpPath,
-      ];
-
-      final session = await FFmpegKit.executeWithArguments(args);
-      final rc = await session.getReturnCode();
-
-      if (!ReturnCode.isSuccess(rc)) {
-        final logs = await session.getAllLogsAsString();
+      final identity = await _identityFor(sourcePath);
+      if (identity == null) {
         return SubtitleExtractionResult.failure(
-          stream,
-          SubtitleExtractionError(
-            message: ReturnCode.isCancel(rc) ? 'Cancelled' : 'FFmpeg failed',
-            ffmpegLogs: logs,
-            returnCode: rc?.getValue(),
-          ),
-        );
+            stream, const SubtitleExtractionError(message: 'Cannot resolve source'));
       }
-
-      final tmp = File(tmpPath);
-      if (!await tmp.exists() || await tmp.length() == 0) {
-        return SubtitleExtractionResult.failure(
-            stream, const SubtitleExtractionError(message: 'Empty output'));
-      }
-
-      await tmp.rename(outPath);
-      return SubtitleExtractionResult.success(stream, outPath);
+      final extractor = await _extractor;
+      final result = await extractor.extract(
+        source: identity,
+        track: _toPackageStream(stream),
+        format: dart_cast.SubtitleOutputFormat.webVtt,
+      );
+      return SubtitleExtractionResult.success(stream, result.file.path);
+    } on dart_cast.MediaTrackException catch (error) {
+      return SubtitleExtractionResult.failure(stream, _errorFor(error));
     } catch (e) {
       return SubtitleExtractionResult.failure(
           stream, SubtitleExtractionError(message: 'Exception: $e'));
-    } finally {
-      _activeExtractions.remove(key);
-      final tmp = File(tmpPath);
-      if (await tmp.exists()) await tmp.delete();
     }
+  }
+
+  /// Maps a package extraction failure to the app's existing messages.
+  SubtitleExtractionError _errorFor(dart_cast.MediaTrackException error) {
+    return switch (error) {
+      dart_cast.SubtitleSourceUnreadable() =>
+        const SubtitleExtractionError(message: 'Cannot resolve source'),
+      dart_cast.SubtitleUnsupportedCodec() =>
+        const SubtitleExtractionError(
+            message: 'Image-based subtitles can\'t be cast'),
+      dart_cast.SubtitleFfmpegFailed(:final returnCode, :final logs) =>
+        SubtitleExtractionError(
+          message: 'FFmpeg failed',
+          ffmpegLogs: logs,
+          returnCode: returnCode,
+        ),
+      dart_cast.SubtitleExtractionCancelled() =>
+        const SubtitleExtractionError(message: 'Cancelled'),
+      dart_cast.SubtitleExtractionTimedOut() =>
+        const SubtitleExtractionError(message: 'Timed out'),
+      dart_cast.SubtitleEmptyOutput() =>
+        const SubtitleExtractionError(message: 'Empty output'),
+      dart_cast.SubtitleCacheFailure() =>
+        const SubtitleExtractionError(message: 'Cache error'),
+    };
   }
 
   Future<void> dispose() async {
     _disposed = true;
-    _activeExtractions.clear();
+    final extractorFuture = _extractorFuture;
+    if (extractorFuture != null) {
+      try {
+        await (await extractorFuture).cancelAll();
+      } catch (_) {
+        // Disposal must not throw.
+      }
+    }
     await _metadataCache.dispose();
   }
 }

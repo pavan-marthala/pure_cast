@@ -4,7 +4,6 @@ import 'dart:developer';
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
-import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
@@ -49,6 +48,7 @@ class DartCastAdapter implements ICastService {
   DartCastAdapter({
     dart_cast.CastService? castService,
     DartCastMediaProbe? mediaProbe,
+    dart_cast.MediaProber? prober,
   }) : _castService =
            castService ??
            dart_cast.CastService(
@@ -67,7 +67,9 @@ class DartCastAdapter implements ICastService {
                }
              },
            ),
-       _mediaProbe = mediaProbe ?? _probeWithFfprobe;
+       _mediaProbe =
+           mediaProbe ??
+           _probeWithProber(prober ?? const dart_cast.FfprobeMediaProber());
 
   @override
   Stream<List<PureCastDevice>> discoverDevices({
@@ -241,55 +243,18 @@ class DartCastAdapter implements ICastService {
     ];
   }
 
-  /// Default probe used in production. FFprobeKit is asynchronous, so the
-  /// caller's UI thread is never blocked.
-  static Future<dart_cast.MediaProbe?> _probeWithFfprobe(String path) async {
-    var input = path;
-    if (input.startsWith('file://')) {
-      input = Uri.parse(input).toFilePath();
-    }
-    final session = await FFprobeKit.getMediaInformation(input);
-    final info = session.getMediaInformation();
-    if (info == null) return null;
-    return dart_cast.MediaProbe.fromJson(_mediaInfoToJson(info));
-  }
-
-  static Map<String, dynamic> _mediaInfoToJson(
-    dynamic info,
-  ) {
-    if (info == null) return const {};
-    // Build a minimal JSON map compatible with MediaProbe.fromJson.
-    final streams = <Map<String, dynamic>>[];
-    for (final s in info.getStreams()) {
-      final tags = s.getTags();
-      final allProps = s.getAllProperties();
-      final disp =
-          (allProps != null && allProps['disposition'] is Map)
-              ? (allProps['disposition'] as Map)['default']
-              : null;
-      final channels =
-          allProps != null ? (allProps['channels'] as num?)?.toInt() : null;
-      streams.add({
-        'codec_type': s.getType(),
-        'codec_name': s.getCodec(),
-        'profile': allProps != null ? allProps['profile'] as String? : null,
-        'level': s.getNumberProperty('level'),
-        'pix_fmt': s.getStringProperty('pix_fmt'),
-        'width': s.getWidth(),
-        'height': s.getHeight(),
-        'r_frame_rate': s.getAverageFrameRate(),
-        'index': s.getIndex(),
-        'channels': channels,
-        'tags': tags,
-        'disposition': {'default': disp == 1 ? 1 : 0},
-      });
-    }
-    return {
-      'format': {
-        'format_name': info.getFormat(),
-        'duration': info.getDuration(),
-      },
-      'streams': streams,
+  /// Default probe used in production, backed by a [dart_cast.MediaProber].
+  ///
+  /// The prober resolves `file://` paths and applies its default 8 s timeout.
+  /// A probe failure becomes null, so [probeAudioTracks] returns an empty list
+  /// instead of throwing (the bloc also guards with its own timeout).
+  static DartCastMediaProbe _probeWithProber(dart_cast.MediaProber prober) {
+    return (String path) async {
+      try {
+        return await prober.probe(path);
+      } on dart_cast.ProbeFailedException {
+        return null;
+      }
     };
   }
 

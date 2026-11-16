@@ -53,5 +53,8 @@ export 'src/core/direct_attempt_policy.dart';
 export 'src/core/media_probe.dart';
 export 'src/core/media_prober.dart';
 export 'src/core/ffprobe_runner.dart';
+export 'src/core/ffmpeg_runner.dart';
+export 'src/core/media_track_exceptions.dart';
+export 'src/core/subtitle_extractor.dart';
 export 'src/core/subtitle_cache.dart';
 export 'src/core/cast_prepare_session.dart';

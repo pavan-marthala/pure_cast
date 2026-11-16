@@ -8,9 +8,12 @@ import 'cast_exceptions.dart';
 /// Final cache file names: 20 hex hash chars, stream index, extension.
 final RegExp _finalNamePattern = RegExp(r'^[0-9a-f]{20}_\d+\.[a-z0-9]{1,8}$');
 
-/// In-flight temp file names: a final name plus `.part.<suffix>`.
+/// In-flight temp file names: a final name plus `.part.<suffix>.<ext>`.
+///
+/// The trailing extension is the real output extension so FFmpeg can pick a
+/// muxer from the temp file name.
 final RegExp _partNamePattern = RegExp(
-  r'^[0-9a-f]{20}_\d+\.[a-z0-9]{1,8}\.part\.[A-Za-z0-9_]+$',
+  r'^[0-9a-f]{20}_\d+\.[a-z0-9]{1,8}\.part\.[0-9_]+\.[a-z0-9]{1,8}$',
 );
 
 /// Lowercase extension rule used by [SubtitleCacheKey].
@@ -268,9 +271,11 @@ class SubtitleCache {
   /// Returns a new, unique temp file path for writing [key]'s output.
   ///
   /// The returned file is inside [directory] and named
-  /// `<fileName>.part.<suffix>`. The suffix makes concurrent extractions of
-  /// the same key use different temp files. The directory is created when
-  /// needed, but the temp file itself is not created.
+  /// `<fileName>.part.<suffix>.<extension>`. The trailing extension is the
+  /// real output extension so FFmpeg can select a muxer from the temp name.
+  /// The suffix makes concurrent extractions of the same key use different
+  /// temp files. The directory is created when needed, but the temp file
+  /// itself is not created.
   Future<File> partFileFor(SubtitleCacheKey key) async {
     try {
       await directory.create(recursive: true);
@@ -278,13 +283,15 @@ class SubtitleCache {
       throw SubtitleCacheException('Cannot create subtitle cache directory', e);
     }
     final suffix = '${DateTime.now().microsecondsSinceEpoch}_${_partCounter++}';
-    return File(_pathForName('${key.fileName}.part.$suffix'));
+    return File(_pathForName('${key.fileName}.part.$suffix.${key.extension}'));
   }
 
   /// Moves a finished [partFile] to its final name for [key].
   ///
-  /// [partFile] must exist, be non-empty and be inside [directory]; otherwise
-  /// a [SubtitleCacheException] is thrown and an empty part file is deleted.
+  /// [partFile] must have a cache temp-file name, exist, be non-empty and be
+  /// inside [directory]; otherwise a [SubtitleCacheException] is thrown and an
+  /// empty part file is deleted. Rejecting other names means a caller cannot
+  /// rename a final cache file (or any foreign file) into place.
   /// The rename happens within the cache directory, so it is atomic, and any
   /// existing final file for [key] is replaced.
   Future<SubtitleCacheEntry> commit(SubtitleCacheKey key, File partFile) async {
@@ -293,6 +300,11 @@ class SubtitleCache {
     if (!_isInside(directoryPath, partPath)) {
       throw SubtitleCacheException(
         'Subtitle part file is outside the cache directory',
+      );
+    }
+    if (!_partNamePattern.hasMatch(_baseName(partFile.path))) {
+      throw SubtitleCacheException(
+        'Subtitle part file name is not a cache temp name',
       );
     }
 

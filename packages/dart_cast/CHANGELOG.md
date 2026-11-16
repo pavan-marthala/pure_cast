@@ -5,9 +5,13 @@
 - `MediaProber` (with `FfprobeMediaProber`) probes a file and returns a `MediaProbe`, throwing the existing `ProbeFailedException` on timeout, missing media information or probe errors
 - `FfprobeRunner` (with `FFmpegKitFfprobeRunner`) exposes the raw FFprobe conversion so tests and alternative backends can replace FFmpegKit
 - `SubtitleCache` stores extracted subtitle files keyed by source-file identity, absolute stream index and extension. `MediaFileIdentity` (path, size and modification time) invalidates entries when a video is replaced; `SubtitleCacheKey` derives the cache file name and `SubtitleCacheLimits` sets the age/size limits used by `cleanup()`. The cache directory is injected, no platform directory is resolved, and cleanup/clear only touch files that match the cache's own names
+- `SubtitleExtractor` extracts embedded subtitle tracks into a `SubtitleCache` with native or WebVTT output, cache-hit short-circuiting, in-flight deduplication, per-track cancellation and timeouts. `extractAll` runs tracks sequentially and reports per-track failures without stopping the batch
+- `FfmpegRunner` (with `FFmpegKitRunner`) starts FFmpeg jobs that expose a session id, a completion result and cancellation by session id, and resolves `file://` / `content://` inputs. Tests can inject a fake runner
+- `MediaTrackException` (sealed) and its subtypes `SubtitleSourceUnreadable`, `SubtitleUnsupportedCodec`, `SubtitleFfmpegFailed`, `SubtitleExtractionCancelled`, `SubtitleExtractionTimedOut` and `SubtitleEmptyOutput` describe extraction failures without putting paths in their messages; FFmpeg logs are capped at the last 2000 characters and must not be shown to end users
 
 ### Changed
 - MediaProber throws ProbeFailedException when FFprobe returns no media information; previously the Chromecast load path treated that as an empty probe and attempted a direct load. Apps that already catch ProbeFailedException need no change.
+- SubtitleCache part temp files now end with the real output extension (`<name>.part.<suffix>.<ext>`) so FFmpeg can select a muxer from the temp file name, and `commit()` rejects files whose names are not cache temp names. This API was unreleased, so released versions are unaffected; old-shape part files are treated as foreign by cleanup
 
 ## 0.7.5
 

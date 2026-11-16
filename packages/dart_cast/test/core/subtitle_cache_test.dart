@@ -174,8 +174,27 @@ void main() {
       expect(second.parent.path, temp.path);
       expect(first.path, contains('${key.fileName}.part.'));
       expect(second.path, contains('${key.fileName}.part.'));
+      expect(first.path.split('.').last, key.extension);
+      expect(second.path.split('.').last, key.extension);
+      expect(
+        RegExp(
+          r'^[0-9a-f]{20}_\d+\.[a-z0-9]{1,8}\.part\.[0-9_]+\.[a-z0-9]{1,8}$',
+        ).hasMatch(first.path.split('/').last),
+        isTrue,
+      );
       expect(await first.exists(), isFalse);
       expect(await second.exists(), isFalse);
+    });
+
+    test('the last extension is the key extension', () async {
+      final cache = SubtitleCache(directory: temp);
+      final key = _key(extension: 'sup');
+
+      final part = await cache.partFileFor(key);
+
+      expect(part.path.endsWith('.sup'), isTrue);
+      expect(part.path.split('.').last, 'sup');
+      expect(part.path, contains('${key.fileName}.part.'));
     });
 
     test('creates the cache directory when missing', () async {
@@ -248,12 +267,31 @@ void main() {
 
     test('rejects a missing part file', () async {
       final cache = SubtitleCache(directory: temp);
-      final part = File('${temp.path}/${_key().fileName}.part.missing');
+      final key = _key();
+      final part = File(
+        '${temp.path}/${key.fileName}.part.123_0.${key.extension}',
+      );
 
       await expectLater(
-        cache.commit(_key(), part),
+        cache.commit(key, part),
         throwsA(isA<SubtitleCacheException>()),
       );
+    });
+
+    test('rejects a part file whose name is not a cache temp name', () async {
+      final cache = SubtitleCache(directory: temp);
+      final key = _key();
+      final finalLooking = await _writeFile(
+        '${temp.path}/${key.fileName}',
+        const [7, 8],
+      );
+
+      await expectLater(
+        cache.commit(key, finalLooking),
+        throwsA(isA<SubtitleCacheException>()),
+      );
+      expect(await finalLooking.exists(), isTrue);
+      expect(await finalLooking.readAsBytes(), const [7, 8]);
     });
 
     test('replaces an existing final file', () async {
@@ -328,7 +366,7 @@ void main() {
         4,
         5,
       ]);
-      await _writeFile('${temp.path}/${_hash}_2.srt.part.abc', const [6]);
+      await _writeFile('${temp.path}/${_hash}_2.srt.part.123_0.srt', const [6]);
       await _writeFile('${temp.path}/foreign.txt', const [7, 8, 9, 10]);
       await Directory('${temp.path}/subdir').create();
 
@@ -470,11 +508,11 @@ void main() {
     test('deletes old orphan parts but keeps fresh ones', () async {
       final cache = limitedCache();
       final oldPart = await _writeFile(
-        '${temp.path}/${_hash}_0.srt.part.100_1',
+        '${temp.path}/${_hash}_0.srt.part.100_1.srt',
         const [1, 2],
       );
       final freshPart = await _writeFile(
-        '${temp.path}/${_hash}_1.srt.part.100_2',
+        '${temp.path}/${_hash}_1.srt.part.100_2.srt',
         const [3, 4, 5],
       );
       await _age(oldPart, const Duration(hours: 2), reference);
@@ -486,6 +524,22 @@ void main() {
       expect(await freshPart.exists(), isTrue);
       expect(result.deletedFiles, 1);
       expect(result.deletedBytes, 2);
+    });
+
+    test('old-shape part names are foreign and left alone', () async {
+      final cache = limitedCache();
+      final oldShape = await _writeFile(
+        '${temp.path}/${_hash}_0.srt.part.123_4',
+        const [1],
+      );
+      await _age(oldShape, const Duration(days: 5), reference);
+
+      final cleanup = await cache.cleanup(now: reference);
+      final cleared = await cache.clear();
+
+      expect(await oldShape.exists(), isTrue);
+      expect(cleanup.deletedFiles, 0);
+      expect(cleared.deletedFiles, 0);
     });
 
     test('leaves foreign files and subdirectories untouched', () async {
@@ -554,7 +608,7 @@ void main() {
           const [1, 2, 3],
         );
         final partFile = await _writeFile(
-          '${temp.path}/${_hash}_1.srt.part.200_0',
+          '${temp.path}/${_hash}_1.srt.part.200_0.srt',
           const [4, 5],
         );
         final protectedFile = await _writeFile(

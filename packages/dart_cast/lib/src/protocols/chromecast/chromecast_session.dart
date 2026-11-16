@@ -18,8 +18,7 @@ import '../../core/live_mkv_stream.dart';
 import '../../core/direct_attempt_policy.dart';
 import '../../core/cast_prepare_session.dart';
 import '../../core/cast_ffmpeg_commands.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffprobe_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min/media_information.dart';
+import '../../core/media_prober.dart';
 import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
 import '../../core/cast_session.dart';
 import '../../core/media_proxy.dart';
@@ -136,6 +135,9 @@ class ChromecastSession extends CastSession {
   /// Test seam: replaces the FFprobeKit probe inside [loadLocalFile].
   final Future<MediaProbe> Function(String input)? _probeFile;
 
+  /// Probes local files before casting; replaced in tests via [probeFile].
+  final MediaProber _prober;
+
   /// Test seam: replaces [CastPrepareSession.start].
   final Future<CastPrepareSession> Function({
     required String inputPath,
@@ -231,14 +233,18 @@ class ChromecastSession extends CastSession {
   /// An optional [mediaTransformer] can be provided to customize how media
   /// is prepared before casting (e.g., custom segmentation, transcoding).
   /// Defaults to [TsHlsMediaTransformer] which wraps TS in HLS.
+  ///
+  /// [prober] overrides media probing; defaults to [FfprobeMediaProber].
   ChromecastSession({
     required CastDevice device,
     MediaTransformer? mediaTransformer,
+    MediaProber? prober,
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _RealChannelAdapter(),
        _proxy = MediaProxy(),
        _liveRuns = LiveMkvRunManager.production(),
        _probeFile = null,
+       _prober = prober ?? const FfprobeMediaProber(),
        _prepareStarter = null,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
@@ -256,6 +262,7 @@ class ChromecastSession extends CastSession {
   /// prepare lifecycles; production code uses the defaults.
   /// [probeFile] and [prepareStarter] are test seams for the probe and
   /// prepare session used by [loadLocalFile].
+  /// [prober] overrides media probing when [probeFile] is not provided.
   ChromecastSession.withMocks({
     required CastDevice device,
     required dynamic channel,
@@ -264,6 +271,7 @@ class ChromecastSession extends CastSession {
     LiveMkvRunManager? liveRuns,
     Future<void> Function()? prepareStopper,
     Future<MediaProbe> Function(String input)? probeFile,
+    MediaProber? prober,
     Future<CastPrepareSession> Function({
       required String inputPath,
       required List<String> Function(String outputDir) buildArgs,
@@ -275,6 +283,7 @@ class ChromecastSession extends CastSession {
        _liveRuns = liveRuns ?? LiveMkvRunManager.production(),
        _stopPrepare = prepareStopper,
        _probeFile = probeFile,
+       _prober = prober ?? const FfprobeMediaProber(),
        _prepareStarter = prepareStarter,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
@@ -477,13 +486,11 @@ class ChromecastSession extends CastSession {
       if (probeFile != null) {
         probe = await probeFile(input);
       } else {
-        final session = await FFprobeKit.getMediaInformation(
-          input,
-        ).timeout(const Duration(seconds: 8));
-        final info = session.getMediaInformation();
-        probe = MediaProbe.fromJson(_mediaInfoToJson(info));
+        probe = await _prober.probe(input);
       }
       plan = decide(probe, caps);
+    } on ProbeFailedException {
+      rethrow;
     } catch (e) {
       throw ProbeFailedException('Probe failed: $e', e);
     }
@@ -952,49 +959,6 @@ class ChromecastSession extends CastSession {
       if (audio[i].isDefault) return i;
     }
     return 0;
-  }
-
-  Map<String, dynamic> _mediaInfoToJson(MediaInformation? info) {
-    if (info == null) return const {};
-    // Build a minimal JSON map compatible with MediaProbe.fromJson
-    final streams = <Map<String, dynamic>>[];
-    for (final s in info.getStreams()) {
-      final tags = s.getTags();
-      // Try to read disposition from getAllProperties if available.
-      // FFprobeKit's StreamInformation does not expose a getDisposition()
-      // method, but getAllProperties() returns the raw JSON map which may
-      // contain a 'disposition' key with 'default' field.
-      final allProps = s.getAllProperties();
-      final disp =
-          (allProps != null && allProps['disposition'] is Map)
-              ? (allProps['disposition'] as Map)['default']
-              : null;
-      final isDefault = disp == 1;
-      final profile = allProps != null ? allProps['profile'] as String? : null;
-      final channels =
-          allProps != null ? (allProps['channels'] as num?)?.toInt() : null;
-      streams.add({
-        'codec_type': s.getType(),
-        'codec_name': s.getCodec(),
-        'profile': profile,
-        'level': s.getNumberProperty('level'),
-        'pix_fmt': s.getStringProperty('pix_fmt'),
-        'width': s.getWidth(),
-        'height': s.getHeight(),
-        'r_frame_rate': s.getAverageFrameRate(),
-        'index': s.getIndex(),
-        'channels': channels,
-        'tags': tags,
-        'disposition': {'default': isDefault ? 1 : 0},
-      });
-    }
-    return {
-      'format': {
-        'format_name': info.getFormat(),
-        'duration': info.getDuration(),
-      },
-      'streams': streams,
-    };
   }
 
   Future<void> _loadMediaInternal(

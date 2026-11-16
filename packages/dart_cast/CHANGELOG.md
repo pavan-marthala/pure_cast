@@ -1,3 +1,10 @@
+## Unreleased
+
+### New
+- `MediaProbe` now exposes `duration` (a `Duration?` derived from `durationSeconds`) and `hasSubtitles`, and its stream models carry the extra fields an app needs to build a track picker: `AudioStream.trackIndex` and `AudioStream.title`; `SubtitleStream.trackIndex`, `SubtitleStream.title`, `SubtitleStream.isImageBased` and `SubtitleStream.displayLabel`. `trackIndex` is the 0-based position among streams of that type (`-map 0:a:N` / `-map 0:s:N`) while the existing `index` remains the absolute container index (`-map 0:N`). All new constructor parameters are optional, so existing code compiles unchanged
+- `MediaProber` (with `FfprobeMediaProber`) probes a file and returns a `MediaProbe`, throwing the existing `ProbeFailedException` on timeout, missing media information or probe errors
+- `FfprobeRunner` (with `FFmpegKitFfprobeRunner`) exposes the raw FFprobe conversion so tests and alternative backends can replace FFmpegKit
+
 ## 0.7.5
 
 ### New

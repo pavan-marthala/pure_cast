@@ -51,4 +51,6 @@ export 'src/utils/network_utils.dart';
 export 'src/core/cast_decision.dart';
 export 'src/core/direct_attempt_policy.dart';
 export 'src/core/media_probe.dart';
+export 'src/core/media_prober.dart';
+export 'src/core/ffprobe_runner.dart';
 export 'src/core/cast_prepare_session.dart';

@@ -110,6 +110,9 @@ class FakeFfmpegRunner implements FfmpegRunner {
     this.outputBytes = const [1, 2, 3],
     this.startGate,
     this.failStreamIndex,
+    this.resolvedContentPath,
+    this.resolveInputError,
+    this.startError,
   });
 
   bool autoComplete;
@@ -119,6 +122,15 @@ class FakeFfmpegRunner implements FfmpegRunner {
   List<int> outputBytes;
   final Completer<void>? startGate;
   int? failStreamIndex;
+
+  /// Value returned for a `content://` path instead of the path itself.
+  String? resolvedContentPath;
+
+  /// When set, [resolveInput] throws it.
+  Object? resolveInputError;
+
+  /// When set, [start] throws it.
+  Object? startError;
 
   final List<List<String>> startedArguments = <List<String>>[];
   final List<FakeFfmpegJob> jobs = <FakeFfmpegJob>[];
@@ -131,6 +143,10 @@ class FakeFfmpegRunner implements FfmpegRunner {
   Future<FfmpegJob> start(List<String> arguments) async {
     if (!startCalled.isCompleted) {
       startCalled.complete();
+    }
+    final error = startError;
+    if (error != null) {
+      throw error;
     }
     final gate = startGate;
     if (gate != null) {
@@ -160,6 +176,13 @@ class FakeFfmpegRunner implements FfmpegRunner {
   @override
   Future<String> resolveInput(String path) async {
     resolvedInputs.add(path);
+    final error = resolveInputError;
+    if (error != null) {
+      throw error;
+    }
+    if (path.startsWith('content://')) {
+      return resolvedContentPath ?? path;
+    }
     return path.startsWith('file://') ? Uri.parse(path).toFilePath() : path;
   }
 
@@ -187,6 +210,35 @@ class CountingCache extends SubtitleCache {
     final result = await super.lookup(key);
     completedLookups++;
     return result;
+  }
+}
+
+class ThrowingCommitCache extends SubtitleCache {
+  ThrowingCommitCache({required super.directory, this.failStreamIndex});
+
+  /// When null, every commit fails; otherwise only this stream index fails.
+  final int? failStreamIndex;
+
+  @override
+  Future<SubtitleCacheEntry> commit(SubtitleCacheKey key, File partFile) async {
+    if (failStreamIndex == null || key.streamIndex == failStreamIndex) {
+      throw SubtitleCacheException('fake commit failure');
+    }
+    return super.commit(key, partFile);
+  }
+}
+
+class ThrowingPartCache extends SubtitleCache {
+  ThrowingPartCache({required super.directory, required this.failStreamIndex});
+
+  final int failStreamIndex;
+
+  @override
+  Future<File> partFileFor(SubtitleCacheKey key) async {
+    if (key.streamIndex == failStreamIndex) {
+      throw SubtitleCacheException('fake temp-file failure');
+    }
+    return super.partFileFor(key);
   }
 }
 
@@ -570,8 +622,10 @@ void main() {
       );
     });
 
-    test('content:// skips the existence check', () async {
-      final runner = FakeFfmpegRunner();
+    test('resolved content:// skips the existence check', () async {
+      final runner = FakeFfmpegRunner(
+        resolvedContentPath: '/proc/saf/external/video/42',
+      );
       final extractor = extractorFor(runner);
 
       final result = await extractor.extract(
@@ -581,10 +635,23 @@ void main() {
 
       expect(await result.file.exists(), isTrue);
       expect(runner.resolvedInputs, ['content://media/external/video/42']);
-      expect(
-        runner.startedArguments.single[4],
-        'content://media/external/video/42',
+      expect(runner.startedArguments.single[4], '/proc/saf/external/video/42');
+    });
+
+    test('unresolved content:// fails before starting FFmpeg', () async {
+      final runner = FakeFfmpegRunner();
+      final extractor = extractorFor(runner);
+
+      await expectLater(
+        extractor.extract(
+          source: _identity('content://media/external/video/42'),
+          track: _track(),
+        ),
+        throwsA(isA<SubtitleSourceUnreadable>()),
       );
+      expect(runner.startedArguments, isEmpty);
+      expect(await partFiles(), isEmpty);
+      expect(extractor.inFlightPaths, isEmpty);
     });
   });
 
@@ -641,6 +708,162 @@ void main() {
       expect(batch.isComplete, isTrue);
       expect(batch.succeeded, hasLength(2));
     });
+
+    test('a cache failure is recorded and later tracks still run', () async {
+      final runner = FakeFfmpegRunner();
+      final extractor = SubtitleExtractor(
+        runner: runner,
+        cache: ThrowingCommitCache(directory: cacheDir, failStreamIndex: 3),
+      );
+      final tracks = [_track(index: 2), _track(index: 3), _track(index: 4)];
+
+      final batch = await extractor.extractAll(source: source, tracks: tracks);
+
+      expect(batch.succeeded.map((r) => r.track.index), [2, 4]);
+      expect(batch.failed.keys, [3]);
+      expect(batch.failed[3], isA<SubtitleCacheFailure>());
+      expect(batch.isComplete, isFalse);
+      expect(runner.startedArguments, hasLength(3));
+      expect(extractor.inFlightPaths, isEmpty);
+      expect(await partFiles(), isEmpty);
+    });
+
+    test(
+      'a temp-file failure is recorded and later tracks still run',
+      () async {
+        final runner = FakeFfmpegRunner();
+        final extractor = SubtitleExtractor(
+          runner: runner,
+          cache: ThrowingPartCache(directory: cacheDir, failStreamIndex: 3),
+        );
+        final tracks = [_track(index: 2), _track(index: 3), _track(index: 4)];
+
+        final batch = await extractor.extractAll(
+          source: source,
+          tracks: tracks,
+        );
+
+        expect(batch.succeeded.map((r) => r.track.index), [2, 4]);
+        expect(batch.failed[3], isA<SubtitleCacheFailure>());
+        expect(batch.isComplete, isFalse);
+        expect(runner.startedArguments, hasLength(2));
+        expect(extractor.inFlightPaths, isEmpty);
+      },
+    );
+  });
+
+  group('failure wrapping', () {
+    test(
+      'resolveInput errors become SubtitleFfmpegFailed and can be retried',
+      () async {
+        final runner =
+            FakeFfmpegRunner()
+              ..resolveInputError = StateError('cannot resolve SAF path');
+        final extractor = extractorFor(runner);
+
+        await expectLater(
+          extractor.extract(source: source, track: _track()),
+          throwsA(
+            isA<SubtitleFfmpegFailed>()
+                .having((e) => e.returnCode, 'returnCode', isNull)
+                .having((e) => e.logs, 'logs', isNull)
+                .having((e) => e.cause, 'cause', isA<StateError>()),
+          ),
+        );
+        expect(runner.startedArguments, isEmpty);
+        expect(await partFiles(), isEmpty);
+        expect(extractor.inFlightPaths, isEmpty);
+
+        runner.resolveInputError = null;
+        final retry = await extractor.extract(source: source, track: _track());
+
+        expect(await retry.file.exists(), isTrue);
+        expect(extractor.inFlightPaths, isEmpty);
+      },
+    );
+
+    test(
+      'start errors become SubtitleFfmpegFailed and can be retried',
+      () async {
+        final runner = FakeFfmpegRunner()..startError = Exception('no session');
+        final extractor = extractorFor(runner);
+
+        await expectLater(
+          extractor.extract(source: source, track: _track()),
+          throwsA(
+            isA<SubtitleFfmpegFailed>()
+                .having((e) => e.returnCode, 'returnCode', isNull)
+                .having((e) => e.logs, 'logs', isNull)
+                .having((e) => e.cause, 'cause', isA<Exception>()),
+          ),
+        );
+        expect(await partFiles(), isEmpty);
+        expect(extractor.inFlightPaths, isEmpty);
+
+        runner.startError = null;
+        final retry = await extractor.extract(source: source, track: _track());
+
+        expect(await retry.file.exists(), isTrue);
+      },
+    );
+
+    test('a MediaTrackException from start is not re-wrapped', () async {
+      final runner =
+          FakeFfmpegRunner()
+            ..startError = SubtitleExtractionCancelled('cancelled upstream');
+      final extractor = extractorFor(runner);
+
+      await expectLater(
+        extractor.extract(source: source, track: _track()),
+        throwsA(isA<SubtitleExtractionCancelled>()),
+      );
+      expect(await partFiles(), isEmpty);
+      expect(extractor.inFlightPaths, isEmpty);
+    });
+
+    test('a cache temp-file failure becomes SubtitleCacheFailure', () async {
+      final notADirectory = File('${temp.path}/not_a_directory');
+      await notADirectory.writeAsString('x');
+      final extractor = SubtitleExtractor(
+        runner: FakeFfmpegRunner(),
+        cache: SubtitleCache(directory: Directory(notADirectory.path)),
+      );
+
+      await expectLater(
+        extractor.extract(source: source, track: _track()),
+        throwsA(
+          isA<SubtitleCacheFailure>().having(
+            (e) => e.cause,
+            'cause',
+            isA<SubtitleCacheException>(),
+          ),
+        ),
+      );
+      expect(extractor.inFlightPaths, isEmpty);
+    });
+
+    test(
+      'a commit failure becomes SubtitleCacheFailure and leaves no part',
+      () async {
+        final extractor = SubtitleExtractor(
+          runner: FakeFfmpegRunner(),
+          cache: ThrowingCommitCache(directory: cacheDir),
+        );
+
+        await expectLater(
+          extractor.extract(source: source, track: _track()),
+          throwsA(
+            isA<SubtitleCacheFailure>().having(
+              (e) => e.cause,
+              'cause',
+              isA<SubtitleCacheException>(),
+            ),
+          ),
+        );
+        expect(await partFiles(), isEmpty);
+        expect(extractor.inFlightPaths, isEmpty);
+      },
+    );
   });
 
   group('inFlightPaths', () {

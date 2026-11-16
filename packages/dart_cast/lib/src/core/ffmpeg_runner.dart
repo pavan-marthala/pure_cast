@@ -56,8 +56,9 @@ abstract interface class FfmpegRunner {
   ///
   /// `file://` URIs become plain paths. `content://` URIs are resolved through
   /// Android's Storage Access Framework; when SAF returns null, or on a
-  /// non-Android platform, [path] is returned unchanged and FFmpeg will fail
-  /// when it tries to open it.
+  /// non-Android platform, [path] is returned unchanged so the caller can
+  /// detect the failure (for example `SubtitleExtractor` throws
+  /// `SubtitleSourceUnreadable` instead of starting FFmpeg with it).
   Future<String> resolveInput(String path);
 }
 

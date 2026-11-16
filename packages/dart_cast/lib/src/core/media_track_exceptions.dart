@@ -2,9 +2,11 @@ import 'cast_exceptions.dart';
 
 /// Base class for failures while extracting a subtitle track.
 ///
-/// This hierarchy covers source, codec, FFmpeg, cancellation, timeout and
-/// empty-output failures. Cache I/O failures are not part of it: they surface
-/// as [SubtitleCacheException] from `SubtitleCache`.
+/// This hierarchy covers source, codec, FFmpeg, cache, cancellation, timeout
+/// and empty-output failures, so every failure thrown by `SubtitleExtractor`
+/// is a [MediaTrackException]. `SubtitleCache`'s own API still throws
+/// [SubtitleCacheException] directly; the extractor wraps those in
+/// [SubtitleCacheFailure].
 ///
 /// Messages never contain file paths or URLs.
 sealed class MediaTrackException extends CastException {
@@ -61,6 +63,15 @@ final class SubtitleExtractionTimedOut extends MediaTrackException {
 final class SubtitleEmptyOutput extends MediaTrackException {
   /// Creates an empty-output failure.
   SubtitleEmptyOutput(super.message, [super.cause]);
+}
+
+/// The subtitle cache could not be read or written.
+///
+/// For example the disk is full or the cache directory is not writable.
+/// [cause] holds the underlying [SubtitleCacheException].
+final class SubtitleCacheFailure extends MediaTrackException {
+  /// Creates a cache failure.
+  SubtitleCacheFailure(super.message, [super.cause]);
 }
 
 String? _truncateLogs(String? logs) =>

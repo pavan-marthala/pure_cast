@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'cast_exceptions.dart';
 import 'ffmpeg_runner.dart';
 import 'media_probe.dart';
 import 'media_track_exceptions.dart';
@@ -165,11 +166,16 @@ class SubtitleExtractor {
   /// [timeout] bounds the FFmpeg run; on expiry the process is cancelled by
   /// session id and [SubtitleExtractionTimedOut] is thrown.
   ///
-  /// Throws [SubtitleSourceUnreadable] when [source] is empty or a plain source
-  /// path does not exist, [SubtitleUnsupportedCodec] when the track cannot
-  /// produce [format], [SubtitleFfmpegFailed] when FFmpeg fails,
-  /// [SubtitleEmptyOutput] when FFmpeg writes nothing, and
-  /// [SubtitleExtractionCancelled] when cancellation wins.
+  /// Throws [SubtitleSourceUnreadable] when [source] is empty, a plain source
+  /// path does not exist, or a `content://` source cannot be resolved;
+  /// [SubtitleUnsupportedCodec] when the track cannot produce [format];
+  /// [SubtitleFfmpegFailed] when FFmpeg fails or cannot be started;
+  /// [SubtitleEmptyOutput] when FFmpeg writes nothing;
+  /// [SubtitleExtractionCancelled] when cancellation wins;
+  /// [SubtitleExtractionTimedOut] when [timeout] expires; and
+  /// [SubtitleCacheFailure] when the cache cannot create or store the file.
+  ///
+  /// Every failure is a [MediaTrackException].
   Future<SubtitleExtractionResult> extract({
     required MediaFileIdentity source,
     required SubtitleStream track,
@@ -341,10 +347,21 @@ class SubtitleExtractor {
   }) async {
     await _ensureSourceReadable(source);
 
-    final part = await cache.partFileFor(key);
+    final File part;
+    try {
+      part = await cache.partFileFor(key);
+    } on SubtitleCacheException catch (error) {
+      throw SubtitleCacheFailure(
+        'Cannot create a subtitle cache temp file',
+        error,
+      );
+    }
     _inFlightPaths.add(part.path);
     try {
-      final input = await runner.resolveInput(source.path);
+      final input = await _resolveInput(source);
+      if (source.path.startsWith('content://') && input == source.path) {
+        throw SubtitleSourceUnreadable('Cannot resolve the content URI');
+      }
       final arguments = <String>[
         '-y',
         '-hide_banner',
@@ -360,7 +377,7 @@ class SubtitleExtractor {
         part.path,
       ];
 
-      final job = await runner.start(arguments);
+      final job = await _startJob(arguments);
       entry.job = job;
       if (entry.cancelRequested) {
         try {
@@ -387,7 +404,15 @@ class SubtitleExtractor {
         throw SubtitleEmptyOutput('FFmpeg produced an empty subtitle file');
       }
 
-      final committed = await cache.commit(key, part);
+      final SubtitleCacheEntry committed;
+      try {
+        committed = await cache.commit(key, part);
+      } on SubtitleCacheException catch (error) {
+        throw SubtitleCacheFailure(
+          'Cannot store the extracted subtitle',
+          error,
+        );
+      }
       return SubtitleExtractionResult(
         track: track,
         file: committed.file,
@@ -397,6 +422,36 @@ class SubtitleExtractor {
     } finally {
       _inFlightPaths.remove(part.path);
       await cache.discard(part);
+    }
+  }
+
+  Future<String> _resolveInput(MediaFileIdentity source) async {
+    try {
+      return await runner.resolveInput(source.path);
+    } on MediaTrackException {
+      rethrow;
+    } on Object catch (error) {
+      throw SubtitleFfmpegFailed(
+        'FFmpeg could not be started',
+        returnCode: null,
+        logs: null,
+        cause: error,
+      );
+    }
+  }
+
+  Future<FfmpegJob> _startJob(List<String> arguments) async {
+    try {
+      return await runner.start(arguments);
+    } on MediaTrackException {
+      rethrow;
+    } on Object catch (error) {
+      throw SubtitleFfmpegFailed(
+        'FFmpeg could not be started',
+        returnCode: null,
+        logs: null,
+        cause: error,
+      );
     }
   }
 

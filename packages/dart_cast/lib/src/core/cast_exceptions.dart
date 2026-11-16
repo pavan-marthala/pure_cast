@@ -87,3 +87,12 @@ class UnsupportedMediaException extends CastException {
 class ProbeFailedException extends CastException {
   ProbeFailedException(super.message, [super.cause]);
 }
+
+/// Thrown when the subtitle cache cannot read or write its files.
+///
+/// Raised for an unwritable cache directory, an empty extraction output, or
+/// any filesystem failure while committing a cache entry.
+class SubtitleCacheException extends CastException {
+  /// Creates a [SubtitleCacheException] with an optional [cause].
+  SubtitleCacheException(super.message, [super.cause]);
+}

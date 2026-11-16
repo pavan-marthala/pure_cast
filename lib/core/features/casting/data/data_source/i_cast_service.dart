@@ -93,9 +93,6 @@ abstract class ICastService {
   /// Stream of media duration updates.
   Stream<Duration> get durationStream;
 
-  /// Currently connected device (null if disconnected).
-  PureCastDevice? get currentDevice;
-
   /// Currently active session state.
   PureCastSessionState get currentState;
 

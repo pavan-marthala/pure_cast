@@ -43,7 +43,6 @@ class DartCastAdapter implements ICastService {
   final StreamController<Duration> _durationController =
       StreamController<Duration>.broadcast();
 
-  PureCastDevice? _currentDevice;
   PureCastSessionState _currentState = PureCastSessionState.disconnected;
 
   @factoryMethod
@@ -93,7 +92,6 @@ class DartCastAdapter implements ICastService {
     try {
       final dartDevice = _mapDeviceToDartCast(device);
       final session = await _castService.connect(dartDevice);
-      _currentDevice = device;
 
       _subscribeToSession(session);
     } catch (e) {
@@ -111,7 +109,6 @@ class DartCastAdapter implements ICastService {
       if (session != null) {
         await session.disconnect();
       }
-      _currentDevice = null;
       _updateState(PureCastSessionState.disconnected);
     } catch (e) {
       throw PureCastException('Failed to disconnect from device', e);
@@ -504,9 +501,6 @@ class DartCastAdapter implements ICastService {
 
   @override
   Stream<Duration> get durationStream => _durationController.stream;
-
-  @override
-  PureCastDevice? get currentDevice => _currentDevice;
 
   @override
   PureCastSessionState get currentState => _currentState;

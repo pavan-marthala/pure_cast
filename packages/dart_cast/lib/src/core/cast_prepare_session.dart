@@ -13,18 +13,15 @@ enum PrepareState { starting, ready, failed, stopped }
 class CastPrepareSession {
   final String sessionId;
   final Directory tempDir;
-  final List<String> args;
   final StreamController<PrepareState> _state =
       StreamController<PrepareState>.broadcast();
   Stream<PrepareState> get stateStream => _state.stream;
   PrepareState _stateValue = PrepareState.starting;
   PrepareState get state => _stateValue;
   String? _ffmpegSessionId;
-  String? logs;
-  int? returnCode;
   String? error;
 
-  CastPrepareSession._(this.sessionId, this.tempDir, this.args);
+  CastPrepareSession._(this.sessionId, this.tempDir);
 
   static Future<CastPrepareSession> start({
     required String inputPath,
@@ -86,7 +83,6 @@ class CastPrepareSession {
     final session = CastPrepareSession._(
       sessionDir.path.split('/').last,
       sessionDir,
-      args,
     );
     session._run(args);
     return session;
@@ -112,9 +108,8 @@ class CastPrepareSession {
         // Check if ffmpeg has already exited (failure or early completion).
         if (completer.isCompleted) {
           final rc = await ffmpegSession.getReturnCode();
-          returnCode = rc?.getValue();
           if (!ReturnCode.isSuccess(rc)) {
-            logs = await ffmpegSession.getAllLogsAsString();
+            final logs = await ffmpegSession.getAllLogsAsString();
             error = 'ffmpeg exited with code ${rc?.getValue()}';
             _chunkLog(logs);
             _emit(PrepareState.failed);
@@ -132,9 +127,7 @@ class CastPrepareSession {
         await Future.delayed(const Duration(milliseconds: 500));
         waited += 500;
       }
-      final rc = await ffmpegSession.getReturnCode();
-      returnCode = rc?.getValue();
-      logs = await ffmpegSession.getAllLogsAsString();
+      final logs = await ffmpegSession.getAllLogsAsString();
       error = 'timeout waiting for segments';
       _chunkLog(logs);
       _emit(PrepareState.failed);

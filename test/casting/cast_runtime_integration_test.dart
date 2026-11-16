@@ -208,9 +208,6 @@ class FakeCastService implements ICastService {
   Stream<Duration> get durationStream => durationController.stream;
 
   @override
-  PureCastDevice? currentDevice;
-
-  @override
   PureCastSessionState currentState = PureCastSessionState.disconnected;
 
   @override

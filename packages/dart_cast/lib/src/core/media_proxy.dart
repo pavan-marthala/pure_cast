@@ -1408,11 +1408,7 @@ class MediaProxy {
           'hasPAT=$hasPat '
           'firstPids=[$arrival] '
           'url=${_summarizeUrl(targetUrl)}';
-      if (stripper.packetsDropped > 0) {
-        CastLogger.debug(line);
-      } else {
-        CastLogger.debug(line);
-      }
+      CastLogger.debug(line);
     }
     await request.response.close();
   }

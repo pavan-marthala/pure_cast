@@ -84,7 +84,6 @@ class Body extends StatelessWidget {
         List<PureCastAudioTrack>,
         int?,
         bool,
-        bool,
         Duration?,
       )
     >(
@@ -101,7 +100,6 @@ class Body extends StatelessWidget {
           state.prepareSubtitlesError,
           state.audioTracks,
           state.activeAudioIndex,
-          state.isLive,
           state.restarting,
           state.seekPreview,
         );
@@ -119,7 +117,6 @@ class Body extends StatelessWidget {
           prepareSubtitlesError,
           audioTracks,
           activeAudioIndex,
-          isLive,
           restarting,
           seekPreview,
         ) = state;
@@ -231,7 +228,6 @@ class Body extends StatelessWidget {
                             subtitles: discoveredSubtitles.isNotEmpty
                                 ? discoveredSubtitles
                                 : (media?.subtitles ?? []),
-                            isLive: isLive,
                           );
                         },
                         child: Padding(
@@ -309,18 +305,15 @@ class SubtitleSwitcher extends StatefulWidget {
     super.key,
     this.activeSubtitle,
     required this.subtitles,
-    this.isLive = false,
   });
 
   final PureCastSubtitleTrack? activeSubtitle;
   final List<PureCastSubtitleTrack> subtitles;
-  final bool isLive;
 
   static Future<void> show(
     BuildContext context, {
     PureCastSubtitleTrack? activeSubtitle,
     required List<PureCastSubtitleTrack> subtitles,
-    bool isLive = false,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -332,7 +325,6 @@ class SubtitleSwitcher extends StatefulWidget {
       builder: (sheetContext) => SubtitleSwitcher(
         activeSubtitle: activeSubtitle,
         subtitles: subtitles,
-        isLive: isLive,
       ),
     );
   }

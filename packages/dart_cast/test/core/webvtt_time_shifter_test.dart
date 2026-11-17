@@ -3,6 +3,13 @@ import 'package:test/test.dart';
 
 String _doc(List<String> lines) => '${lines.join('\n')}\n';
 
+String _stamp(int seconds) {
+  final hours = (seconds ~/ 3600).toString().padLeft(2, '0');
+  final minutes = ((seconds ~/ 60) % 60).toString().padLeft(2, '0');
+  final secs = (seconds % 60).toString().padLeft(2, '0');
+  return '$hours:$minutes:$secs.000';
+}
+
 void main() {
   group('WebVttTimeShifter.shift', () {
     test('a zero offset is an identity, byte for byte', () {
@@ -298,7 +305,7 @@ void main() {
       );
     });
 
-    test('shifts a 5 MB document well under a second', () {
+    test('shifts a 5 MB document with correct cue boundaries', () {
       final buffer = StringBuffer('WEBVTT\n\n');
       var index = 0;
       while (buffer.length < 5 * 1024 * 1024) {
@@ -317,23 +324,30 @@ void main() {
       }
       final input = buffer.toString();
       expect(input.length, greaterThanOrEqualTo(5 * 1024 * 1024));
+      final cueCount = index;
 
-      // Warm the parser up on a prefix so the measurement below is the shift
-      // itself rather than first-call JIT work.
-      WebVttTimeShifter.shift(
-        input.substring(0, 64 * 1024),
-        const Duration(seconds: 1),
-      );
-
-      final stopwatch = Stopwatch()..start();
-      final output = WebVttTimeShifter.shift(
-        input,
-        const Duration(seconds: 60),
-      );
-      stopwatch.stop();
+      // Wall-clock timing is deliberately not asserted: parallel test
+      // isolates make elapsed-time limits flaky. The shifted cue boundaries
+      // are the assertions that matter.
+      const offset = Duration(seconds: 60);
+      final output = WebVttTimeShifter.shift(input, offset);
 
       expect(output.length, greaterThan(1024));
-      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+      // Cues ending at or before zero are dropped, so the first 30 cues (at
+      // two seconds apart) are removed.
+      expect('-->'.allMatches(output).length, cueCount - 30);
+      expect(output, contains('00:00:00.000 --> 00:00:01.000\nline 30\n'));
+      expect(output, isNot(contains('\nline 29\n')));
+
+      final lastStart = 2 * (cueCount - 1) - 60;
+      final lastEnd = lastStart + 1;
+      expect(
+        output,
+        contains(
+          '${_stamp(lastStart)} --> ${_stamp(lastEnd)}\n'
+          'line ${cueCount - 1}\n',
+        ),
+      );
     });
   });
 }

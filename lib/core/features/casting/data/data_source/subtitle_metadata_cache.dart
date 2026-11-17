@@ -92,18 +92,42 @@ class SubtitleMetadataCacheEntry {
 class SubtitleMetadataCache {
   Directory? _cacheDir;
   bool _disposed = false;
+  final Future<Directory> Function()? directoryOverride;
 
-  SubtitleMetadataCache();
+  /// Creates the cache.
+  ///
+  /// [directoryOverride] is for tests; production callers use the app
+  /// documents directory.
+  SubtitleMetadataCache({this.directoryOverride});
+
+  /// The cache directory path, without creating it.
+  Future<Directory> _resolveCacheDir() async {
+    final override = directoryOverride;
+    if (override != null) return override();
+    final baseDir = await getApplicationDocumentsDirectory();
+    return Directory('${baseDir.path}/pure_cast_subtitle_metadata');
+  }
 
   /// Ensures the cache directory exists.
   Future<Directory> _getCacheDir() async {
     if (_cacheDir != null) return _cacheDir!;
-    final baseDir = await getApplicationDocumentsDirectory();
-    _cacheDir = Directory('${baseDir.path}/pure_cast_subtitle_metadata');
-    if (!await _cacheDir!.exists()) {
-      await _cacheDir!.create(recursive: true);
+    final dir = await _resolveCacheDir();
+    _cacheDir = dir;
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
     }
-    return _cacheDir!;
+    return dir;
+  }
+
+  /// The cache directory, or null when it does not exist yet.
+  Future<Directory?> _existingCacheDir() async {
+    if (_cacheDir != null) {
+      return await _cacheDir!.exists() ? _cacheDir : null;
+    }
+    final dir = await _resolveCacheDir();
+    if (!await dir.exists()) return null;
+    _cacheDir = dir;
+    return dir;
   }
 
   /// Generates a cache key from the file path.
@@ -187,6 +211,66 @@ class SubtitleMetadataCache {
 
     if (await cacheFile.exists()) {
       await cacheFile.delete();
+    }
+  }
+
+  static final RegExp _entryFileNamePattern = RegExp(r'^[0-9a-f]+\.json$');
+
+  /// Deletes cache entries probed longer than [maxAge] ago.
+  ///
+  /// Only files named like this cache's own entries are considered, and a
+  /// missing directory is a no-op. The entry's `probedAt` is preferred; when
+  /// the file cannot be read or parsed, its modification time is used instead.
+  /// Foreign files and subdirectories are ignored. Returns the number of
+  /// deleted entries and never throws.
+  Future<int> removeOlderThan(Duration maxAge, {DateTime? now}) async {
+    if (_disposed) return 0;
+    final reference = now ?? DateTime.now();
+    var deleted = 0;
+
+    try {
+      final dir = await _existingCacheDir();
+      if (dir == null) return 0;
+
+      for (final entity in await dir.list().toList()) {
+        if (entity is! File) continue;
+        if (!_entryFileNamePattern.hasMatch(entity.uri.pathSegments.last)) {
+          continue;
+        }
+
+        final probedAt = await _probedAtOrModified(entity);
+        if (probedAt == null) continue;
+        if (reference.difference(probedAt) <= maxAge) continue;
+
+        try {
+          await entity.delete();
+          deleted++;
+        } catch (_) {
+          // A file that cannot be deleted is left for the next run.
+        }
+      }
+    } catch (_) {
+      // Maintenance must never throw.
+    }
+
+    return deleted;
+  }
+
+  /// The entry's [SubtitleMetadataCacheEntry.probedAt], or the file's
+  /// modification time when the entry cannot be read or parsed.
+  Future<DateTime?> _probedAtOrModified(File file) async {
+    try {
+      final json = await file.readAsString();
+      final entry = SubtitleMetadataCacheEntry.fromJson(
+        convert.jsonDecode(json) as Map<String, dynamic>,
+      );
+      return entry.probedAt;
+    } catch (_) {
+      try {
+        return await file.lastModified();
+      } catch (_) {
+        return null;
+      }
     }
   }
 

@@ -7,6 +7,9 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/DI/injection.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_extraction_service.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_maintenance.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_metadata_cache.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/subtitle/subtitle_extraction_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
@@ -31,6 +34,13 @@ void main() async {
   // await dotenv.load(fileName: "app_config.env");
   await configureDependencies();
   await CastPrepareSession.cleanupLeftovers();
+  // Off the startup path: housekeeping must never delay or block the app.
+  unawaited(
+    SubtitleMaintenance(
+      metadataCache: getIt<SubtitleMetadataCache>(),
+      extractionService: getIt<SubtitleExtractionService>(),
+    ).run(),
+  );
   if (kDebugMode) {
     CastLogger.setCallback((level, message) {
       if (level == 'DEBUG') return;

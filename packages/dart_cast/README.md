@@ -82,6 +82,103 @@ Cast media to Chromecast, AirPlay, and DLNA devices from pure Dart.
 | AirPlay    | yes     | yes | yes   | yes     | yes   |
 | DLNA       | yes     | yes | yes   | yes     | yes   |
 
+## Media tracks: probing, subtitle extraction and live subtitles
+
+These APIs cover the media-track path: inspect a local file, extract an
+embedded subtitle track, and attach it to a Chromecast live MKV stream. They do
+not resolve app-specific directories; the caller supplies the cache directory.
+
+### Probing
+
+`FfprobeMediaProber` (or any `MediaProber`) returns a `MediaProbe` with the
+container, duration, video stream, audio streams and subtitle streams. Two
+indices are reported for every stream: `index` is the absolute container index
+(use with `-map 0:N`), while `trackIndex` is the 0-based position among streams
+of that type (use with `-map 0:a:N` / `-map 0:s:N`).
+
+```dart
+const prober = FfprobeMediaProber();
+final probe = await prober.probe('/movies/example.mkv');
+for (final subtitle in probe.subtitles) {
+  print('${subtitle.displayLabel}: '
+      'index=${subtitle.index} track=${subtitle.trackIndex}');
+}
+```
+
+### Extracting subtitles
+
+`SubtitleCache` stores extracted files keyed by source identity (path, size and
+modification time), stream index and extension, so a changed video no longer
+serves a stale subtitle. The caller injects the directory; the cache never
+resolves a platform directory itself. Defaults: unused entries expire after
+7 days, and the cache is trimmed to 512 MB (least recently used first).
+`cleanup` only touches files that match the cache's own names.
+
+```dart
+final cache = SubtitleCache(directory: cacheDirectory);
+final extractor = SubtitleExtractor(
+  runner: const FFmpegKitRunner(),
+  cache: cache,
+);
+
+// Protect files that are still being written.
+await cache.cleanup(protectedPaths: extractor.inFlightPaths);
+```
+
+`SubtitleExtractor.extract` converts a track to its native format by default,
+or to WebVTT for casting with `SubtitleOutputFormat.webVtt`. Concurrent calls
+for the same source/track are deduplicated, `cancel` stops one track, and
+`timeout` bounds a run. Failures are typed `MediaTrackException`s:
+`SubtitleSourceUnreadable`, `SubtitleUnsupportedCodec` (image-based tracks
+cannot become text), `SubtitleFfmpegFailed`, `SubtitleExtractionCancelled`,
+`SubtitleExtractionTimedOut`, `SubtitleEmptyOutput` and `SubtitleCacheFailure`.
+
+```dart
+final result = await extractor.extract(
+  source: MediaFileIdentity(
+    path: '/movies/example.mkv',
+    sizeBytes: 1024,
+    modified: DateTime.now(),
+  ),
+  track: probe.subtitles.first,
+  format: SubtitleOutputFormat.webVtt,
+);
+print(result.file.path);
+```
+
+### Live MKV subtitles
+
+`ChromecastSession.loadLiveMkv` accepts a `subtitle` for a new live stream, and
+`switchLiveSubtitle` attaches, replaces or clears it on a running stream.
+Attaching a non-null subtitle restarts the stream at the requested position;
+clearing it uses `EDIT_TRACKS_INFO` only. A restart re-prepares the subtitle
+from the original file for the new start offset; `WebVttTimeShifter.shift`
+moves the caller's full-timeline WebVTT by that same offset.
+
+```dart
+const subtitle = CastSubtitle(
+  url: 'https://example.com/subtitles/en.vtt',
+  label: 'English',
+  language: 'en',
+  format: 'vtt',
+);
+
+await session.loadLiveMkv(
+  filePath: '/movies/example.mkv',
+  audioIndex: 0,
+  streamType: 'BUFFERED',
+  subtitle: subtitle,
+);
+
+await session.switchLiveSubtitle(subtitle: null, position: position);
+```
+
+### Platform note
+
+The FFmpeg-backed features (`FfprobeMediaProber`, `FFmpegKitRunner` and
+`FFmpegKitFfprobeRunner`) require the `ffmpeg_kit_flutter_new_min` platforms:
+Android, iOS, macOS, Windows and Linux. They are not available on web.
+
 ## Quick Start
 
 ```dart

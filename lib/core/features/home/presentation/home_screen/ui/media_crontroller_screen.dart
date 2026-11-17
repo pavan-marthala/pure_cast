@@ -10,7 +10,6 @@ import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_seek_bar.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
-import 'package:pure_cast/core/utils/app_toast.dart';
 
 class MediaControllerScreen extends StatefulWidget {
   const MediaControllerScreen({super.key});
@@ -368,11 +367,6 @@ class _SubtitleSwitcherState extends State<SubtitleSwitcher> {
                     ? Icon(Icons.check, color: context.appColors.primary)
                     : null,
                 onTap: () {
-                  if (widget.isLive) {
-                    showInfoToast(message: kLiveSubtitlesUnavailableMessage);
-                    Navigator.of(context).pop();
-                    return;
-                  }
                   context.read<CastSessionBloc>().add(
                     SetSubtitleEvent(subtitle),
                   );

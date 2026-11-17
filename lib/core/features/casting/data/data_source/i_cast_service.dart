@@ -34,6 +34,17 @@ abstract class ICastService {
     List<PureCastAudioTrack>? audioTracks,
   });
 
+  /// Attaches, replaces or clears the subtitle of the current live MKV stream.
+  ///
+  /// A non-null [subtitle] restarts the stream at [position] with a
+  /// time-shifted copy attached. Passing null disables subtitles in place,
+  /// without a restart. Throws a [PureCastException] when there is no active
+  /// Chromecast session or the switch fails.
+  Future<void> switchLiveSubtitle({
+    required PureCastSubtitleTrack? subtitle,
+    required Duration position,
+  });
+
   /// Probes a local file and returns its audio tracks.
   ///
   /// [PureCastAudioTrack.index] is the 0-based index among audio streams.

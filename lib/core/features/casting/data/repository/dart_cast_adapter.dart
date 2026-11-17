@@ -228,6 +228,45 @@ class DartCastAdapter implements ICastService {
   }
 
   @override
+  Future<void> switchLiveSubtitle({
+    required PureCastSubtitleTrack? subtitle,
+    required Duration position,
+  }) async {
+    final session = _castService.activeSession;
+    if (session == null) {
+      throw const PureCastException('No active cast session');
+    }
+    if (session is! dart_cast.ChromecastSession) {
+      throw const PureCastException(
+        'Live MKV cast requires a Chromecast session',
+      );
+    }
+    // A subtitle restarts the live stream (new media session) exactly like an
+    // audio switch, so late events from the replaced session must be dropped.
+    // Disabling subtitles keeps the session, so the guard stays disarmed.
+    if (subtitle != null) {
+      _liveTimeline.armRestart(session.mediaSessionId);
+    }
+    try {
+      await session.switchLiveSubtitle(
+        subtitle: subtitle != null ? _mapSubtitleToDartCast(subtitle) : null,
+        position: position,
+      );
+    } on dart_cast.SubtitleAttachException catch (e) {
+      if (subtitle != null) _liveTimeline.cancel();
+      // The message is user-facing and deliberately path-free.
+      dart_cast.CastLogger.error('PureCast: switch live subtitle failed: $e');
+      rethrow;
+    } catch (e) {
+      if (subtitle != null) _liveTimeline.cancel();
+      dart_cast.CastLogger.error(
+        'PureCast: switch live subtitle failed (${e.runtimeType})',
+      );
+      throw PureCastException('Failed to switch live subtitle', e);
+    }
+  }
+
+  @override
   Future<List<PureCastAudioTrack>> probeAudioTracks(String filePath) async {
     final probe = await _mediaProbe(filePath);
     if (probe == null) return const [];

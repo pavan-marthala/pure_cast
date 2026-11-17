@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+
+import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_extraction_service.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/subtitle_metadata_cache.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/coordinator/playback_coordinator.dart';
@@ -12,6 +16,7 @@ import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cas
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/music_library/data/repository/media_repository.dart';
+import 'package:pure_cast/core/DI/injection.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
 
 class FakeMediaRepository implements MediaRepository {
@@ -47,6 +52,7 @@ class FakeCastService implements ICastService {
   bool shouldConnectFail = false;
   bool disconnectCalled = false;
   PureCastMedia? loadedMedia;
+  int loadMediaCalls = 0;
 
   // Live/audio state, writable by tests.
   bool isLive = false;
@@ -104,6 +110,7 @@ class FakeCastService implements ICastService {
 
   @override
   Future<void> loadMedia(PureCastMedia media, {bool bypassTransform = false}) async {
+    loadMediaCalls++;
     loadedMedia = media;
     if (loadShouldBeLive) {
       isLive = true;
@@ -141,6 +148,25 @@ class FakeCastService implements ICastService {
     isLive = true;
     tracks = audioTracks ?? tracks;
     activeIndex = audioIndex;
+  }
+
+  // Live subtitle switching.
+  int switchSubtitleCalled = 0;
+  PureCastSubtitleTrack? switchSubtitleTrack;
+  Duration? switchSubtitlePosition;
+  Object? switchSubtitleError;
+  Completer<void>? switchSubtitleGate;
+
+  @override
+  Future<void> switchLiveSubtitle({
+    required PureCastSubtitleTrack? subtitle,
+    required Duration position,
+  }) async {
+    switchSubtitleCalled++;
+    switchSubtitleTrack = subtitle;
+    switchSubtitlePosition = position;
+    if (switchSubtitleGate != null) await switchSubtitleGate!.future;
+    if (switchSubtitleError != null) throw switchSubtitleError!;
   }
 
   @override
@@ -299,6 +325,92 @@ class FakeAppDatabase implements AppDatabase {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeSubtitleMetadataCache extends SubtitleMetadataCache {
+  final Map<String, List<SubtitleStreamInfo>> entries =
+      <String, List<SubtitleStreamInfo>>{};
+
+  @override
+  Future<List<SubtitleStreamInfo>?> getCachedSubtitles({
+    required String filePath,
+    required int fileSize,
+    required DateTime lastModified,
+  }) async => entries[filePath];
+
+  @override
+  Future<void> cacheSubtitles({
+    required String filePath,
+    required int fileSize,
+    required DateTime lastModified,
+    required List<SubtitleStreamInfo> streams,
+  }) async {
+    entries[filePath] = streams;
+  }
+
+  @override
+  Future<void> dispose() async {}
+}
+
+class _FakeSubtitleProber implements dart_cast.MediaProber {
+  _FakeSubtitleProber(this.probeResult);
+
+  final dart_cast.MediaProbe probeResult;
+
+  @override
+  Future<dart_cast.MediaProbe> probe(
+    String inputPath, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async => probeResult;
+}
+
+class _FakeSubtitleJob implements dart_cast.FfmpegJob {
+  _FakeSubtitleJob(this.sessionId, this.result);
+
+  @override
+  final String? sessionId;
+
+  final dart_cast.FfmpegResult result;
+  bool cancelled = false;
+
+  @override
+  Future<dart_cast.FfmpegResult> get done async => result;
+
+  @override
+  Future<void> cancel() async {
+    cancelled = true;
+  }
+}
+
+class _FakeSubtitleRunner implements dart_cast.FfmpegRunner {
+  final List<List<String>> startedArguments = <List<String>>[];
+  final List<_FakeSubtitleJob> jobs = <_FakeSubtitleJob>[];
+
+  @override
+  Future<dart_cast.FfmpegJob> start(List<String> arguments) async {
+    startedArguments.add(List<String>.of(arguments));
+    final output = File(arguments.last);
+    await output.parent.create(recursive: true);
+    await output.writeAsString(
+      'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhi\n',
+      flush: true,
+    );
+    final job = _FakeSubtitleJob(
+      '${jobs.length + 1}',
+      const dart_cast.FfmpegResult(
+        returnCode: 0,
+        logs: null,
+        success: true,
+        cancelled: false,
+      ),
+    );
+    jobs.add(job);
+    return job;
+  }
+
+  @override
+  Future<String> resolveInput(String path) async =>
+      path.startsWith('file://') ? Uri.parse(path).toFilePath() : path;
 }
 
 void main() {
@@ -1129,33 +1241,145 @@ void main() {
       await bloc.close();
     });
 
-    test('subtitle pick while live is blocked with a message and leaves '
-        'playback untouched', () async {
+    test('live subtitle pick restarts once at the current position and keeps '
+        'the audio selection', () async {
       final bloc = await liveBloc();
+      bloc.add(const PositionUpdatedEvent(Duration(minutes: 5)));
+      await pumpEventQueue();
+      final loadCallsBefore = fakeCastService.loadMediaCalls;
       const subtitle = PureCastSubtitleTrack(
         id: 'movie:1',
         label: 'English',
         language: 'eng',
-        url: '/tmp/english.vtt',
+        url: '/tmp/pure_cast_subtitle_cache/english.vtt',
         format: 'vtt',
       );
 
       bloc.add(const SetSubtitleEvent(subtitle));
       await pumpEventQueue();
 
+      expect(fakeCastService.switchSubtitleCalled, 1);
+      expect(
+        fakeCastService.switchSubtitlePosition,
+        const Duration(minutes: 5),
+      );
+      expect(fakeCastService.switchSubtitleTrack, equals(subtitle));
+      expect(fakeCastService.loadMediaCalls, loadCallsBefore);
+      expect(fakeCastService.setSubtitleCalls, 0);
+      expect(bloc.state.activeSubtitle, equals(subtitle));
+      expect(bloc.state.prepareSubtitlesError, isNull);
+      expect(bloc.state.restarting, isFalse);
+      expect(bloc.state.activeAudioIndex, 0);
+
+      await bloc.close();
+    });
+
+    test('live subtitle off disables in place and clears the restart flag',
+        () async {
+      final bloc = await liveBloc();
+      const subtitle = PureCastSubtitleTrack(
+        id: 'movie:1',
+        label: 'English',
+        language: 'eng',
+        url: '/tmp/pure_cast_subtitle_cache/english.vtt',
+        format: 'vtt',
+      );
+
+      bloc.add(const SetSubtitleEvent(subtitle));
+      await pumpEventQueue();
+      expect(bloc.state.activeSubtitle, equals(subtitle));
+
+      bloc.add(const SetSubtitleEvent(null));
+      await pumpEventQueue();
+
+      expect(fakeCastService.switchSubtitleCalled, 2);
+      expect(fakeCastService.switchSubtitleTrack, isNull);
+      expect(bloc.state.activeSubtitle, isNull);
+      expect(bloc.state.restarting, isFalse);
+
+      // A following pick proves the in-flight flag was cleared.
+      bloc.add(const SetSubtitleEvent(subtitle));
+      await pumpEventQueue();
+      expect(fakeCastService.switchSubtitleCalled, 3);
+      expect(bloc.state.activeSubtitle, equals(subtitle));
+
+      await bloc.close();
+    });
+
+    test('a failed live subtitle switch reports the message, keeps the '
+        'previous subtitle and clears the restart flag', () async {
+      final bloc = await liveBloc();
+      const first = PureCastSubtitleTrack(
+        id: 'movie:1',
+        label: 'English',
+        language: 'eng',
+        url: '/tmp/pure_cast_subtitle_cache/english.vtt',
+        format: 'vtt',
+      );
+      const second = PureCastSubtitleTrack(
+        id: 'movie:2',
+        label: 'Spanish',
+        language: 'spa',
+        url: '/tmp/pure_cast_subtitle_cache/spanish.vtt',
+        format: 'vtt',
+      );
+
+      bloc.add(const SetSubtitleEvent(first));
+      await pumpEventQueue();
+      fakeCastService.switchSubtitleError = const PureCastException(
+        'Live subtitle source could not be read',
+      );
+      bloc.add(const SetSubtitleEvent(second));
+      await pumpEventQueue();
+
+      expect(bloc.state.restarting, isFalse);
       expect(
         bloc.state.prepareSubtitlesError,
-        kLiveSubtitlesUnavailableMessage,
+        'PureCastException: Live subtitle source could not be read',
       );
-      expect(bloc.state.activeSubtitle, isNull);
-      expect(fakeCastService.setSubtitleCalls, 0);
-      expect(fakeCastService.loadedMedia, equals(media));
+      expect(bloc.state.activeSubtitle, equals(first));
+
+      // The next pick works, proving the in-flight flag was cleared.
+      fakeCastService.switchSubtitleError = null;
+      bloc.add(const SetSubtitleEvent(second));
+      await pumpEventQueue();
+      expect(fakeCastService.switchSubtitleCalled, 3);
+      expect(bloc.state.activeSubtitle, equals(second));
+
+      await bloc.close();
+    });
+
+    test('a subtitle pick during an in-flight live restart is dropped',
+        () async {
+      final bloc = await liveBloc();
+      const subtitle = PureCastSubtitleTrack(
+        id: 'movie:1',
+        label: 'English',
+        language: 'eng',
+        url: '/tmp/pure_cast_subtitle_cache/english.vtt',
+        format: 'vtt',
+      );
+
+      fakeCastService.switchGate = Completer<void>();
+      bloc.add(const SelectAudioEvent(1));
+      await pumpEventQueue();
+      expect(fakeCastService.switchCalled, 1);
+
+      bloc.add(const SetSubtitleEvent(subtitle));
+      await pumpEventQueue();
+      expect(fakeCastService.switchSubtitleCalled, 0);
+
+      fakeCastService.switchGate!.complete();
+      await pumpEventQueue();
+      expect(fakeCastService.switchCalled, 1);
+      expect(fakeCastService.switchSubtitleCalled, 0);
 
       await bloc.close();
     });
 
     test('subtitle pick while not live still runs the existing path', () async {
       final bloc = await directBloc();
+      final loadCallsBefore = fakeCastService.loadMediaCalls;
       const subtitle = PureCastSubtitleTrack(
         id: 'movie:2',
         label: 'English',
@@ -1171,6 +1395,197 @@ void main() {
       expect(bloc.state.activeSubtitle, equals(subtitle));
       expect(fakeCastService.setSubtitleCalls, 1);
       expect(fakeCastService.lastSubtitle, equals(subtitle));
+      // Non-live picks still reload the media with the declared track.
+      expect(fakeCastService.loadMediaCalls, loadCallsBefore + 1);
+
+      await bloc.close();
+    });
+  });
+
+  group('CastSessionBloc - live subtitle extraction', () {
+    const device = PureCastDevice(
+      id: 'tv_live_sub',
+      name: 'Living Room TV',
+      protocol: PureCastProtocol.chromecast,
+      host: '192.168.1.21',
+      port: 8009,
+      capabilities: PureCastCapabilities(
+        canChangeAudioTrack: true,
+        canSeek: true,
+      ),
+    );
+    const tracks = [
+      PureCastAudioTrack(
+        index: 0,
+        language: 'eng',
+        codec: 'ac3',
+        channels: 6,
+        isDefault: true,
+      ),
+      PureCastAudioTrack(
+        index: 1,
+        language: 'spa',
+        codec: 'ac3',
+        channels: 2,
+      ),
+    ];
+
+    late Directory temp;
+    late File source;
+    late _FakeSubtitleRunner runner;
+    late PureCastMedia media;
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('live_subtitle_bloc_test_');
+      source = File('${temp.path}/movie.mkv');
+      await source.writeAsBytes(const [1, 2, 3, 4], flush: true);
+      media = PureCastMedia(
+        uri: source.path,
+        type: PureCastMediaType.mkv,
+        title: 'Movie',
+        isLocalFile: true,
+      );
+      runner = _FakeSubtitleRunner();
+      await getIt.reset();
+      getIt.registerSingleton<SubtitleExtractionService>(
+        SubtitleExtractionService.withDependencies(
+          metadataCache: _FakeSubtitleMetadataCache(),
+          prober: _FakeSubtitleProber(
+            dart_cast.MediaProbe(
+              container: 'matroska,webm',
+              durationSeconds: 5400,
+              video: const dart_cast.VideoStream(codec: 'h264'),
+              audio: const [
+                dart_cast.AudioStream(index: 1, codec: 'ac3', channels: 6),
+              ],
+              subtitles: const [
+                dart_cast.SubtitleStream(
+                  index: 2,
+                  trackIndex: 0,
+                  codec: 'subrip',
+                  language: 'eng',
+                ),
+                dart_cast.SubtitleStream(
+                  index: 5,
+                  trackIndex: 1,
+                  codec: 'hdmv_pgs_subtitle',
+                  isImageBased: true,
+                ),
+              ],
+            ),
+          ),
+          runner: runner,
+          cacheDirectory: () async => Directory('${temp.path}/cache'),
+        ),
+      );
+    });
+
+    tearDown(() async {
+      await getIt.reset();
+      try {
+        await temp.delete(recursive: true);
+      } on FileSystemException {
+        // Best effort cleanup.
+      }
+    });
+
+    Future<CastSessionBloc> liveBloc() async {
+      fakeCastService.loadShouldBeLive = true;
+      fakeCastService.liveTracksOnLoad = tracks;
+      fakeCastService.activeIndexOnLoad = 0;
+      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      bloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+      bloc.add(LoadMediaEvent(media));
+      await pumpEventQueue();
+      return bloc;
+    }
+
+    PureCastSubtitleTrack textSubtitle() => PureCastSubtitleTrack(
+      id: '${media.uri}:2',
+      label: 'English',
+      language: 'eng',
+      url: media.uri,
+      format: 'subrip',
+    );
+
+    PureCastSubtitleTrack imageSubtitle() => PureCastSubtitleTrack(
+      id: '${media.uri}:5',
+      label: 'PGS',
+      language: 'eng',
+      url: media.uri,
+      format: 'hdmv_pgs_subtitle',
+    );
+
+    test('an unextracted live pick extracts WebVTT and restarts once',
+        () async {
+      final bloc = await liveBloc();
+      bloc.add(const PositionUpdatedEvent(Duration(minutes: 5)));
+      await pumpEventQueue();
+      final loadCallsBefore = fakeCastService.loadMediaCalls;
+
+      bloc.add(SetSubtitleEvent(textSubtitle()));
+      await pumpEventQueue(times: 50);
+
+      expect(runner.startedArguments, hasLength(1));
+      expect(fakeCastService.switchSubtitleCalled, 1);
+      expect(
+        fakeCastService.switchSubtitlePosition,
+        const Duration(minutes: 5),
+      );
+      final sent = fakeCastService.switchSubtitleTrack!;
+      expect(sent.url, endsWith('.vtt'));
+      expect(sent.url, isNot(media.uri));
+      expect(sent.format, 'vtt');
+      expect(bloc.state.activeSubtitle, equals(sent));
+      expect(bloc.state.prepareSubtitlesError, isNull);
+      expect(bloc.state.restarting, isFalse);
+      expect(bloc.state.preparingSubtitles, isFalse);
+      expect(bloc.state.activeAudioIndex, 0);
+      expect(fakeCastService.loadMediaCalls, loadCallsBefore);
+      expect(fakeCastService.setSubtitleCalls, 0);
+      expect(bloc.state.activeMedia!.subtitles, contains(sent));
+      expect(bloc.state.activeMedia!.defaultSubtitle, isNull);
+
+      await bloc.close();
+    });
+
+    test('an image-based live pick reports the service message and keeps the '
+        'previous subtitle', () async {
+      final bloc = await liveBloc();
+
+      bloc.add(SetSubtitleEvent(textSubtitle()));
+      await pumpEventQueue(times: 50);
+      final previous = bloc.state.activeSubtitle;
+      expect(previous, isNotNull);
+      expect(fakeCastService.switchSubtitleCalled, 1);
+
+      bloc.add(SetSubtitleEvent(imageSubtitle()));
+      await pumpEventQueue(times: 50);
+
+      expect(
+        bloc.state.prepareSubtitlesError,
+        "Image-based subtitles can't be cast",
+      );
+      expect(fakeCastService.switchSubtitleCalled, 1);
+      expect(bloc.state.restarting, isFalse);
+      expect(bloc.state.activeSubtitle, equals(previous));
+      expect(bloc.state.preparingSubtitles, isFalse);
+
+      await bloc.close();
+    });
+
+    test('ExtractAndSetSubtitleEvent on live uses the same helper', () async {
+      final bloc = await liveBloc();
+
+      bloc.add(ExtractAndSetSubtitleEvent(textSubtitle()));
+      await pumpEventQueue(times: 50);
+
+      expect(fakeCastService.switchSubtitleCalled, 1);
+      expect(fakeCastService.switchSubtitleTrack!.url, endsWith('.vtt'));
+      expect(bloc.state.activeSubtitle, isNotNull);
+      expect(bloc.state.restarting, isFalse);
+      expect(fakeCastService.setSubtitleCalls, 0);
 
       await bloc.close();
     });

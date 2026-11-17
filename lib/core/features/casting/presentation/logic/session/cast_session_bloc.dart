@@ -18,13 +18,6 @@ part 'cast_session_event.dart';
 part 'cast_session_state.dart';
 part 'cast_session_bloc.freezed.dart';
 
-/// Message emitted when the user tries to change subtitles on the live stream.
-///
-/// The live MKV path does not carry subtitle tracks yet; restarting the media
-/// to attach one would reset the audio track and the position.
-const String kLiveSubtitlesUnavailableMessage =
-    "Subtitles aren't available for this stream yet";
-
 @injectable
 class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   final ICastService _castService;
@@ -36,9 +29,9 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   StreamSubscription<Duration>? _durationSubscription;
   bool _isLoadingMedia = false;
 
-  /// True while a live restart (audio switch or seek) is awaiting the engine.
-  /// Checked when an event is enqueued so commands issued during the restart
-  /// are dropped instead of racing it.
+  /// True while a live restart (audio switch, seek or subtitle switch) is
+  /// awaiting the engine. Checked when an event is enqueued so commands issued
+  /// during the restart are dropped instead of racing it.
   bool _restartInFlight = false;
 
   /// Accumulates quick relative-seek taps into a single seek.
@@ -74,7 +67,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         (event is SeekMediaEvent ||
             event is SeekRelativeEvent ||
             event is CommitSeekPreviewEvent ||
-            event is SelectAudioEvent)) {
+            event is SelectAudioEvent ||
+            // Only live sessions restart in place; a non-live session can set
+            // this flag only while its audio switch is already restarting.
+            (state.isLive &&
+                (event is SetSubtitleEvent ||
+                    event is ExtractAndSetSubtitleEvent)))) {
       log(
         'Dropping ${event.runtimeType} while a live restart is in flight',
         name: 'Cast Session Bloc',
@@ -469,14 +467,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     SetSubtitleEvent event,
     Emitter<CastSessionState> emit,
   ) async {
-    // The live MKV path does not carry subtitles. Attaching one would reload
-    // the media, reset the audio track and jump back to the start.
-    if (state.isLive && event.subtitle != null) {
-      emit(
-        state.copyWith(
-          prepareSubtitlesError: kLiveSubtitlesUnavailableMessage,
-        ),
-      );
+    if (state.isLive) {
+      await _setLiveSubtitle(event.subtitle, emit);
       return;
     }
 
@@ -605,6 +597,152 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         subtitle.url.endsWith('.sup');
   }
 
+  /// Applies a subtitle choice to the live MKV stream.
+  ///
+  /// Passing null disables subtitles in place. A non-null subtitle is
+  /// extracted first when it still points at the media file, then the live
+  /// stream is restarted at the current position with a time-shifted copy
+  /// attached. Both paths mirror the guards of [_onSelectAudio].
+  Future<void> _setLiveSubtitle(
+    PureCastSubtitleTrack? subtitle,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final media = state.activeMedia;
+    final device = state.activeDevice;
+    if (media == null || device == null) return;
+    if (state.restarting || _restartInFlight) return;
+    if (device.protocol != PureCastProtocol.chromecast) return;
+
+    if (subtitle == null) {
+      _restartInFlight = true;
+      try {
+        await _castService.switchLiveSubtitle(
+          subtitle: null,
+          position: state.position,
+        );
+        emit(state.copyWith(activeSubtitle: null, prepareSubtitlesError: null));
+      } catch (e) {
+        emit(state.copyWith(prepareSubtitlesError: e.toString()));
+      } finally {
+        _restartInFlight = false;
+      }
+      return;
+    }
+
+    var resolved = subtitle;
+    if (!_isExtractedSubtitle(resolved) && media.isLocalFile) {
+      emit(state.copyWith(preparingSubtitles: true, prepareError: null));
+      try {
+        final extracted = await _extractLiveSubtitle(resolved, media, emit);
+        if (extracted == null) return;
+        resolved = extracted;
+      } catch (e) {
+        emit(state.copyWith(prepareSubtitlesError: e.toString()));
+        return;
+      } finally {
+        if (media.isLocalFile) {
+          emit(state.copyWith(preparingSubtitles: false));
+        }
+      }
+    }
+
+    _restartInFlight = true;
+    _cancelSeekPreview();
+    emit(
+      state.copyWith(restarting: true, playbackError: null, seekPreview: null),
+    );
+    try {
+      await _castService.switchLiveSubtitle(
+        subtitle: resolved,
+        position: state.position,
+      );
+
+      final updatedSubtitles = [...media.subtitles];
+      final index = updatedSubtitles.indexWhere((s) => s.id == resolved.id);
+      if (index >= 0) {
+        updatedSubtitles[index] = resolved;
+      } else {
+        updatedSubtitles.add(resolved);
+      }
+
+      final refreshed = _castService.audioTracks;
+      emit(
+        state.copyWith(
+          activeSubtitle: resolved,
+          activeMedia: media.copyWith(subtitles: updatedSubtitles),
+          prepareSubtitlesError: null,
+          audioTracks: refreshed.isNotEmpty ? refreshed : state.audioTracks,
+          isLive: _castService.isLiveStream,
+          restarting: false,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(restarting: false, prepareSubtitlesError: e.toString()),
+      );
+    } finally {
+      _restartInFlight = false;
+    }
+  }
+
+  /// Extracts [subtitle]'s stream into cast-ready WebVTT for [media].
+  ///
+  /// This intentionally duplicates the stream matching of the non-live
+  /// handlers instead of sharing it, so their behaviour stays untouched.
+  /// Returns null after emitting [CastSessionState.prepareSubtitlesError] when
+  /// extraction cannot proceed.
+  Future<PureCastSubtitleTrack?> _extractLiveSubtitle(
+    PureCastSubtitleTrack subtitle,
+    PureCastMedia media,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final extractionService = getIt<SubtitleExtractionService>();
+
+    final file = File(media.uri);
+    final fileSize = await file.length();
+    final lastModified = await file.lastModified();
+
+    final probeResult = await extractionService.probeAndCacheSubtitles(
+      filePath: media.uri,
+      fileSize: fileSize,
+      lastModified: lastModified,
+    );
+
+    SubtitleStreamInfo? matchingStream;
+    final streamIndexStr = subtitle.id.split(':').last;
+    for (final stream in probeResult.streams) {
+      if (stream.streamIndex.toString() == streamIndexStr) {
+        matchingStream = stream;
+        break;
+      }
+    }
+
+    if (matchingStream == null) {
+      emit(
+        state.copyWith(
+          prepareSubtitlesError: 'Subtitle stream not found in video',
+        ),
+      );
+      return null;
+    }
+
+    final result = await extractionService.extractCastSubtitle(
+      sourcePath: media.uri,
+      stream: matchingStream,
+    );
+
+    if (!result.isSuccess) {
+      emit(
+        state.copyWith(
+          prepareSubtitlesError: result.error?.message ?? 'Extraction failed',
+        ),
+      );
+      return null;
+    }
+
+    return subtitle.copyWith(url: result.outputPath!, format: 'vtt');
+  }
+
   Future<void> _onExtractAndSetSubtitle(
     ExtractAndSetSubtitleEvent event,
     Emitter<CastSessionState> emit,
@@ -613,11 +751,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     if (media == null) return;
 
     if (state.isLive) {
-      emit(
-        state.copyWith(
-          prepareSubtitlesError: kLiveSubtitlesUnavailableMessage,
-        ),
-      );
+      await _setLiveSubtitle(event.subtitle, emit);
       return;
     }
 

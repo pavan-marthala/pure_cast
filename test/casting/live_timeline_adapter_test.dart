@@ -371,6 +371,7 @@ void main() {
     late ChromecastSession session;
     late DartCastAdapter adapter;
     late HttpClient httpClient;
+    late Directory subtitleTemp;
 
     setUp(() async {
       device = CastDevice(
@@ -384,11 +385,15 @@ void main() {
       proxy = MediaProxy();
       await proxy.start();
       harness = _LiveHarness();
+      subtitleTemp = await Directory.systemTemp.createTemp(
+        'adapter_live_sub_test_',
+      );
       session = ChromecastSession.withMocks(
         device: device,
         channel: channel,
         proxy: proxy,
         liveRuns: harness.manager,
+        liveSubtitleTempDir: subtitleTemp,
       );
       adapter = DartCastAdapter(
         castService: CastService(sessionFactory: (_) => session),
@@ -400,6 +405,11 @@ void main() {
       httpClient.close(force: true);
       await adapter.dispose();
       await proxy.stop();
+      try {
+        await subtitleTemp.delete(recursive: true);
+      } on FileSystemException {
+        // Best effort cleanup.
+      }
     });
 
     Future<void> connect() async {
@@ -693,6 +703,194 @@ void main() {
       expect(durations, contains(const Duration(minutes: 90)));
 
       await durationSub.cancel();
+    });
+
+    test('switchLiveSubtitle requires an active cast session', () async {
+      await expectLater(
+        adapter.switchLiveSubtitle(subtitle: null, position: Duration.zero),
+        throwsA(isA<PureCastException>()),
+      );
+    });
+
+    test('switchLiveSubtitle requires a Chromecast session', () async {
+      final dlnaDevice = CastDevice(
+        id: 'dlna-device',
+        name: 'DLNA TV',
+        protocol: CastProtocol.dlna,
+        address: InternetAddress('192.168.1.101'),
+        port: 80,
+      );
+      final dlnaSession = DlnaSession(
+        device: dlnaDevice,
+        description: DlnaDeviceDescription(
+          friendlyName: 'DLNA TV',
+          udn: 'dlna-device',
+          locationUrl: 'http://192.168.1.101',
+        ),
+      );
+      final dlnaAdapter = DartCastAdapter(
+        castService: CastService(sessionFactory: (_) => dlnaSession),
+      );
+      try {
+        await dlnaAdapter.connect(
+          const PureCastDevice(
+            id: 'dlna-device',
+            name: 'DLNA TV',
+            protocol: PureCastProtocol.dlna,
+            host: '192.168.1.101',
+            port: 80,
+            capabilities: PureCastCapabilities(),
+          ),
+        );
+        await expectLater(
+          dlnaAdapter.switchLiveSubtitle(
+            subtitle: null,
+            position: Duration.zero,
+          ),
+          throwsA(isA<PureCastException>()),
+        );
+      } finally {
+        await dlnaAdapter.dispose();
+      }
+    });
+
+    test('a live subtitle switch restarts at the position and drops the '
+        'replaced session positions', () async {
+      await connect();
+      await startLive();
+
+      final vtt = File('${subtitleTemp.path}/source.vtt');
+      await vtt.writeAsString(
+        'WEBVTT\n\n00:00:29.000 --> 00:00:31.000\nhello\n',
+        flush: true,
+      );
+      final subtitle = PureCastSubtitleTrack(
+        id: 'movie:2',
+        label: 'English',
+        language: 'eng',
+        url: vtt.path,
+        format: 'vtt',
+      );
+
+      final positions = <Duration>[];
+      final sub = adapter.positionStream.listen(positions.add);
+
+      final switchFuture = adapter.switchLiveSubtitle(
+        subtitle: subtitle,
+        position: const Duration(seconds: 30),
+      );
+      final loadMsg = await _awaitSentLoad(channel, skip: 1);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(() => harness.args.length == 2);
+
+      // Late MEDIA_STATUS from the replaced media session (id 10).
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(mediaSessionId: 10, currentTime: 29.0),
+      );
+      await _settle();
+      expect(positions, isEmpty, reason: 'stale position was not dropped');
+
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(
+          mediaSessionId: 11,
+          currentTime: 0.5,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await switchFuture;
+      await _settle();
+
+      expect(
+        positions,
+        contains(const Duration(seconds: 30, milliseconds: 500)),
+      );
+      final media = loadMsg.payload['media'] as Map<String, dynamic>;
+      expect(media['tracks'], hasLength(1));
+      expect(loadMsg.payload['activeTrackIds'], [1]);
+      expect(adapter.liveStartOffset, const Duration(seconds: 30));
+
+      await sub.cancel();
+    });
+
+    test('clearing a live subtitle does not restart or drop positions', () async {
+      await connect();
+      await startLive();
+      final loadsBefore = channel.sentMessages
+          .where(
+            (m) =>
+                m.namespace == _mediaNamespace && m.payload['type'] == 'LOAD',
+          )
+          .length;
+
+      final positions = <Duration>[];
+      final sub = adapter.positionStream.listen(positions.add);
+
+      await adapter.switchLiveSubtitle(
+        subtitle: null,
+        position: const Duration(seconds: 30),
+      );
+      await _settle();
+
+      final loadsAfter = channel.sentMessages
+          .where(
+            (m) =>
+                m.namespace == _mediaNamespace && m.payload['type'] == 'LOAD',
+          )
+          .length;
+      expect(loadsAfter, loadsBefore);
+      final edit = channel.sentMessages.lastWhere(
+        (m) =>
+            m.namespace == _mediaNamespace &&
+            m.payload['type'] == 'EDIT_TRACKS_INFO',
+      );
+      expect(edit.payload['activeTrackIds'], isEmpty);
+      expect(adapter.liveStartOffset, Duration.zero);
+
+      // No new media session, so the guard was not armed: the next position is
+      // accepted immediately.
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(mediaSessionId: 10, currentTime: 4.0),
+      );
+      await _settle();
+      expect(positions, [const Duration(seconds: 4)]);
+
+      await sub.cancel();
+    });
+
+    test('an invalid live subtitle source propagates SubtitleAttachException', () async {
+      await connect();
+      await startLive();
+
+      await expectLater(
+        adapter.switchLiveSubtitle(
+          subtitle: PureCastSubtitleTrack(
+            id: 'movie:9',
+            label: 'Missing',
+            language: 'eng',
+            url: '${subtitleTemp.path}/missing.vtt',
+            format: 'vtt',
+          ),
+          position: const Duration(seconds: 10),
+        ),
+        throwsA(isA<SubtitleAttachException>()),
+      );
+
+      // The failed validation created no new session, so positions flow again.
+      final positions = <Duration>[];
+      final sub = adapter.positionStream.listen(positions.add);
+      channel.injectMessage(
+        namespace: _mediaNamespace,
+        payload: _mediaStatusPayload(mediaSessionId: 10, currentTime: 2.0),
+      );
+      await _settle();
+      expect(positions, [const Duration(seconds: 2)]);
+      await sub.cancel();
     });
   });
 }

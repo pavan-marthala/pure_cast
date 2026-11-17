@@ -130,17 +130,24 @@ class AudioTrackRow extends StatelessWidget {
     final label = canChange && active != null ? audioTrackLabel(active) : 'N/A';
 
     return GestureDetector(
-      onTap:
-          _canOpen
-              ? () => AudioTrackSwitcher.show(
-                context,
-                tracks: tracks,
-                activeIndex: activeIndex,
-              )
-              : null,
+      onTap: _canOpen
+          ? () => AudioTrackSwitcher.show(
+              context,
+              tracks: tracks,
+              activeIndex: activeIndex,
+            )
+          : null,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: colors.background,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(22),
+            bottom: Radius.circular(8),
+          ),
+          border: Border.all(color: colors.border),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -195,11 +202,8 @@ class AudioTrackSwitcher extends StatelessWidget {
       useRootNavigator: true,
       showDragHandle: true,
       backgroundColor: context.appColors.surfaceLight,
-      builder:
-          (sheetContext) => AudioTrackSwitcher(
-            tracks: tracks,
-            activeIndex: activeIndex,
-          ),
+      builder: (sheetContext) =>
+          AudioTrackSwitcher(tracks: tracks, activeIndex: activeIndex),
     );
   }
 
@@ -214,10 +218,9 @@ class AudioTrackSwitcher extends StatelessWidget {
             for (final track in tracks)
               ListTile(
                 title: Text(audioTrackLabel(track)),
-                trailing:
-                    activeIndex == track.index
-                        ? Icon(Icons.check, color: context.appColors.primary)
-                        : null,
+                trailing: activeIndex == track.index
+                    ? Icon(Icons.check, color: context.appColors.primary)
+                    : null,
                 onTap: () {
                   context.read<CastSessionBloc>().add(
                     SelectAudioEvent(track.index),

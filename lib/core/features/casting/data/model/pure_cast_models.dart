@@ -240,7 +240,11 @@ class PureCastMedia {
           duration == other.duration &&
           isLocalFile == other.isLocalFile;
   factory PureCastMedia.skeleton() {
-    return PureCastMedia(uri: 'kjgd', type: .video, title: 'TEmhcd.mp4');
+    return PureCastMedia(
+      uri: 'kjgd',
+      type: .video,
+      title: 'TEmhcdxmfbhvnh.mp4',
+    );
   }
 
   PureCastMedia copyWith({

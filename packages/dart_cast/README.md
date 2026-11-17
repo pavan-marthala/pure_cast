@@ -153,11 +153,14 @@ print(result.file.path);
 Attaching a non-null subtitle restarts the stream at the requested position;
 clearing it uses `EDIT_TRACKS_INFO` only. A restart re-prepares the subtitle
 from the original file for the new start offset; `WebVttTimeShifter.shift`
-moves the caller's full-timeline WebVTT by that same offset.
+moves the caller's full-timeline WebVTT by that same offset. The live subtitle
+source must be a full-timeline WebVTT file on the local filesystem (a plain
+path or a `file://` URI): the package reads and time-shifts it, and remote URLs
+are not supported on the live path.
 
 ```dart
 const subtitle = CastSubtitle(
-  url: 'https://example.com/subtitles/en.vtt',
+  url: '/data/subtitles/en.vtt',
   label: 'English',
   language: 'en',
   format: 'vtt',

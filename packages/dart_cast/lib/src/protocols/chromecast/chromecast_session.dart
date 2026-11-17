@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart';
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/cast_device.dart';
 import '../../core/cast_exceptions.dart';
@@ -24,6 +27,7 @@ import '../../core/cast_session.dart';
 import '../../core/media_proxy.dart';
 import '../../core/media_transformer.dart';
 import '../../core/ts_hls_media_transformer.dart';
+import '../../core/webvtt_time_shifter.dart';
 import '../../utils/logger.dart';
 import 'cast_media_channel.dart';
 import 'cast_receiver_channel.dart';
@@ -169,6 +173,28 @@ class ChromecastSession extends CastSession {
   /// LOAD `streamType` used for the current live stream (kept for restarts).
   String _liveStreamType = 'LIVE';
 
+  /// Caller-supplied full-timeline WebVTT source for the live subtitle.
+  ///
+  /// This is always the ORIGINAL subtitle file. The file served to the
+  /// receiver is a time-shifted copy regenerated from this source on every
+  /// live (re)start, never from a previous copy.
+  CastSubtitle? _liveSubtitle;
+
+  /// Path of the shifted VTT file currently registered with the proxy.
+  ///
+  /// At most one such file exists at a time; it is replaced on every restart
+  /// and deleted on teardown.
+  String? _shiftedLiveSubtitlePath;
+
+  /// Test seam: directory that holds the shifted live subtitle files.
+  ///
+  /// When null, a `cast_live_sub_` directory is created under the platform
+  /// temporary directory, mirroring [CastPrepareSession]'s temp handling.
+  final Directory? _liveSubtitleTempDir;
+
+  /// Disambiguates shifted file names created within the same microsecond.
+  static int _shiftedSubtitleSequence = 0;
+
   /// True while [loadLocalFile] hands its freshly prepared HLS dir to
   /// [loadMedia]; prevents the new-load cleanup from deleting it.
   bool _prepareHandedToLoad = false;
@@ -214,6 +240,13 @@ class ChromecastSession extends CastSession {
   /// Known duration of the live source (null when the probe had none).
   Duration? get liveDuration => _liveDuration;
 
+  /// Subtitle source attached to the live stream, if any.
+  ///
+  /// This is the caller-supplied full-timeline WebVTT. The time-shifted copy
+  /// that the receiver actually fetches is regenerated internally for each
+  /// live (re)start. Null when no live subtitles are attached.
+  CastSubtitle? get liveSubtitle => _liveSubtitle;
+
   int? get mediaSessionId => _mediaSessionId;
   Timer? _heartbeatTimer;
   StreamSubscription<dynamic>? _messageSubscription;
@@ -235,10 +268,15 @@ class ChromecastSession extends CastSession {
   /// Defaults to [TsHlsMediaTransformer] which wraps TS in HLS.
   ///
   /// [prober] overrides media probing; defaults to [FfprobeMediaProber].
+  ///
+  /// [liveSubtitleTempDir] overrides where shifted live-subtitle files are
+  /// written; tests inject a temporary directory. When null, a
+  /// `cast_live_sub_` directory under the platform temp directory is used.
   ChromecastSession({
     required CastDevice device,
     MediaTransformer? mediaTransformer,
     MediaProber? prober,
+    Directory? liveSubtitleTempDir,
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _RealChannelAdapter(),
        _proxy = MediaProxy(),
@@ -246,6 +284,7 @@ class ChromecastSession extends CastSession {
        _probeFile = null,
        _prober = prober ?? const FfprobeMediaProber(),
        _prepareStarter = null,
+       _liveSubtitleTempDir = liveSubtitleTempDir,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -263,6 +302,9 @@ class ChromecastSession extends CastSession {
   /// [probeFile] and [prepareStarter] are test seams for the probe and
   /// prepare session used by [loadLocalFile].
   /// [prober] overrides media probing when [probeFile] is not provided.
+  /// [liveSubtitleTempDir] overrides where shifted live-subtitle files are
+  /// written; when null a `cast_live_sub_` directory under the platform temp
+  /// directory is used.
   ChromecastSession.withMocks({
     required CastDevice device,
     required dynamic channel,
@@ -277,6 +319,7 @@ class ChromecastSession extends CastSession {
       required List<String> Function(String outputDir) buildArgs,
     })?
     prepareStarter,
+    Directory? liveSubtitleTempDir,
     this.enableReceiverDebugNamespaces = false,
   }) : _channel = _MockChannelAdapter(channel),
        _proxy = proxy ?? MediaProxy(),
@@ -285,6 +328,7 @@ class ChromecastSession extends CastSession {
        _probeFile = probeFile,
        _prober = prober ?? const FfprobeMediaProber(),
        _prepareStarter = prepareStarter,
+       _liveSubtitleTempDir = liveSubtitleTempDir,
        _mediaTransformer =
            mediaTransformer ?? const TsHlsMediaTransformer(wrapRemoteTs: true),
        super(device);
@@ -754,17 +798,24 @@ class ChromecastSession extends CastSession {
   /// [duration] and [audioTracks] let a caller that already probed the file
   /// (notably [loadLocalFile]) hand the probe results in, so no second
   /// FFprobe is needed.
+  ///
+  /// [subtitle] is a full-timeline WebVTT file (`file://` URI or plain path)
+  /// to show over the live stream. It is stored as-is and a time-shifted copy
+  /// is served for the current play position; see [liveSubtitle] and
+  /// [switchLiveSubtitle].
   Future<void> loadLiveMkv({
     required String filePath,
     required int audioIndex,
     required String streamType,
     Duration? duration,
     List<AudioStream> audioTracks = const [],
+    CastSubtitle? subtitle,
   }) async {
     // A new live load replaces any previous live runs / prepared HLS dir.
     await _cleanupCastResources();
     _releaseLiveToken();
     _resetLiveMetadata();
+    _liveSubtitle = subtitle;
     await _proxy.start(targetDeviceIp: device.address.address);
 
     final effectiveDuration = duration;
@@ -814,9 +865,21 @@ class ChromecastSession extends CastSession {
       debugPrint('[LIVE] live URL: $liveUrl');
     }
 
+    // The subtitle is always re-derived from the original source for the
+    // offset this run starts at (the same value handed to `-ss`). A failure
+    // here downgrades the stream to "no subtitles" instead of failing the
+    // cast.
+    final liveSubtitle = await _preparedLiveSubtitle(startSeconds);
+
     try {
       await loadMedia(
-        CastMedia(url: liveUrl, type: CastMediaType.mkv, title: 'Live MKV'),
+        CastMedia(
+          url: liveUrl,
+          type: CastMediaType.mkv,
+          title: 'Live MKV',
+          subtitles: liveSubtitle != null ? [liveSubtitle] : const [],
+          defaultSubtitle: liveSubtitle,
+        ),
         contentType: 'video/x-matroska',
         duration: sendDurationInLoad ? duration : null,
         bypassTransform: true,
@@ -913,12 +976,177 @@ class ChromecastSession extends CastSession {
     audioTracks: audioTracks,
   );
 
-  /// Closes every live run (cancelling each by its own session id) and stops
-  /// the HLS prepare session, which deletes its temp dir. Safe to call
-  /// repeatedly.
+  /// Attaches, replaces or clears the subtitle of the current live stream.
+  ///
+  /// [subtitle] must point at a full-timeline WebVTT file (`file://` URI or
+  /// plain path). It is validated *before* anything changes: when it cannot be
+  /// read, is not WebVTT, or cannot be shifted for [position], this throws a
+  /// [SubtitleAttachException] and the current stream is left untouched. On
+  /// success the stream restarts at [position] with a copy of [subtitle]
+  /// shifted so receiver time zero matches that source position — the same
+  /// restart used by [switchLiveAudio], so the existing in-flight guards apply.
+  ///
+  /// Passing null clears the subtitle in place: the shifted copy is deleted
+  /// and EDIT_TRACKS_INFO deactivates the track. No restart and no new LOAD is
+  /// issued.
+  ///
+  /// Throws a [StateError] when the session is not connected or the current
+  /// media is not a live MKV stream.
+  Future<void> switchLiveSubtitle({
+    required CastSubtitle? subtitle,
+    required Duration position,
+  }) async {
+    if (_transportId == null) {
+      throw StateError('Not connected. Call connect() first.');
+    }
+    if (!_isLive || _liveFilePath == null) {
+      throw StateError('switchLiveSubtitle requires a live MKV stream');
+    }
+
+    if (subtitle == null) {
+      _liveSubtitle = null;
+      await _deleteShiftedLiveSubtitle();
+      await setSubtitle(null);
+      return;
+    }
+
+    await _validateLiveSubtitleSource(subtitle, position);
+
+    _liveSubtitle = subtitle;
+    await _restartLiveStream(
+      filePath: _liveFilePath!,
+      audioIndex: _liveAudioIndex,
+      position: position,
+      streamType: _liveStreamType,
+    );
+  }
+
+  /// Validates [subtitle] for [position] without touching live state.
+  ///
+  /// Reads the source and performs one throw-away shift, so a missing or
+  /// malformed file can never leave a half-restarted stream behind. Error
+  /// messages deliberately carry no path or URL.
+  Future<void> _validateLiveSubtitleSource(
+    CastSubtitle subtitle,
+    Duration position,
+  ) async {
+    final String text;
+    try {
+      text = await File(_localPathOf(subtitle.url)).readAsString();
+    } catch (e) {
+      throw SubtitleAttachException(
+        'Live subtitle source could not be read',
+        e,
+      );
+    }
+
+    final body = text.startsWith('\uFEFF') ? text.substring(1) : text;
+    if (!body.startsWith('WEBVTT')) {
+      throw SubtitleAttachException(
+        'Live subtitle source is not a WebVTT file',
+      );
+    }
+
+    try {
+      WebVttTimeShifter.shift(text, position);
+    } catch (e) {
+      throw SubtitleAttachException(
+        'Live subtitle source could not be time-shifted',
+        e,
+      );
+    }
+  }
+
+  /// Builds the shifted copy of [_liveSubtitle] for a run starting at
+  /// [startSeconds] in the source file, or null when there is nothing to
+  /// attach.
+  ///
+  /// Always reads the ORIGINAL source. On failure this logs without the path,
+  /// clears [_liveSubtitle] and returns null so the stream still loads — a
+  /// subtitle problem must never fail a cast.
+  Future<CastSubtitle?> _preparedLiveSubtitle(double? startSeconds) async {
+    final source = _liveSubtitle;
+    if (source == null) return null;
+
+    try {
+      final text = await File(_localPathOf(source.url)).readAsString();
+      final body = text.startsWith('\uFEFF') ? text.substring(1) : text;
+      if (!body.startsWith('WEBVTT')) {
+        throw const FormatException('Not a WebVTT document');
+      }
+      final offset = Duration(
+        milliseconds: ((startSeconds ?? 0) * 1000).round(),
+      );
+      final shifted = WebVttTimeShifter.shift(text, offset);
+      final path = await _writeShiftedLiveSubtitle(shifted);
+      return CastSubtitle(
+        url: Uri.file(path).toString(),
+        label: source.label,
+        language: source.language,
+        format: 'vtt',
+      );
+    } catch (_) {
+      CastLogger.warning(
+        'Chromecast: live subtitle could not be prepared; continuing without '
+        'subtitles',
+      );
+      _liveSubtitle = null;
+      await _deleteShiftedLiveSubtitle();
+      return null;
+    }
+  }
+
+  /// Writes [content] to a fresh shifted-subtitle file and returns its path.
+  ///
+  /// The previous shifted file is deleted first, so exactly one exists.
+  Future<String> _writeShiftedLiveSubtitle(String content) async {
+    await _deleteShiftedLiveSubtitle();
+    final dir = await _resolveLiveSubtitleTempDir();
+    final path =
+        '${dir.path}/cast_live_sub_'
+        '${DateTime.now().microsecondsSinceEpoch}_'
+        '${_shiftedSubtitleSequence++}.vtt';
+    await File(path).writeAsString(content, flush: true);
+    _shiftedLiveSubtitlePath = path;
+    return path;
+  }
+
+  /// Resolves (and creates) the directory that holds shifted subtitle files.
+  Future<Directory> _resolveLiveSubtitleTempDir() async {
+    final override = _liveSubtitleTempDir;
+    final dir =
+        override ??
+        Directory('${(await getTemporaryDirectory()).path}/cast_live_sub_');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
+  /// Deletes the current shifted subtitle file. Failures are swallowed.
+  Future<void> _deleteShiftedLiveSubtitle() async {
+    final path = _shiftedLiveSubtitlePath;
+    _shiftedLiveSubtitlePath = null;
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {
+      // A leftover temp file is harmless; never fail teardown over it.
+    }
+  }
+
+  /// Converts a `file://` URI or plain path to a filesystem path.
+  static String _localPathOf(String url) =>
+      url.startsWith('file://') ? Uri.parse(url).toFilePath() : url;
+
+  /// Closes every live run (cancelling each by its own session id), stops the
+  /// HLS prepare session (which deletes its temp dir) and deletes the current
+  /// shifted live-subtitle file. Safe to call repeatedly.
   Future<void> _cleanupCastResources() async {
     await _liveRuns.closeAll();
     await _stopPrepareSession();
+    await _deleteShiftedLiveSubtitle();
   }
 
   /// Stops the HLS prepare session (cancelling its own ffmpeg id and
@@ -944,6 +1172,10 @@ class ChromecastSession extends CastSession {
 
   /// Clears every piece of live state. Called on teardown and whenever a
   /// non-live load replaces the current media.
+  ///
+  /// Also forgets the live subtitle source and deletes its shifted copy; the
+  /// deletion is fire-and-forget because this method is synchronous and is
+  /// called from synchronous teardown paths.
   void _resetLiveMetadata() {
     _isLive = false;
     _liveFilePath = null;
@@ -952,6 +1184,8 @@ class ChromecastSession extends CastSession {
     _liveDuration = null;
     _liveStreamType = 'LIVE';
     _liveStartOffset = Duration.zero;
+    _liveSubtitle = null;
+    unawaited(_deleteShiftedLiveSubtitle());
   }
 
   int _defaultAudioIndex(List<AudioStream> audio) {

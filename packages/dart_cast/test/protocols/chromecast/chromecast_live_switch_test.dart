@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:dart_cast/src/core/cast_device.dart';
 import 'package:dart_cast/src/core/cast_exceptions.dart';
+import 'package:dart_cast/src/core/cast_media.dart';
+import 'package:dart_cast/src/core/cast_session.dart';
 import 'package:dart_cast/src/core/live_mkv_stream.dart';
 import 'package:dart_cast/src/core/local_tcp_source.dart';
 import 'package:dart_cast/src/core/media_probe.dart';
@@ -52,6 +54,10 @@ class _MockCastV2Channel {
     required Map<String, dynamic> payload,
   }) {
     _incoming.add(_ReceivedMessage(namespace: namespace, payload: payload));
+  }
+
+  void injectError(Object error) {
+    _incoming.addError(error);
   }
 }
 
@@ -261,7 +267,9 @@ void main() {
   late ChromecastSession session;
   late HttpClient httpClient;
   late MediaProbe nextProbe;
+  late Directory subtitleTemp;
   var probeCalls = 0;
+  var sessionDisposedInTest = false;
 
   setUp(() async {
     device = CastDevice(
@@ -277,11 +285,14 @@ void main() {
     harness = _LiveHarness();
     nextProbe = _makeProbe();
     probeCalls = 0;
+    sessionDisposedInTest = false;
+    subtitleTemp = await Directory.systemTemp.createTemp('cast_live_sub_test_');
     session = ChromecastSession.withMocks(
       device: device,
       channel: channel,
       proxy: proxy,
       liveRuns: harness.manager,
+      liveSubtitleTempDir: subtitleTemp,
       probeFile: (input) async {
         probeCalls++;
         return nextProbe;
@@ -298,8 +309,13 @@ void main() {
 
   tearDown(() async {
     httpClient.close(force: true);
-    session.dispose();
+    if (!sessionDisposedInTest) session.dispose();
     await proxy.stop();
+    try {
+      await subtitleTemp.delete(recursive: true);
+    } on FileSystemException {
+      // Best effort cleanup.
+    }
   });
 
   Future<void> connect() async {
@@ -1064,6 +1080,485 @@ void main() {
       expect(seek.payload['mediaSessionId'], 10);
       expect(seek.payload['currentTime'], 10.0);
       expect(harness.args, isEmpty);
+    });
+  });
+
+  group('ChromecastSession live subtitles', () {
+    // 30s → 31s, 60s → 62.5s, 125s → 127s, 310s → 312s, 500s → 502s.
+    const sourceVtt =
+        'WEBVTT\n'
+        '\n'
+        '00:00:30.000 --> 00:00:31.000\n'
+        'before\n'
+        '\n'
+        '00:01:00.000 --> 00:01:02.500\n'
+        'early\n'
+        '\n'
+        '00:02:05.000 --> 00:02:07.000\n'
+        'after\n'
+        '\n'
+        '00:05:10.000 --> 00:05:12.000\n'
+        'five\n'
+        '\n'
+        '00:08:20.000 --> 00:08:22.000\n'
+        'eight\n';
+
+    late File sourceFile;
+
+    setUp(() async {
+      sourceFile = File('${subtitleTemp.path}/source.vtt');
+      await sourceFile.writeAsString(sourceVtt, flush: true);
+    });
+
+    CastSubtitle sourceSubtitle() => CastSubtitle(
+      url: Uri.file(sourceFile.path).toString(),
+      label: 'English',
+      language: 'en',
+      format: 'vtt',
+    );
+
+    Future<List<File>> shiftedFiles() async {
+      if (!await subtitleTemp.exists()) return const [];
+      return (await subtitleTemp.list().toList())
+          .whereType<File>()
+          .where(
+            (file) => file.uri.pathSegments.last.startsWith('cast_live_sub_'),
+          )
+          .toList();
+    }
+
+    Future<String> singleShiftedContent() async {
+      final files = await shiftedFiles();
+      expect(files, hasLength(1));
+      return files.single.readAsString();
+    }
+
+    int loadCount() =>
+        channel.sentMessages
+            .where(
+              (m) =>
+                  m.namespace == CastMediaChannel.mediaNamespace &&
+                  m.payload['type'] == 'LOAD',
+            )
+            .length;
+
+    Future<void> waitForNoShiftedFiles() async {
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        if ((await shiftedFiles()).isEmpty) return;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      fail('shifted subtitle file was not deleted');
+    }
+
+    /// Acknowledges the next live LOAD, opens its receiver-side request and
+    /// completes [future].
+    Future<Map<String, dynamic>> acknowledgeNextLoad({
+      required int skip,
+      required int mediaSessionId,
+      required Future<void> future,
+    }) async {
+      final loadMsg = await _awaitSentLoad(channel, skip: skip);
+      await _startLiveRequest(
+        httpClient,
+        loadMsg.payload['media']['contentId'] as String,
+      );
+      await _waitFor(
+        () => harness.args.length == skip + 1,
+        reason: 'live run #${skip + 1} did not open',
+      );
+      channel.injectMessage(
+        namespace: CastMediaChannel.mediaNamespace,
+        sourceId: 'web-4',
+        destinationId: 'sender-0',
+        payload: _mediaStatusPayload(
+          mediaSessionId: mediaSessionId,
+          requestId: loadMsg.payload['requestId'] as int,
+        ),
+      );
+      await future;
+      return loadMsg.payload;
+    }
+
+    Future<void> startInitialLiveStreamWithSubtitle() async {
+      final future = session.loadLiveMkv(
+        filePath: '/videos/movie.mkv',
+        audioIndex: 0,
+        streamType: 'LIVE',
+        subtitle: sourceSubtitle(),
+      );
+      await acknowledgeNextLoad(skip: 0, mediaSessionId: 10, future: future);
+    }
+
+    test(
+      'loadLiveMkv attaches one active text track and an unshifted copy',
+      () async {
+        await connect();
+        final loadFuture = session.loadLiveMkv(
+          filePath: '/videos/movie.mkv',
+          audioIndex: 0,
+          streamType: 'LIVE',
+          subtitle: sourceSubtitle(),
+        );
+        final payload = await acknowledgeNextLoad(
+          skip: 0,
+          mediaSessionId: 10,
+          future: loadFuture,
+        );
+
+        final media = payload['media'] as Map<String, dynamic>;
+        final tracks = media['tracks'] as List;
+        expect(tracks, hasLength(1));
+        final track = tracks.single as Map<String, dynamic>;
+        expect(track['type'], 'TEXT');
+        expect(track['trackId'], 1);
+        expect(track['name'], 'English');
+        expect(track['language'], 'en');
+        expect(track['trackContentId'], endsWith('.vtt'));
+        expect(payload['activeTrackIds'], [1]);
+
+        expect(await singleShiftedContent(), sourceVtt);
+        expect(session.liveSubtitle?.url, Uri.file(sourceFile.path).toString());
+      },
+    );
+
+    test('switchLiveSubtitle attaches a copy shifted by 120s', () async {
+      await connect();
+      await startInitialLiveStream();
+      expect(session.liveSubtitle, isNull);
+      expect(await shiftedFiles(), isEmpty);
+
+      final switchFuture = session.switchLiveSubtitle(
+        subtitle: sourceSubtitle(),
+        position: const Duration(seconds: 120),
+      );
+      final payload = await acknowledgeNextLoad(
+        skip: 1,
+        mediaSessionId: 11,
+        future: switchFuture,
+      );
+
+      final tracks =
+          (payload['media'] as Map<String, dynamic>)['tracks'] as List;
+      expect(tracks, hasLength(1));
+      expect(payload['activeTrackIds'], [1]);
+      expect(session.liveSubtitle?.url, Uri.file(sourceFile.path).toString());
+      expect(harness.cancelsFor(1), 1);
+      expect(harness.manager.activeCount, 1);
+      expect(
+        await singleShiftedContent(),
+        'WEBVTT\n'
+        '\n'
+        '00:00:05.000 --> 00:00:07.000\n'
+        'after\n'
+        '\n'
+        '00:03:10.000 --> 00:03:12.000\n'
+        'five\n'
+        '\n'
+        '00:06:20.000 --> 00:06:22.000\n'
+        'eight\n',
+      );
+    });
+
+    test(
+      'a later audio switch shifts the original again, not the copy',
+      () async {
+        await connect();
+        await startInitialLiveStream();
+        final attach = session.switchLiveSubtitle(
+          subtitle: sourceSubtitle(),
+          position: const Duration(seconds: 120),
+        );
+        await acknowledgeNextLoad(skip: 1, mediaSessionId: 11, future: attach);
+
+        final switchFuture = session.switchLiveAudio(
+          filePath: '/videos/movie.mkv',
+          audioIndex: 2,
+          position: const Duration(seconds: 300),
+          streamType: 'LIVE',
+        );
+        final payload = await acknowledgeNextLoad(
+          skip: 2,
+          mediaSessionId: 12,
+          future: switchFuture,
+        );
+
+        final tracks =
+            (payload['media'] as Map<String, dynamic>)['tracks'] as List;
+        expect(tracks, hasLength(1));
+        expect(payload['activeTrackIds'], [1]);
+        // 310s − 300s = 10s. Shifting the 120s copy again would drop it.
+        expect(
+          await singleShiftedContent(),
+          'WEBVTT\n'
+          '\n'
+          '00:00:10.000 --> 00:00:12.000\n'
+          'five\n'
+          '\n'
+          '00:03:20.000 --> 00:03:22.000\n'
+          'eight\n',
+        );
+        expect(harness.args[2], containsAllInOrder(['-map', '0:a:2']));
+      },
+    );
+
+    test('a live seek re-attaches the subtitle shifted by 500s', () async {
+      await connect();
+      await startInitialLiveStream();
+      final attach = session.switchLiveSubtitle(
+        subtitle: sourceSubtitle(),
+        position: Duration.zero,
+      );
+      await acknowledgeNextLoad(skip: 1, mediaSessionId: 11, future: attach);
+
+      final seekFuture = session.seek(const Duration(seconds: 500));
+      final payload = await acknowledgeNextLoad(
+        skip: 2,
+        mediaSessionId: 12,
+        future: seekFuture,
+      );
+
+      final tracks =
+          (payload['media'] as Map<String, dynamic>)['tracks'] as List;
+      expect(tracks, hasLength(1));
+      expect(payload['activeTrackIds'], [1]);
+      expect(
+        await singleShiftedContent(),
+        'WEBVTT\n'
+        '\n'
+        '00:00:00.000 --> 00:00:02.000\n'
+        'eight\n',
+      );
+      expect(session.liveStartOffset, const Duration(seconds: 500));
+    });
+
+    test(
+      'switchLiveSubtitle(null) disables in place without a restart',
+      () async {
+        await connect();
+        await startInitialLiveStreamWithSubtitle();
+        final loadsBefore = loadCount();
+        final runsBefore = harness.args.length;
+
+        await session.switchLiveSubtitle(
+          subtitle: null,
+          position: Duration.zero,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(loadCount(), loadsBefore);
+        expect(harness.args.length, runsBefore);
+        expect(session.liveSubtitle, isNull);
+        expect(await shiftedFiles(), isEmpty);
+
+        final edit = channel.sentMessages.lastWhere(
+          (m) =>
+              m.namespace == CastMediaChannel.mediaNamespace &&
+              m.payload['type'] == 'EDIT_TRACKS_INFO',
+        );
+        expect(edit.payload['activeTrackIds'], isEmpty);
+        expect(edit.payload['mediaSessionId'], 10);
+
+        // The next audio restart loads without any subtitle track at all.
+        final switchFuture = session.switchLiveAudio(
+          filePath: '/videos/movie.mkv',
+          audioIndex: 1,
+          position: const Duration(seconds: 60),
+          streamType: 'LIVE',
+        );
+        final payload = await acknowledgeNextLoad(
+          skip: 1,
+          mediaSessionId: 11,
+          future: switchFuture,
+        );
+        final media = payload['media'] as Map<String, dynamic>;
+        expect(media.containsKey('tracks'), isFalse);
+        expect(payload.containsKey('activeTrackIds'), isFalse);
+      },
+    );
+
+    test(
+      'an invalid source throws before any restart and keeps the state',
+      () async {
+        await connect();
+        await startInitialLiveStreamWithSubtitle();
+        final before = session.liveSubtitle;
+        final loadsBefore = loadCount();
+        expect(await shiftedFiles(), hasLength(1));
+
+        final missing = CastSubtitle(
+          url: Uri.file('${subtitleTemp.path}/missing.vtt').toString(),
+          label: 'Missing',
+          language: 'en',
+          format: 'vtt',
+        );
+        await expectLater(
+          session.switchLiveSubtitle(
+            subtitle: missing,
+            position: const Duration(seconds: 30),
+          ),
+          throwsA(isA<SubtitleAttachException>()),
+        );
+
+        final notVtt = File('${subtitleTemp.path}/not_vtt.vtt');
+        await notVtt.writeAsString('1\n00:00:01,000 --> 00:00:02,000\nsrt\n');
+        await expectLater(
+          session.switchLiveSubtitle(
+            subtitle: CastSubtitle(
+              url: notVtt.path,
+              label: 'SRT',
+              language: 'en',
+              format: 'vtt',
+            ),
+            position: const Duration(seconds: 30),
+          ),
+          throwsA(isA<SubtitleAttachException>()),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(loadCount(), loadsBefore);
+        expect(harness.cancelsFor(1), 0);
+        expect(harness.args.length, 1);
+        expect(session.liveSubtitle, same(before));
+        expect(await shiftedFiles(), hasLength(1));
+      },
+    );
+
+    test('switchLiveSubtitle requires a connected live stream', () async {
+      await expectLater(
+        session.switchLiveSubtitle(subtitle: null, position: Duration.zero),
+        throwsA(isA<StateError>()),
+      );
+
+      await connect();
+      await expectLater(
+        session.switchLiveSubtitle(subtitle: null, position: Duration.zero),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('each restart replaces the previous shifted file', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      final firstPath = (await shiftedFiles()).single.path;
+
+      final switchFuture = session.switchLiveAudio(
+        filePath: '/videos/movie.mkv',
+        audioIndex: 1,
+        position: const Duration(seconds: 60),
+        streamType: 'LIVE',
+      );
+      await acknowledgeNextLoad(
+        skip: 1,
+        mediaSessionId: 11,
+        future: switchFuture,
+      );
+
+      final files = await shiftedFiles();
+      expect(files, hasLength(1));
+      expect(files.single.path, isNot(firstPath));
+    });
+
+    test('stop deletes the shifted file', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      expect(await shiftedFiles(), hasLength(1));
+
+      await session.stop();
+
+      expect(await shiftedFiles(), isEmpty);
+      expect(session.liveSubtitle, isNull);
+    });
+
+    test('disconnect deletes the shifted file', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      expect(await shiftedFiles(), hasLength(1));
+
+      await session.disconnect();
+
+      expect(await shiftedFiles(), isEmpty);
+      expect(session.liveSubtitle, isNull);
+    });
+
+    test('dispose deletes the shifted file', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      expect(await shiftedFiles(), hasLength(1));
+
+      sessionDisposedInTest = true;
+      session.dispose();
+
+      await waitForNoShiftedFiles();
+    });
+
+    test('a lost socket deletes the shifted file', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      expect(await shiftedFiles(), hasLength(1));
+
+      channel.injectError(StateError('socket lost'));
+      await _waitFor(
+        () => session.state == SessionState.disconnected,
+        reason: 'socket loss did not disconnect the session',
+      );
+
+      await waitForNoShiftedFiles();
+    });
+
+    test(
+      'a non-live load clears liveSubtitle and deletes the shifted file',
+      () async {
+        await connect();
+        await startInitialLiveStreamWithSubtitle();
+        expect(session.liveSubtitle, isNotNull);
+
+        final loadFuture = session.loadMedia(
+          const CastMedia(
+            url: 'http://example.com/video.mp4',
+            type: CastMediaType.mp4,
+          ),
+        );
+        final loadMsg = await _awaitSentLoad(channel, skip: 1);
+        channel.injectMessage(
+          namespace: CastMediaChannel.mediaNamespace,
+          sourceId: 'web-4',
+          destinationId: 'sender-0',
+          payload: _mediaStatusPayload(
+            mediaSessionId: 11,
+            requestId: loadMsg.payload['requestId'] as int,
+          ),
+        );
+        await loadFuture;
+
+        expect(session.liveSubtitle, isNull);
+        await waitForNoShiftedFiles();
+      },
+    );
+
+    test('a source that disappears before a restart downgrades to no '
+        'subtitles', () async {
+      await connect();
+      await startInitialLiveStreamWithSubtitle();
+      await sourceFile.delete();
+
+      final switchFuture = session.switchLiveAudio(
+        filePath: '/videos/movie.mkv',
+        audioIndex: 0,
+        position: const Duration(seconds: 60),
+        streamType: 'LIVE',
+      );
+      final payload = await acknowledgeNextLoad(
+        skip: 1,
+        mediaSessionId: 11,
+        future: switchFuture,
+      );
+
+      final media = payload['media'] as Map<String, dynamic>;
+      expect(media.containsKey('tracks'), isFalse);
+      expect(payload.containsKey('activeTrackIds'), isFalse);
+      expect(session.liveSubtitle, isNull);
+      expect(await shiftedFiles(), isEmpty);
     });
   });
 }

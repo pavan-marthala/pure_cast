@@ -96,3 +96,12 @@ class SubtitleCacheException extends CastException {
   /// Creates a [SubtitleCacheException] with an optional [cause].
   SubtitleCacheException(super.message, [super.cause]);
 }
+
+/// Thrown when a subtitle cannot be attached to the current cast stream.
+///
+/// Raised before any live restart when the supplied WebVTT source is missing,
+/// unreadable or malformed. The message never contains a file path or URL.
+class SubtitleAttachException extends CastException {
+  /// Creates a [SubtitleAttachException] with an optional [cause].
+  SubtitleAttachException(super.message, [super.cause]);
+}

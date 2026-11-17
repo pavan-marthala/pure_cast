@@ -19,6 +19,7 @@ export 'src/core/hls_stream_proxy.dart';
 export 'src/core/media_proxy.dart';
 export 'src/core/media_source.dart';
 export 'src/core/subtitle_converter.dart';
+export 'src/core/webvtt_time_shifter.dart';
 
 // Protocols — AirPlay
 export 'src/protocols/airplay/airplay_client.dart';

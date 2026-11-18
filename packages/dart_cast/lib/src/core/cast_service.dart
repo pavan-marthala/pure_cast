@@ -26,6 +26,13 @@ class CastService {
   CastSession? _activeSession;
   CastDevice? _lastDevice;
 
+  /// Upper bound for tearing down the previous session before connecting.
+  ///
+  /// Teardown stops live FFmpeg runs and the local proxy; if any of those
+  /// never finishes, waiting for them would block the new connection and the
+  /// UI would stay on "Connecting..." indefinitely.
+  final Duration disconnectTimeout;
+
   /// Creates a [CastService].
   ///
   /// [discoveryProviders] are the protocol-specific discovery providers.
@@ -34,6 +41,7 @@ class CastService {
   CastService({
     List<DeviceDiscoveryProvider>? discoveryProviders,
     SessionFactory? sessionFactory,
+    this.disconnectTimeout = const Duration(seconds: 5),
   }) : _discoveryManager = DiscoveryManager(discoveryProviders ?? []),
        _sessionFactory = sessionFactory;
 
@@ -69,10 +77,19 @@ class CastService {
       'CastService: connecting to ${device.name} (${device.protocol})',
     );
 
-    // Auto-disconnect previous session
-    if (_activeSession != null) {
+    // Auto-disconnect previous session. Stop tracking it first: its teardown
+    // emits `disconnected`, and that must not be mistaken for the new session
+    // failing. The teardown is bounded so a stuck FFmpeg/proxy cleanup cannot
+    // block the new connection forever.
+    final previousSession = _activeSession;
+    _activeSession = null;
+    if (previousSession != null) {
       try {
-        await _activeSession!.disconnect();
+        await previousSession.disconnect().timeout(disconnectTimeout);
+      } on TimeoutException {
+        CastLogger.warning(
+          'CastService: timed out disconnecting previous session, continuing',
+        );
       } catch (e) {
         CastLogger.warning(
           'CastService: error disconnecting previous session: $e',
@@ -90,6 +107,14 @@ class CastService {
 
   /// The currently active cast session, or null if not connected.
   CastSession? get activeSession => _activeSession;
+
+  /// Forgets the active session without disconnecting it.
+  ///
+  /// Call this after the caller has already disconnected the session so the
+  /// next [connect] does not tear it down a second time.
+  void clearActiveSession() {
+    _activeSession = null;
+  }
 
   /// The last device connected to, for [reconnect] support.
   CastDevice? get lastDevice => _lastDevice;

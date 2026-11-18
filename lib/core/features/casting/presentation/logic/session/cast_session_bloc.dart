@@ -40,8 +40,28 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   /// How long relative-seek taps are collected before one seek is issued.
   static const Duration _seekRelativeDelay = Duration(milliseconds: 600);
 
-  CastSessionBloc(this._castService, this._historyRepo, this._db)
-    : super(const CastSessionState()) {
+  /// Upper bound for a single connect attempt, including the teardown of any
+  /// previous session.
+  ///
+  /// A legitimate attempt can take ~20 s (5 s TLS + 15 s receiver handshake),
+  /// so this only trips when a teardown or the receiver never responds. Without
+  /// it a stuck connect leaves the UI on "Connecting..." forever.
+  final Duration connectTimeout;
+
+  /// Device id of the connect currently in flight, if any.
+  ///
+  /// Guards against overlapping connects (a double tap, or the discovery
+  /// auto-reconnect racing a manual tap). Both would tear down each other's
+  /// session and can leave the receiver connected while the UI stays in
+  /// [StateStatus.loading].
+  String? _connectingDeviceId;
+
+  CastSessionBloc(
+    this._castService,
+    this._historyRepo,
+    this._db, {
+    @ignoreParam this.connectTimeout = const Duration(seconds: 30),
+  }) : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
     on<LoadMediaEvent>(_onLoadMedia);
@@ -100,7 +120,17 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     ConnectDeviceEvent event,
     Emitter<CastSessionState> emit,
   ) async {
+    if (_connectingDeviceId != null) {
+      log(
+        'Ignoring connect to ${event.device.name}: '
+        'a connect to $_connectingDeviceId is already in flight',
+        name: 'Cast Session Bloc',
+      );
+      return;
+    }
+
     final previousDevice = state.activeDevice;
+    _connectingDeviceId = event.device.id;
     emit(
       state.copyWith(
         connectionStatus: StateStatus.loading,
@@ -109,16 +139,26 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       ),
     );
     try {
-      await _castService.connect(event.device);
-      await _db.setLastCastedDevice(
-        deviceId: event.device.id,
-        deviceName: event.device.name,
-        protocol: event.device.protocol.name,
-      );
+      await _castService.connect(event.device).timeout(connectTimeout);
       emit(state.copyWith(connectionStatus: StateStatus.loaded));
+      // Persisting the last device is not needed for the UI to settle, so it
+      // must never keep the connection in the loading state.
+      unawaited(_persistLastCastedDevice(event.device));
       if (state.activeMedia != null) {
         add(LoadMediaEvent(state.activeMedia!));
       }
+    } on TimeoutException {
+      // Keep the requested device selected: the timed-out connect may still
+      // complete underneath (e.g. a slow receiver handshake). If it does, the
+      // session stream reports connected/playing and the status self-heals.
+      emit(
+        state.copyWith(
+          connectionStatus: StateStatus.error,
+          connectionError:
+              'Timed out connecting to ${event.device.name}. '
+              'Check that the device is on the same network.',
+        ),
+      );
     } catch (e) {
       emit(
         state.copyWith(
@@ -126,6 +166,25 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           connectionError: e.toString(),
           activeDevice: previousDevice,
         ),
+      );
+    } finally {
+      _connectingDeviceId = null;
+    }
+  }
+
+  Future<void> _persistLastCastedDevice(PureCastDevice device) async {
+    try {
+      await _db
+          .setLastCastedDevice(
+            deviceId: device.id,
+            deviceName: device.name,
+            protocol: device.protocol.name,
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (e) {
+      log(
+        'Failed to persist last casted device: $e',
+        name: 'Cast Session Bloc',
       );
     }
   }
@@ -863,7 +922,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       // handshake, which emits disconnected on the stream. Clearing activeDevice
       // there would break the connect flow on Android where the receiver
       // shows connected but the BLoC state says disconnected.
-      if (state.connectionStatus == StateStatus.loading) {
+      if (_connectingDeviceId != null ||
+          state.connectionStatus == StateStatus.loading) {
         emit(state.copyWith(sessionState: event.newState));
         return;
       }
@@ -874,7 +934,23 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       return;
     }
 
-    emit(state.copyWith(sessionState: event.newState));
+    // The receiver can report connected/playing before the connect future
+    // resolves (or when a session was opened outside this bloc). Treat that as
+    // a successful connection so the UI never stays latched on "Connecting...".
+    final healedConnectionStatus =
+        (event.newState == PureCastSessionState.connected ||
+                event.newState == PureCastSessionState.playing) &&
+            state.activeDevice != null &&
+            state.connectionStatus != StateStatus.loaded
+        ? StateStatus.loaded
+        : state.connectionStatus;
+
+    emit(
+      state.copyWith(
+        sessionState: event.newState,
+        connectionStatus: healedConnectionStatus,
+      ),
+    );
     _checkpointHistory(
       completed: event.newState == PureCastSessionState.completed,
     );
@@ -910,6 +986,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   Future<void> close() {
     _isLoadingMedia = false;
     _restartInFlight = false;
+    _connectingDeviceId = null;
     _cancelSeekPreview();
     _stateSubscription?.cancel();
     _positionSubscription?.cancel();

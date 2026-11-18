@@ -1659,15 +1659,29 @@ class ChromecastSession extends CastSession {
       CastLogger.warning('Chromecast: error sending CLOSE messages: $e');
     }
 
-    // Transition state immediately so the UI responds
+    // Transition state immediately so the UI responds. This must happen before
+    // the live-resource teardown: that teardown can block on FFmpeg and would
+    // otherwise leave the UI (and CastService.connect) waiting while the
+    // previous session keeps the receiver playing.
     _transportId = null;
     _sessionId = null;
     _mediaSessionId = null;
-    // Close all live runs and stop the HLS prepare session.
-    await _cleanupCastResources();
+    stateMachine.transitionTo(SessionState.disconnected);
     _releaseLiveToken();
     _resetLiveMetadata();
-    stateMachine.transitionTo(SessionState.disconnected);
+    try {
+      // Close all live runs and stop the HLS prepare session, but never let a
+      // stuck FFmpeg job hang the disconnect.
+      await _cleanupCastResources().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      CastLogger.warning(
+        'Chromecast: live cleanup timed out during disconnect',
+      );
+    } catch (e) {
+      CastLogger.warning(
+        'Chromecast: live cleanup error during disconnect: $e',
+      );
+    }
 
     // Clean up socket and proxy with a timeout so we don't hang
     try {

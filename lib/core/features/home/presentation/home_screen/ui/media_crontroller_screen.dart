@@ -57,7 +57,7 @@ class _MediaControllerScreenState extends State<MediaControllerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(slivers: [Body()]);
+    return Body();
   }
 }
 
@@ -128,246 +128,254 @@ class Body extends StatelessWidget {
         if (prepareError != null) {
           return SliverToBoxAdapter(child: Center(child: Text(prepareError)));
         }
-        return SliverPadding(
-          padding: .symmetric(horizontal: 16, vertical: 16),
-          sliver: SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: .start,
-              children: [
-                Row(
-                  mainAxisAlignment: .spaceBetween,
+        return SafeArea(
+          child: Padding(
+            padding: .symmetric(horizontal: 16, vertical: 16),
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: .start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        context.pop();
-                      },
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        color: colors.white,
-                        size: 28,
-                      ),
-                    ),
-
-                    Expanded(
-                      child: Text(
-                        media?.title ?? 'Unknown Title',
-                        style: typo.titleLarge.copyWith(
-                          color: colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 18,
+                    Row(
+                      mainAxisAlignment: .spaceBetween,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            context.pop();
+                          },
+                          child: Icon(
+                            Icons.keyboard_arrow_down,
+                            color: colors.white,
+                            size: 28,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+
+                        Expanded(
+                          child: Text(
+                            media?.title ?? 'Unknown Title',
+                            style: typo.titleLarge.copyWith(
+                              color: colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 18,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    Container(
+                      height: 200,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: .circular(12),
+                        gradient: context.appGradients.surface,
+                        image: media?.thumbnailBytes != null
+                            ? DecorationImage(
+                                fit: .cover,
+                                image: MemoryImage(media!.thumbnailBytes!),
+                              )
+                            : null,
                       ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 16),
-                Container(
-                  height: 200,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: .circular(12),
-                    gradient: context.appGradients.surface,
-                    image: media?.thumbnailBytes != null
-                        ? DecorationImage(
-                            fit: .cover,
-                            image: MemoryImage(media!.thumbnailBytes!),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                CastSeekBar(
-                  position: position,
-                  duration: duration,
-                  canSeek: device?.capabilities.canSeek ?? false,
-                  restarting: restarting,
-                  seekPreview: seekPreview,
-                ),
-                SizedBox(height: 20),
-                PlayerControls(),
-                SizedBox(height: 20),
-                Column(
-                  spacing: 4,
-                  children: [
-                    AudioTrackRow(
-                      tracks: audioTracks,
-                      activeIndex: activeAudioIndex,
-                      canChange:
-                          device != null &&
-                          device.protocol == PureCastProtocol.chromecast &&
-                          device.capabilities.canChangeAudioTrack,
+                    const SizedBox(height: 16),
+                    CastSeekBar(
+                      position: position,
+                      duration: duration,
+                      canSeek: device?.capabilities.canSeek ?? false,
                       restarting: restarting,
+                      seekPreview: seekPreview,
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        final extractionState = context
-                            .read<SubtitleExtractionBloc>()
-                            .state;
-                        final discoveredSubtitles = extractionState.streams.map(
-                          (stream) {
-                            return PureCastSubtitleTrack(
-                              id: '${media!.uri}:${stream.streamIndex}',
-                              label: stream.displayLabel,
-                              language: stream.language ?? '',
-                              url: media.uri,
-                              format: stream.codecName.toLowerCase(),
+                    SizedBox(height: 20),
+                    PlayerControls(),
+                    SizedBox(height: 20),
+                    Column(
+                      spacing: 4,
+                      children: [
+                        AudioTrackRow(
+                          tracks: audioTracks,
+                          activeIndex: activeAudioIndex,
+                          canChange:
+                              device != null &&
+                              device.protocol == PureCastProtocol.chromecast &&
+                              device.capabilities.canChangeAudioTrack,
+                          restarting: restarting,
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            final extractionState = context
+                                .read<SubtitleExtractionBloc>()
+                                .state;
+                            final discoveredSubtitles = extractionState.streams
+                                .map((stream) {
+                                  return PureCastSubtitleTrack(
+                                    id: '${media!.uri}:${stream.streamIndex}',
+                                    label: stream.displayLabel,
+                                    language: stream.language ?? '',
+                                    url: media.uri,
+                                    format: stream.codecName.toLowerCase(),
+                                  );
+                                })
+                                .toList();
+                            SubtitleSwitcher.show(
+                              context,
+                              activeSubtitle: subtitle,
+                              subtitles: discoveredSubtitles.isNotEmpty
+                                  ? discoveredSubtitles
+                                  : (media?.subtitles ?? []),
                             );
                           },
-                        ).toList();
-                        SubtitleSwitcher.show(
-                          context,
-                          activeSubtitle: subtitle,
-                          subtitles: discoveredSubtitles.isNotEmpty
-                              ? discoveredSubtitles
-                              : (media?.subtitles ?? []),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.background,
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(8),
-                            bottom: Radius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(8),
+                                bottom: Radius.circular(8),
+                              ),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Subtitles',
+                                    style: typo.titleMedium.copyWith(
+                                      color: colors.white,
+                                    ),
+                                  ),
+                                ),
+                                if (!preparingSubtitles)
+                                  Text(
+                                    subtitle != null ? subtitle.label : 'Off',
+                                    style: typo.labelMedium.copyWith(
+                                      color: colors.textSecondary,
+                                    ),
+                                  ),
+                                preparingSubtitles
+                                    ? SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(),
+                                      )
+                                    : Icon(
+                                        Icons.chevron_right,
+                                        color: colors.textSecondary,
+                                      ),
+                              ],
+                            ),
                           ),
-                          border: Border.all(color: colors.border),
                         ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Subtitles',
-                                style: typo.titleMedium.copyWith(
-                                  color: colors.white,
+                        // GestureDetector(
+                        //   onTap: () {},
+                        //   child: Container(
+                        //     padding: const EdgeInsets.symmetric(
+                        //       horizontal: 16,
+                        //       vertical: 16,
+                        //     ),
+                        //     decoration: BoxDecoration(
+                        //       color: colors.background,
+                        //       borderRadius: BorderRadius.vertical(
+                        //         top: Radius.circular(8),
+                        //         bottom: Radius.circular(8),
+                        //       ),
+                        //       border: Border.all(color: colors.border),
+                        //     ),
+                        //     child: Row(
+                        //       children: [
+                        //         Expanded(
+                        //           child: Text(
+                        //             'Scale',
+                        //             style: typo.titleMedium.copyWith(
+                        //               color: colors.white,
+                        //             ),
+                        //           ),
+                        //         ),
+                        //         Container(
+                        //           padding: const EdgeInsets.all(4),
+                        //           decoration: BoxDecoration(
+                        //             color: colors.surfaceLight,
+                        //             shape: BoxShape.circle,
+                        //             border: Border.all(color: colors.border),
+                        //           ),
+                        //           child: Icon(
+                        //             Icons.remove,
+                        //             color: colors.textSecondary,
+                        //           ),
+                        //         ),
+                        //         const SizedBox(width: 8),
+                        //         Text(
+                        //           '100%',
+                        //           style: typo.labelMedium.copyWith(
+                        //             color: colors.textSecondary,
+                        //           ),
+                        //         ),
+                        //         const SizedBox(width: 8),
+                        //         Container(
+                        //           padding: const EdgeInsets.all(4),
+                        //           decoration: BoxDecoration(
+                        //             color: colors.surfaceLight,
+                        //             shape: BoxShape.circle,
+                        //             border: Border.all(color: colors.border),
+                        //           ),
+                        //           child: Icon(
+                        //             Icons.add,
+                        //             color: colors.textSecondary,
+                        //           ),
+                        //         ),
+                        //       ],
+                        //     ),
+                        //   ),
+                        // ),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.background,
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(22),
+                              top: Radius.circular(8),
+                            ),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Device',
+                                  style: typo.titleMedium.copyWith(
+                                    color: colors.white,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (!preparingSubtitles)
                               Text(
-                                subtitle != null ? subtitle.label : 'Off',
+                                device?.name ?? 'No Device',
                                 style: typo.labelMedium.copyWith(
                                   color: colors.textSecondary,
                                 ),
                               ),
-                            preparingSubtitles
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(),
-                                  )
-                                : Icon(
-                                    Icons.chevron_right,
-                                    color: colors.textSecondary,
-                                  ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {},
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colors.background,
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(8),
-                            bottom: Radius.circular(8),
-                          ),
-                          border: Border.all(color: colors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Scale',
-                                style: typo.titleMedium.copyWith(
-                                  color: colors.white,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: colors.surfaceLight,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Icon(
-                                Icons.remove,
+                              Icon(
+                                Icons.chevron_right,
                                 color: colors.textSecondary,
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '100%',
-                              style: typo.labelMedium.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: colors.surfaceLight,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Icon(
-                                Icons.add,
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.background,
-                        borderRadius: BorderRadius.vertical(
-                          bottom: Radius.circular(22),
-                          top: Radius.circular(8),
-                        ),
-                        border: Border.all(color: colors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Device',
-                              style: typo.titleMedium.copyWith(
-                                color: colors.white,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            device?.name ?? 'No Device',
-                            style: typo.labelMedium.copyWith(
-                              color: colors.textSecondary,
-                            ),
-                          ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: colors.textSecondary,
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         );

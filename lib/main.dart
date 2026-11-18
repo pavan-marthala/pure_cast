@@ -80,6 +80,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final GoRouter _goRouter;
+  late final CastSessionBloc _sessionBloc;
   bool _isCasting = false;
   late final StreamSubscription _sessionSubscription;
 
@@ -87,6 +88,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Resolve the bloc once: CastSessionBloc is registered as a factory, so a
+    // second getIt lookup would return a different instance than the one
+    // provided to the widget tree.
+    _sessionBloc = getIt<CastSessionBloc>();
 
     _goRouter = GoRouter(
       initialLocation: AppRoutes.splash,
@@ -117,7 +123,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _listenToSessionState() {
-    final sessionBloc = getIt<CastSessionBloc>();
+    final sessionBloc = _sessionBloc;
     _sessionSubscription = sessionBloc.stream.listen((state) {
       final wasCasting = _isCasting;
       _isCasting = state.isCasting;
@@ -181,7 +187,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           create: (context) =>
               getIt<CastDiscoveryBloc>()..add(const StartDiscoveryEvent()),
         ),
-        BlocProvider(create: (context) => getIt<CastSessionBloc>()),
+        BlocProvider(create: (context) => _sessionBloc),
         BlocProvider(create: (context) => mediaBloc, lazy: false),
         BlocProvider(
           create: (context) => getIt<QueueBloc>()..add(const LoadQueueEvent()),

@@ -48,9 +48,11 @@ class FakeCastService implements ICastService {
       StreamController<Duration>.broadcast();
 
   bool connectCalled = false;
+  int connectCalls = 0;
   PureCastDevice? connectDeviceTarget;
   bool shouldConnectFail = false;
   bool disconnectCalled = false;
+  Completer<void>? connectGate;
   PureCastMedia? loadedMedia;
   int loadMediaCalls = 0;
 
@@ -97,7 +99,9 @@ class FakeCastService implements ICastService {
   @override
   Future<void> connect(PureCastDevice device) async {
     connectCalled = true;
+    connectCalls++;
     connectDeviceTarget = device;
+    if (connectGate != null) await connectGate!.future;
     if (shouldConnectFail) {
       throw const PureCastException('Network connection failed');
     }
@@ -630,6 +634,129 @@ void main() {
       expect(sessionBloc.state.sessionState, equals(PureCastSessionState.disconnected));
       expect(sessionBloc.state.activeMedia, isNull);
 
+      await sessionBloc.close();
+    });
+
+    test('6. A stale disconnected event mid-connect does not reset the connect', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+
+      const deviceA = PureCastDevice(
+        id: 'tv_a',
+        name: 'TV A',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.20',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      fakeCastService.connectGate = Completer<void>();
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loading));
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+
+      // The previous session is torn down while the new connect is running.
+      fakeCastService.sessionStateController.add(
+        PureCastSessionState.disconnected,
+      );
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loading));
+
+      fakeCastService.connectGate!.complete();
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loaded));
+
+      await sessionBloc.close();
+    });
+
+    test('7. Duplicate connect events start only one connection', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+
+      const deviceA = PureCastDevice(
+        id: 'tv_a',
+        name: 'TV A',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.20',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      fakeCastService.connectGate = Completer<void>();
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      await pumpEventQueue();
+
+      expect(fakeCastService.connectCalls, equals(1));
+
+      fakeCastService.connectGate!.complete();
+      await pumpEventQueue();
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loaded));
+
+      await sessionBloc.close();
+    });
+
+    test('8. A connect that never completes fails with a timeout', () async {
+      final sessionBloc = CastSessionBloc(
+        fakeCastService,
+        historyRepo,
+        fakeDb,
+        connectTimeout: const Duration(milliseconds: 50),
+      );
+
+      const deviceA = PureCastDevice(
+        id: 'tv_a',
+        name: 'TV A',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.20',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      fakeCastService.connectGate = Completer<void>(); // never completed
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.error));
+      expect(sessionBloc.state.connectionError, contains('Timed out'));
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+
+      await sessionBloc.close();
+    });
+
+    test('9. A connected event heals a stuck loading status', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+
+      const deviceA = PureCastDevice(
+        id: 'tv_a',
+        name: 'TV A',
+        protocol: PureCastProtocol.chromecast,
+        host: '192.168.1.20',
+        port: 8009,
+        capabilities: PureCastCapabilities(),
+      );
+
+      fakeCastService.connectGate = Completer<void>();
+      sessionBloc.add(const ConnectDeviceEvent(deviceA));
+      await pumpEventQueue();
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loading));
+
+      // The receiver reports the session as connected while connect() is still
+      // waiting on teardown.
+      fakeCastService.sessionStateController.add(
+        PureCastSessionState.connected,
+      );
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.connectionStatus, equals(StateStatus.loaded));
+      expect(sessionBloc.state.activeDevice, equals(deviceA));
+
+      fakeCastService.connectGate!.complete();
       await sessionBloc.close();
     });
   });

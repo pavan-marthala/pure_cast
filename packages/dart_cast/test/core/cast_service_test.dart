@@ -93,6 +93,19 @@ class MockCastSession extends CastSession {
   }
 }
 
+/// A session whose teardown never finishes, simulating a stuck FFmpeg/proxy
+/// cleanup on Android.
+class HangingMockCastSession extends MockCastSession {
+  HangingMockCastSession(super.device);
+
+  final Completer<void> hang = Completer<void>();
+
+  @override
+  Future<void> disconnect() async {
+    await hang.future;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -302,6 +315,64 @@ void main() {
 
       service.dispose();
     });
+
+    test('connect abandons a previous session whose teardown hangs', () async {
+      final device1 = _device('d1', CastProtocol.chromecast);
+      final device2 = _device('d2', CastProtocol.chromecast);
+
+      HangingMockCastSession? previous;
+      final service = CastService(
+        discoveryProviders: [],
+        disconnectTimeout: const Duration(milliseconds: 50),
+        sessionFactory: (device) {
+          if (device.id == 'd1') {
+            previous = HangingMockCastSession(device);
+            return previous!;
+          }
+          return MockCastSession(device);
+        },
+      );
+
+      await service.connect(device1);
+      final session = await service
+          .connect(device2)
+          .timeout(const Duration(seconds: 2));
+
+      expect(session.device.id, equals('d2'));
+      expect(service.activeSession, same(session));
+      // The stuck teardown is still pending but no longer blocks new connects.
+      expect(previous!.hang.isCompleted, isFalse);
+
+      service.dispose();
+    });
+
+    test(
+      'clearActiveSession forgets a session that was already disconnected',
+      () async {
+        final device = _device('d1', CastProtocol.chromecast);
+
+        MockCastSession? first;
+        final service = CastService(
+          discoveryProviders: [],
+          sessionFactory: (device) {
+            final session = MockCastSession(device);
+            if (device.id == 'd1' && first == null) first = session;
+            return session;
+          },
+        );
+
+        final session = await service.connect(device);
+        expect(first, same(session));
+
+        service.clearActiveSession();
+        expect(service.activeSession, isNull);
+
+        await service.connect(device);
+        expect(first!.disconnected, isFalse);
+
+        service.dispose();
+      },
+    );
 
     test('dispose cleans up everything', () async {
       final provider = MockDiscoveryProvider(

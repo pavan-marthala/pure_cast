@@ -106,15 +106,19 @@ class DartCastAdapter implements ICastService {
 
   @override
   Future<void> disconnect() async {
+    final session = _castService.activeSession;
     try {
-      final session = _castService.activeSession;
       if (session != null) {
         await session.disconnect();
       }
-      _updateState(PureCastSessionState.disconnected);
     } catch (e) {
       throw PureCastException('Failed to disconnect from device', e);
+    } finally {
+      // Forget the session even if its teardown threw, so the next connect does
+      // not try to disconnect it again.
+      _castService.clearActiveSession();
     }
+    _updateState(PureCastSessionState.disconnected);
   }
 
   @override
@@ -533,7 +537,17 @@ class DartCastAdapter implements ICastService {
     _bufferingDebounceTimer?.cancel();
     _lastDurationEmitted = null;
 
+    // The state stream does not replay its current value, and the session has
+    // already transitioned to `connected` before this subscription exists.
+    // Publish it so a freshly opened session is not reported as disconnected.
+    _updateState(_mapStateToDomain(session.state));
+
     _sessionStateSub = session.stateStream.listen((state) {
+      // A previous session emits `disconnected` while CastService tears it down
+      // for a new connect. Forwarding that event resets the BLoC mid-connect,
+      // so drop anything that no longer belongs to the active session.
+      if (!identical(_castService.activeSession, session)) return;
+
       final domainState = _mapStateToDomain(state);
 
       if (domainState == PureCastSessionState.disconnected) {

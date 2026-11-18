@@ -53,6 +53,7 @@ class CurrentlyPlaying extends StatelessWidget {
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: .circular(40),
+                    color: colors.primary.withValues(alpha: .25),
                     image: sessionState.activeMedia?.thumbnailBytes != null
                         ? DecorationImage(
                             fit: .cover,
@@ -64,6 +65,9 @@ class CurrentlyPlaying extends StatelessWidget {
                   ),
                   height: 48,
                   width: 48,
+                  child: sessionState.activeMedia?.thumbnailBytes == null
+                      ? Icon(Icons.cast, color: colors.primary)
+                      : null,
                 ),
                 Expanded(
                   child: Column(

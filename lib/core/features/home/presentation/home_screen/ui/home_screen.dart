@@ -271,7 +271,7 @@ class MediaWidgetList extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  "${media.duration?.inHours ?? "00"} : ${media.duration?.inMinutes ?? "00"}",
+                  media.duration?.toFormattedString() ?? "00:00",
                   style: context.appTypography.titleSmall,
                   maxLines: 1,
                   overflow: .ellipsis,

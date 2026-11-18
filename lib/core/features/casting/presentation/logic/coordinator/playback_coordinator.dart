@@ -49,6 +49,14 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
     log("Queue Length ${items.length}", name: "Playback Coordinator");
     final currentIndex = queueState.currentIndex;
 
+    // A queue restored from storage on launch must not start playback by
+    // itself. Remember the index so the first Next/Previous is still detected
+    // as a change.
+    if (queueState.restoredFromStorage) {
+      _lastHandledQueueIndex = currentIndex;
+      return;
+    }
+
     final hasActivePlayback = sessionState.activeMedia != null &&
         sessionState.sessionState != PureCastSessionState.disconnected &&
         sessionState.sessionState != PureCastSessionState.completed;

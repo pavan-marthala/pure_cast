@@ -250,10 +250,6 @@ class FakeCastService implements ICastService {
 }
 
 class FakeAppDatabase implements AppDatabase {
-  String? lastDeviceId;
-  String? lastDeviceName;
-  String? lastProtocol;
-
   List<PlaybackQueueTableData> queueData = [];
   PlaybackHistoryTableData? mostRecentHistory;
   PlaybackHistoryTableCompanion? recordedHistoryCompanion;
@@ -263,35 +259,6 @@ class FakeAppDatabase implements AppDatabase {
     preferredSubtitleLanguage: 'en',
     autoPlayNext: true,
   );
-
-  @override
-  Future<LastCastedDeviceTableData?> getLastCastedDevice() async {
-    if (lastDeviceId == null) return null;
-    return LastCastedDeviceTableData(
-      deviceId: lastDeviceId!,
-      deviceName: lastDeviceName!,
-      protocol: lastProtocol!,
-      lastCastAt: DateTime.now(),
-    );
-  }
-
-  @override
-  Future<void> setLastCastedDevice({
-    required String deviceId,
-    required String deviceName,
-    required String protocol,
-  }) async {
-    lastDeviceId = deviceId;
-    lastDeviceName = deviceName;
-    lastProtocol = protocol;
-  }
-
-  @override
-  Future<void> clearLastCastedDevice() async {
-    lastDeviceId = null;
-    lastDeviceName = null;
-    lastProtocol = null;
-  }
 
   @override
   Future<List<PlaybackQueueTableData>> getQueue() async => queueData;
@@ -436,7 +403,7 @@ void main() {
 
   group('CastDiscoveryBloc - Refactored Discovery Ownership Tests', () {
     test('1. Discovery returns devices and updates discoveryStatus', () async {
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
 
       discoveryBloc.add(const StartDiscoveryEvent());
       await pumpEventQueue();
@@ -462,7 +429,7 @@ void main() {
     });
 
     test('2. Discovery error sets discoveryStatus to error', () async {
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
 
       discoveryBloc.add(const StartDiscoveryEvent());
       await pumpEventQueue();
@@ -477,7 +444,7 @@ void main() {
     });
 
     test('3. DiscoveryBloc does NOT own connect() or disconnect()', () async {
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
 
       discoveryBloc.add(const StartDiscoveryEvent());
       await pumpEventQueue();
@@ -490,8 +457,8 @@ void main() {
   });
 
   group('CastSessionBloc - Sole Connection Owner Tests', () {
-    test('1. Connect success updates activeDevice and persists last_casted_device', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+    test('1. Connect success updates activeDevice', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -509,13 +476,12 @@ void main() {
       expect(fakeCastService.connectDeviceTarget, equals(deviceA));
       expect(sessionBloc.state.connectionStatus, equals(StateStatus.loaded));
       expect(sessionBloc.state.activeDevice, equals(deviceA));
-      expect(fakeDb.lastDeviceId, equals('tv_a'));
 
       await sessionBloc.close();
     });
 
     test('2. Connect failure preserves previous activeDevice and sets connectionStatus error', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -552,7 +518,7 @@ void main() {
     });
 
     test('3. Disconnect clears activeDevice and resets session state', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -578,7 +544,7 @@ void main() {
     });
 
     test('4. Device switching: TV A -> TV B succeeds and updates activeDevice', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -605,13 +571,12 @@ void main() {
       await pumpEventQueue();
 
       expect(sessionBloc.state.activeDevice, equals(deviceB));
-      expect(fakeDb.lastDeviceId, equals('tv_b'));
 
       await sessionBloc.close();
     });
 
     test('5. Receiver-initiated disconnect event resets session state and clears activeDevice', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -638,7 +603,7 @@ void main() {
     });
 
     test('6. A stale disconnected event mid-connect does not reset the connect', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -675,7 +640,7 @@ void main() {
     });
 
     test('7. Duplicate connect events start only one connection', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -704,7 +669,6 @@ void main() {
       final sessionBloc = CastSessionBloc(
         fakeCastService,
         historyRepo,
-        fakeDb,
         connectTimeout: const Duration(milliseconds: 50),
       );
 
@@ -730,7 +694,7 @@ void main() {
     });
 
     test('9. A connected event heals a stuck loading status', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -761,16 +725,12 @@ void main() {
     });
   });
 
-  group('Auto-Reconnection & UI State Isolation Tests', () {
-    test('1. Discovery emits AutoReconnectMatchFoundEvent and session owner connects', () async {
-      fakeDb.lastDeviceId = 'tv_last';
-      fakeDb.lastDeviceName = 'Last TV';
-      fakeDb.lastProtocol = 'chromecast';
+  group('Manual Connection & UI State Isolation Tests', () {
+    test('1. Discovery updates never connect automatically', () async {
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
-
-      const lastDevice = PureCastDevice(
+      const device = PureCastDevice(
         id: 'tv_last',
         name: 'Last TV',
         protocol: PureCastProtocol.chromecast,
@@ -779,35 +739,23 @@ void main() {
         capabilities: PureCastCapabilities(),
       );
 
-      discoveryBloc.stream.listen((state) {
-        // Handle auto-reconnect stream notification
-      });
-
-      // Wire auto-reconnect match event to SessionBloc
-      discoveryBloc.stream.listen((discoveryState) {
-        // Auto reconnect notification
-      });
-
       discoveryBloc.add(const StartDiscoveryEvent());
       await pumpEventQueue();
 
-      fakeCastService.discoveryController.add([lastDevice]);
+      fakeCastService.discoveryController.add([device]);
       await pumpEventQueue();
 
-      // Trigger session connect explicitly as done by runtime listener
-      sessionBloc.add(const ConnectDeviceEvent(lastDevice));
-      await pumpEventQueue();
-
-      expect(sessionBloc.state.activeDevice, equals(lastDevice));
-      expect(fakeCastService.connectCalled, isTrue);
+      expect(discoveryBloc.state.devices, contains(device));
+      expect(fakeCastService.connectCalled, isFalse);
+      expect(sessionBloc.state.activeDevice, isNull);
 
       await discoveryBloc.close();
       await sessionBloc.close();
     });
 
     test('2. UI determines active device via Discovery.devices and Session.activeDevice match', () async {
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const deviceA = PureCastDevice(
         id: 'tv_a',
@@ -849,7 +797,7 @@ void main() {
   group('PlaybackCoordinator Unit & Orchestration Tests', () {
     test('1. Empty queue does not trigger media load', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -863,9 +811,51 @@ void main() {
       await sessionBloc.close();
     });
 
+    test('1b. Queue restored from storage does not start playback', () async {
+      fakeDb.queueData = [
+        PlaybackQueueTableData(
+          id: 'saved_video',
+          mediaUri: 'http://example.com/video1.mp4',
+          mediaType: 'mp4',
+          title: 'Video 1',
+          isLocalFile: false,
+          queueOrder: 0,
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+      queueBloc.add(const LoadQueueEvent());
+      await pumpEventQueue();
+
+      expect(queueBloc.state.items.length, equals(1));
+      expect(queueBloc.state.restoredFromStorage, isTrue);
+      expect(sessionBloc.state.activeMedia, isNull);
+      expect(fakeCastService.loadedMedia, isNull);
+
+      // Adding media afterwards still starts playback as before.
+      const media = PureCastMedia(
+        uri: 'http://example.com/video2.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Video 2',
+      );
+      queueBloc.add(const AddToQueueEvent(media));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.activeMedia, equals(media));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
     test('2. First item added to empty queue triggers LoadMediaEvent on CastSessionBloc', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -888,7 +878,7 @@ void main() {
 
     test('3. Completed A + queue still contains A + select B -> B starts immediately', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -928,7 +918,7 @@ void main() {
 
     test('4. Active A + select B -> B added to queue without interrupting A', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -967,7 +957,7 @@ void main() {
 
     test('5. Stopped A + select B -> B starts immediately', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -1005,7 +995,7 @@ void main() {
 
     test('6. Automatic queue continuation: A completes -> B starts casting automatically', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
       final coordinator = PlaybackCoordinator(historyRepo);
 
       coordinator.start(queueBloc, sessionBloc);
@@ -1047,7 +1037,7 @@ void main() {
     });
 
     test('7. Issue 1: Media selected without active cast session retains media as pending without exception', () async {
-      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const localMedia = PureCastMedia(
         uri: '/storage/emulated/0/DCIM/Camera/sample.mp4',
@@ -1085,8 +1075,9 @@ void main() {
       await sessionBloc.close();
     });
 
-    test('8. Issue 1B: Auto-reconnect match found emits autoReconnectDevice in discovery state', () async {
-      final discoveryBloc = CastDiscoveryBloc(fakeCastService, fakeDb);
+    test('8. Only an explicit ConnectDeviceEvent opens a session', () async {
+      final discoveryBloc = CastDiscoveryBloc(fakeCastService);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
 
       const savedDevice = PureCastDevice(
         id: 'saved_tv_id',
@@ -1097,12 +1088,20 @@ void main() {
         capabilities: PureCastCapabilities(),
       );
 
-      discoveryBloc.add(const AutoReconnectMatchFoundEvent(savedDevice));
+      discoveryBloc.add(const StartDiscoveryEvent());
+      await pumpEventQueue();
+      fakeCastService.discoveryController.add([savedDevice]);
+      await pumpEventQueue();
+      expect(fakeCastService.connectCalled, isFalse);
+
+      sessionBloc.add(const ConnectDeviceEvent(savedDevice));
       await pumpEventQueue();
 
-      expect(discoveryBloc.state.autoReconnectDevice, equals(savedDevice));
+      expect(fakeCastService.connectCalled, isTrue);
+      expect(sessionBloc.state.activeDevice, equals(savedDevice));
 
       await discoveryBloc.close();
+      await sessionBloc.close();
     });
   });
 
@@ -1147,7 +1146,7 @@ void main() {
     ];
 
     Future<CastSessionBloc> connectBloc() async {
-      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final bloc = CastSessionBloc(fakeCastService, historyRepo);
       bloc.add(const ConnectDeviceEvent(device));
       await pumpEventQueue();
       expect(bloc.state.activeDevice, equals(device));
@@ -1620,7 +1619,7 @@ void main() {
       fakeCastService.loadShouldBeLive = true;
       fakeCastService.liveTracksOnLoad = tracks;
       fakeCastService.activeIndexOnLoad = 0;
-      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final bloc = CastSessionBloc(fakeCastService, historyRepo);
       bloc.add(const ConnectDeviceEvent(device));
       await pumpEventQueue();
       bloc.add(LoadMediaEvent(media));
@@ -1743,7 +1742,7 @@ void main() {
     CastSessionBloc liveBlocIn(FakeAsync async) {
       fakeCastService.loadShouldBeLive = true;
       fakeCastService.liveTracksOnLoad = const [];
-      final bloc = CastSessionBloc(fakeCastService, historyRepo, fakeDb);
+      final bloc = CastSessionBloc(fakeCastService, historyRepo);
       bloc.add(const ConnectDeviceEvent(device));
       async.flushMicrotasks();
       bloc.add(const LoadMediaEvent(media));

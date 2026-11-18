@@ -7,21 +7,7 @@ import 'package:path/path.dart' as p;
 
 part 'app_database.g.dart';
 
-// ── 1. Last Casted Device Table ─────────────────────────────
-class LastCastedDeviceTable extends Table {
-  @override
-  String get tableName => 'last_casted_device';
-
-  TextColumn get deviceId => text()();
-  TextColumn get deviceName => text()();
-  TextColumn get protocol => text()();
-  DateTimeColumn get lastCastAt => dateTime()();
-
-  @override
-  Set<Column> get primaryKey => {deviceId};
-}
-
-// ── 2. Playback Queue Table ──────────────────────────────────
+// ── 1. Playback Queue Table ──────────────────────────────────
 class PlaybackQueueTable extends Table {
   @override
   String get tableName => 'playback_queue';
@@ -40,7 +26,7 @@ class PlaybackQueueTable extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-// ── 3. Playback History Table ────────────────────────────────
+// ── 2. Playback History Table ────────────────────────────────
 class PlaybackHistoryTable extends Table {
   @override
   String get tableName => 'playback_history';
@@ -60,7 +46,7 @@ class PlaybackHistoryTable extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-// ── 4. User Preferences Table ────────────────────────────────
+// ── 3. User Preferences Table ────────────────────────────────
 class UserPreferencesTable extends Table {
   @override
   String get tableName => 'user_preferences';
@@ -77,7 +63,6 @@ class UserPreferencesTable extends Table {
 // ── Database Class ───────────────────────────────────────────
 @lazySingleton
 @DriftDatabase(tables: [
-  LastCastedDeviceTable,
   PlaybackQueueTable,
   PlaybackHistoryTable,
   UserPreferencesTable,
@@ -86,35 +71,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
-  // ── Last Casted Device Queries ──
-  Future<LastCastedDeviceTableData?> getLastCastedDevice() async {
-    final list = await (select(lastCastedDeviceTable)
-          ..orderBy([(t) => OrderingTerm.desc(t.lastCastAt)])
-          ..limit(1))
-        .get();
-    return list.isNotEmpty ? list.first : null;
-  }
-
-  Future<void> setLastCastedDevice({
-    required String deviceId,
-    required String deviceName,
-    required String protocol,
-  }) async {
-    await into(lastCastedDeviceTable).insertOnConflictUpdate(
-      LastCastedDeviceTableCompanion.insert(
-        deviceId: deviceId,
-        deviceName: deviceName,
-        protocol: protocol,
-        lastCastAt: DateTime.now(),
-      ),
-    );
-  }
-
-  Future<void> clearLastCastedDevice() async {
-    await delete(lastCastedDeviceTable).go();
-  }
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      // Devices are no longer remembered between launches.
+      if (from < 2) {
+        await m.deleteTable('last_casted_device');
+      }
+    },
+  );
 
   // ── Playback Queue Queries ──
   Future<List<PlaybackQueueTableData>> getQueue() async {

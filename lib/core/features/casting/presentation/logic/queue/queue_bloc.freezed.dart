@@ -657,7 +657,10 @@ String toString() {
 /// @nodoc
 mixin _$QueueState {
 
- List<PureCastMedia> get items; int get currentIndex; StateStatus get status; String? get error;
+ List<PureCastMedia> get items; int get currentIndex; StateStatus get status; String? get error;/// True when [items] were restored from storage on launch rather than
+/// produced by a user action. The playback coordinator must not start
+/// playback for a restored queue.
+ bool get restoredFromStorage;
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -669,20 +672,20 @@ $QueueStateCopyWith<QueueState> get copyWith => _$QueueStateCopyWithImpl<QueueSt
 @override
 bool operator ==(Object other) {
   final _this = this as QueueState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.currentIndex, _this.currentIndex) || other.currentIndex == _this.currentIndex)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.currentIndex, _this.currentIndex) || other.currentIndex == _this.currentIndex)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error)&&(identical(other.restoredFromStorage, _this.restoredFromStorage) || other.restoredFromStorage == _this.restoredFromStorage));
 }
 
 
 @override
 int get hashCode {
   final _this = this as QueueState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.items),_this.currentIndex,_this.status,_this.error);
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.items),_this.currentIndex,_this.status,_this.error,_this.restoredFromStorage);
 }
 
 @override
 String toString() {
   final _this = this as QueueState;
-  return 'QueueState(items: ${_this.items}, currentIndex: ${_this.currentIndex}, status: ${_this.status}, error: ${_this.error})';
+  return 'QueueState(items: ${_this.items}, currentIndex: ${_this.currentIndex}, status: ${_this.status}, error: ${_this.error}, restoredFromStorage: ${_this.restoredFromStorage})';
 }
 
 
@@ -693,7 +696,7 @@ abstract mixin class $QueueStateCopyWith<$Res>  {
   factory $QueueStateCopyWith(QueueState value, $Res Function(QueueState) _then) = _$QueueStateCopyWithImpl;
 @useResult
 $Res call({
- List<PureCastMedia> items, int currentIndex, StateStatus status, String? error
+ List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage
 });
 
 
@@ -710,13 +713,14 @@ class _$QueueStateCopyWithImpl<$Res>
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,}) {
   return _then(QueueState(
 items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,currentIndex: null == currentIndex ? _self.currentIndex : currentIndex // ignore: cast_nullable_to_non_nullable
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as StateStatus,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,restoredFromStorage: null == restoredFromStorage ? _self.restoredFromStorage : restoredFromStorage // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -801,10 +805,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _QueueState() when $default != null:
-return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
   return orElse();
 
 }
@@ -822,10 +826,10 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)  $default,) {final _that = this;
 switch (_that) {
 case _QueueState():
-return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -842,10 +846,10 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)?  $default,) {final _that = this;
 switch (_that) {
 case _QueueState() when $default != null:
-return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
   return null;
 
 }
@@ -857,7 +861,7 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error);case _:
 
 
 class _QueueState implements QueueState {
-  const _QueueState({ List<PureCastMedia> items = const [], this.currentIndex = 0, this.status = StateStatus.initial, this.error}): _items = items;
+  const _QueueState({ List<PureCastMedia> items = const [], this.currentIndex = 0, this.status = StateStatus.initial, this.error, this.restoredFromStorage = false}): _items = items;
   
 
  final  List<PureCastMedia> _items;
@@ -870,6 +874,10 @@ class _QueueState implements QueueState {
 @override@JsonKey() final  int currentIndex;
 @override@JsonKey() final  StateStatus status;
 @override final  String? error;
+/// True when [items] were restored from storage on launch rather than
+/// produced by a user action. The playback coordinator must not start
+/// playback for a restored queue.
+@override@JsonKey() final  bool restoredFromStorage;
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
@@ -881,18 +889,18 @@ _$QueueStateCopyWith<_QueueState> get copyWith => __$QueueStateCopyWithImpl<_Que
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error)&&(identical(other.restoredFromStorage, restoredFromStorage) || other.restoredFromStorage == restoredFromStorage));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error);
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error,restoredFromStorage);
 }
 
 @override
 String toString() {
-    return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error)';
+    return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error, restoredFromStorage: $restoredFromStorage)';
 }
 
 
@@ -903,7 +911,7 @@ abstract mixin class _$QueueStateCopyWith<$Res> implements $QueueStateCopyWith<$
   factory _$QueueStateCopyWith(_QueueState value, $Res Function(_QueueState) _then) = __$QueueStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<PureCastMedia> items, int currentIndex, StateStatus status, String? error
+ List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage
 });
 
 
@@ -920,13 +928,14 @@ class __$QueueStateCopyWithImpl<$Res>
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,}) {
   return _then(_QueueState(
 items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,currentIndex: null == currentIndex ? _self.currentIndex : currentIndex // ignore: cast_nullable_to_non_nullable
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as StateStatus,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,restoredFromStorage: null == restoredFromStorage ? _self.restoredFromStorage : restoredFromStorage // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

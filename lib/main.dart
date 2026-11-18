@@ -23,7 +23,6 @@ import 'package:pure_cast/core/features/splash/presentation/splash_screen/ui/spl
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
 import 'package:pure_cast/core/utils/check_platforms.dart';
-import 'package:pure_cast/core/utils/state_status.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
@@ -204,16 +203,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         builder: (context) {
           final queueBloc = BlocProvider.of<QueueBloc>(context);
           final sessionBloc = BlocProvider.of<CastSessionBloc>(context);
-          final discoveryBloc = BlocProvider.of<CastDiscoveryBloc>(context);
-
-          discoveryBloc.stream.listen((discoveryState) {
-            final autoDevice = discoveryState.autoReconnectDevice;
-            if (autoDevice != null &&
-                sessionBloc.state.activeDevice == null &&
-                sessionBloc.state.connectionStatus != StateStatus.loading) {
-              sessionBloc.add(ConnectDeviceEvent(autoDevice));
-            }
-          });
 
           getIt<PlaybackCoordinator>().start(queueBloc, sessionBloc);
 

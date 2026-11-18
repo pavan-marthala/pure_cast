@@ -7,5 +7,4 @@ abstract class CastDiscoveryEvent with _$CastDiscoveryEvent {
   const factory CastDiscoveryEvent.refreshDiscovery() = RefreshDiscoveryEvent;
   const factory CastDiscoveryEvent.devicesUpdated(List<PureCastDevice> devices) = DevicesUpdatedEvent;
   const factory CastDiscoveryEvent.discoveryError(String message) = DiscoveryErrorEvent;
-  const factory CastDiscoveryEvent.autoReconnectMatchFound(PureCastDevice device) = AutoReconnectMatchFoundEvent;
 }

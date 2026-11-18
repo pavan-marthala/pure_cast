@@ -55,6 +55,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           items: items,
           currentIndex: items.isEmpty ? 0 : state.currentIndex,
           status: status,
+          restoredFromStorage: true,
         ),
       );
     } catch (e) {
@@ -78,6 +79,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           items: updatedItems,
           currentIndex: newIndex,
           status: StateStatus.loaded,
+          restoredFromStorage: false,
         ),
       );
       await _persistQueue(updatedItems);
@@ -109,6 +111,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           items: updatedItems,
           currentIndex: newIndex,
           status: status,
+          restoredFromStorage: false,
         ),
       );
       await _persistQueue(updatedItems);
@@ -128,7 +131,13 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       final item = updatedItems.removeAt(event.oldIndex);
       updatedItems.insert(newIdx, item);
 
-      emit(state.copyWith(items: updatedItems, status: StateStatus.loaded));
+      emit(
+        state.copyWith(
+          items: updatedItems,
+          status: StateStatus.loaded,
+          restoredFromStorage: false,
+        ),
+      );
       await _persistQueue(updatedItems);
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
@@ -146,6 +155,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           items: const [],
           currentIndex: 0,
           status: StateStatus.empty,
+          restoredFromStorage: false,
         ),
       );
     } catch (e) {
@@ -156,7 +166,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   void _onNextQueueItem(NextQueueItemEvent event, Emitter<QueueState> emit) {
     if (state.items.isEmpty) return;
     if (state.currentIndex < state.items.length - 1) {
-      emit(state.copyWith(currentIndex: state.currentIndex + 1));
+      emit(
+        state.copyWith(
+          currentIndex: state.currentIndex + 1,
+          restoredFromStorage: false,
+        ),
+      );
     }
   }
 
@@ -166,7 +181,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   ) {
     if (state.items.isEmpty) return;
     if (state.currentIndex > 0) {
-      emit(state.copyWith(currentIndex: state.currentIndex - 1));
+      emit(
+        state.copyWith(
+          currentIndex: state.currentIndex - 1,
+          restoredFromStorage: false,
+        ),
+      );
     }
   }
 
@@ -175,7 +195,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     Emitter<QueueState> emit,
   ) {
     if (event.index >= 0 && event.index < state.items.length) {
-      emit(state.copyWith(currentIndex: event.index));
+      emit(
+        state.copyWith(
+          currentIndex: event.index,
+          restoredFromStorage: false,
+        ),
+      );
     }
   }
 
@@ -188,7 +213,13 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       final pickedItems = await _mediaRepository.pickFiles();
       // User cancelled or picker returned nothing — keep existing queue intact.
       if (pickedItems.isEmpty) {
-        emit(state.copyWith(status: StateStatus.loaded, error: null));
+        emit(
+          state.copyWith(
+            status: StateStatus.loaded,
+            error: null,
+            restoredFromStorage: false,
+          ),
+        );
         return;
       }
 
@@ -205,6 +236,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           currentIndex: newIndex,
           status: StateStatus.loaded,
           error: null,
+          restoredFromStorage: false,
         ),
       );
       await _persistQueue(updatedItems);

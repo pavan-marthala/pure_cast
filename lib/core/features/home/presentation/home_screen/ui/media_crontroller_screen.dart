@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/subtitle/subtitle_extraction_bloc.dart';
+import 'package:pure_cast/core/features/home/presentation/home_screen/ui/device_manager_screen.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_audio_controls.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/cast_seek_bar.dart';
 import 'package:pure_cast/core/features/home/presentation/home_screen/ui/widgets/player_controls.dart';
@@ -334,41 +335,79 @@ class Body extends StatelessWidget {
                         //     ),
                         //   ),
                         // ),
-
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colors.background,
-                            borderRadius: BorderRadius.vertical(
-                              bottom: Radius.circular(22),
-                              top: Radius.circular(8),
+                        GestureDetector(
+                          onTap: () {
+                            DeviceManagerScreen.show(context);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
                             ),
-                            border: Border.all(color: colors.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Device',
-                                  style: typo.titleMedium.copyWith(
-                                    color: colors.white,
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: BorderRadius.vertical(
+                                bottom: Radius.circular(8),
+                                top: Radius.circular(8),
+                              ),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Device',
+                                    style: typo.titleMedium.copyWith(
+                                      color: colors.white,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Text(
-                                device?.name ?? 'No Device',
-                                style: typo.labelMedium.copyWith(
+                                Text(
+                                  device?.name ?? 'No Device',
+                                  style: typo.labelMedium.copyWith(
+                                    color: colors.textSecondary,
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
                                   color: colors.textSecondary,
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        GestureDetector(
+                          onTap: () {
+                            context.read<CastSessionBloc>().add(
+                              CastSessionEvent.stopMedia(),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.error.withValues(alpha: .3),
+                              borderRadius: BorderRadius.vertical(
+                                bottom: Radius.circular(22),
+                                top: Radius.circular(8),
                               ),
-                              Icon(
-                                Icons.chevron_right,
-                                color: colors.textSecondary,
-                              ),
-                            ],
+                            ),
+                            child: Row(
+                              mainAxisAlignment: .center,
+                              crossAxisAlignment: .center,
+                              children: [
+                                Icon(Icons.stop, color: colors.error),
+                                Text(
+                                  'Stop Casting',
+                                  style: typo.labelMedium.copyWith(
+                                    color: colors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],

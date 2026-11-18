@@ -90,14 +90,10 @@ extension GetItInjectableX on _i174.GetIt {
       () => _i445.CastSessionBloc(
         gh<_i1071.ICastService>(),
         gh<_i187.PlaybackHistoryRepository>(),
-        gh<_i600.AppDatabase>(),
       ),
     );
     gh.factory<_i619.CastDiscoveryBloc>(
-      () => _i619.CastDiscoveryBloc(
-        gh<_i1071.ICastService>(),
-        gh<_i600.AppDatabase>(),
-      ),
+      () => _i619.CastDiscoveryBloc(gh<_i1071.ICastService>()),
     );
     return this;
   }

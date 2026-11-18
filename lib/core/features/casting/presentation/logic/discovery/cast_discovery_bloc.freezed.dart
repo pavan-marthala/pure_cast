@@ -56,7 +56,7 @@ extension CastDiscoveryEventPatterns on CastDiscoveryEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( StartDiscoveryEvent value)?  startDiscovery,TResult Function( StopDiscoveryEvent value)?  stopDiscovery,TResult Function( RefreshDiscoveryEvent value)?  refreshDiscovery,TResult Function( DevicesUpdatedEvent value)?  devicesUpdated,TResult Function( DiscoveryErrorEvent value)?  discoveryError,TResult Function( AutoReconnectMatchFoundEvent value)?  autoReconnectMatchFound,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( StartDiscoveryEvent value)?  startDiscovery,TResult Function( StopDiscoveryEvent value)?  stopDiscovery,TResult Function( RefreshDiscoveryEvent value)?  refreshDiscovery,TResult Function( DevicesUpdatedEvent value)?  devicesUpdated,TResult Function( DiscoveryErrorEvent value)?  discoveryError,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case StartDiscoveryEvent() when startDiscovery != null:
@@ -64,8 +64,7 @@ return startDiscovery(_that);case StopDiscoveryEvent() when stopDiscovery != nul
 return stopDiscovery(_that);case RefreshDiscoveryEvent() when refreshDiscovery != null:
 return refreshDiscovery(_that);case DevicesUpdatedEvent() when devicesUpdated != null:
 return devicesUpdated(_that);case DiscoveryErrorEvent() when discoveryError != null:
-return discoveryError(_that);case AutoReconnectMatchFoundEvent() when autoReconnectMatchFound != null:
-return autoReconnectMatchFound(_that);case _:
+return discoveryError(_that);case _:
   return orElse();
 
 }
@@ -83,7 +82,7 @@ return autoReconnectMatchFound(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( StartDiscoveryEvent value)  startDiscovery,required TResult Function( StopDiscoveryEvent value)  stopDiscovery,required TResult Function( RefreshDiscoveryEvent value)  refreshDiscovery,required TResult Function( DevicesUpdatedEvent value)  devicesUpdated,required TResult Function( DiscoveryErrorEvent value)  discoveryError,required TResult Function( AutoReconnectMatchFoundEvent value)  autoReconnectMatchFound,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( StartDiscoveryEvent value)  startDiscovery,required TResult Function( StopDiscoveryEvent value)  stopDiscovery,required TResult Function( RefreshDiscoveryEvent value)  refreshDiscovery,required TResult Function( DevicesUpdatedEvent value)  devicesUpdated,required TResult Function( DiscoveryErrorEvent value)  discoveryError,}){
 final _that = this;
 switch (_that) {
 case StartDiscoveryEvent():
@@ -91,8 +90,7 @@ return startDiscovery(_that);case StopDiscoveryEvent():
 return stopDiscovery(_that);case RefreshDiscoveryEvent():
 return refreshDiscovery(_that);case DevicesUpdatedEvent():
 return devicesUpdated(_that);case DiscoveryErrorEvent():
-return discoveryError(_that);case AutoReconnectMatchFoundEvent():
-return autoReconnectMatchFound(_that);case _:
+return discoveryError(_that);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -109,7 +107,7 @@ return autoReconnectMatchFound(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( StartDiscoveryEvent value)?  startDiscovery,TResult? Function( StopDiscoveryEvent value)?  stopDiscovery,TResult? Function( RefreshDiscoveryEvent value)?  refreshDiscovery,TResult? Function( DevicesUpdatedEvent value)?  devicesUpdated,TResult? Function( DiscoveryErrorEvent value)?  discoveryError,TResult? Function( AutoReconnectMatchFoundEvent value)?  autoReconnectMatchFound,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( StartDiscoveryEvent value)?  startDiscovery,TResult? Function( StopDiscoveryEvent value)?  stopDiscovery,TResult? Function( RefreshDiscoveryEvent value)?  refreshDiscovery,TResult? Function( DevicesUpdatedEvent value)?  devicesUpdated,TResult? Function( DiscoveryErrorEvent value)?  discoveryError,}){
 final _that = this;
 switch (_that) {
 case StartDiscoveryEvent() when startDiscovery != null:
@@ -117,8 +115,7 @@ return startDiscovery(_that);case StopDiscoveryEvent() when stopDiscovery != nul
 return stopDiscovery(_that);case RefreshDiscoveryEvent() when refreshDiscovery != null:
 return refreshDiscovery(_that);case DevicesUpdatedEvent() when devicesUpdated != null:
 return devicesUpdated(_that);case DiscoveryErrorEvent() when discoveryError != null:
-return discoveryError(_that);case AutoReconnectMatchFoundEvent() when autoReconnectMatchFound != null:
-return autoReconnectMatchFound(_that);case _:
+return discoveryError(_that);case _:
   return null;
 
 }
@@ -135,15 +132,14 @@ return autoReconnectMatchFound(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Set<PureCastProtocol>? protocols)?  startDiscovery,TResult Function()?  stopDiscovery,TResult Function()?  refreshDiscovery,TResult Function( List<PureCastDevice> devices)?  devicesUpdated,TResult Function( String message)?  discoveryError,TResult Function( PureCastDevice device)?  autoReconnectMatchFound,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Set<PureCastProtocol>? protocols)?  startDiscovery,TResult Function()?  stopDiscovery,TResult Function()?  refreshDiscovery,TResult Function( List<PureCastDevice> devices)?  devicesUpdated,TResult Function( String message)?  discoveryError,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case StartDiscoveryEvent() when startDiscovery != null:
 return startDiscovery(_that.protocols);case StopDiscoveryEvent() when stopDiscovery != null:
 return stopDiscovery();case RefreshDiscoveryEvent() when refreshDiscovery != null:
 return refreshDiscovery();case DevicesUpdatedEvent() when devicesUpdated != null:
 return devicesUpdated(_that.devices);case DiscoveryErrorEvent() when discoveryError != null:
-return discoveryError(_that.message);case AutoReconnectMatchFoundEvent() when autoReconnectMatchFound != null:
-return autoReconnectMatchFound(_that.device);case _:
+return discoveryError(_that.message);case _:
   return orElse();
 
 }
@@ -161,15 +157,14 @@ return autoReconnectMatchFound(_that.device);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Set<PureCastProtocol>? protocols)  startDiscovery,required TResult Function()  stopDiscovery,required TResult Function()  refreshDiscovery,required TResult Function( List<PureCastDevice> devices)  devicesUpdated,required TResult Function( String message)  discoveryError,required TResult Function( PureCastDevice device)  autoReconnectMatchFound,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Set<PureCastProtocol>? protocols)  startDiscovery,required TResult Function()  stopDiscovery,required TResult Function()  refreshDiscovery,required TResult Function( List<PureCastDevice> devices)  devicesUpdated,required TResult Function( String message)  discoveryError,}) {final _that = this;
 switch (_that) {
 case StartDiscoveryEvent():
 return startDiscovery(_that.protocols);case StopDiscoveryEvent():
 return stopDiscovery();case RefreshDiscoveryEvent():
 return refreshDiscovery();case DevicesUpdatedEvent():
 return devicesUpdated(_that.devices);case DiscoveryErrorEvent():
-return discoveryError(_that.message);case AutoReconnectMatchFoundEvent():
-return autoReconnectMatchFound(_that.device);case _:
+return discoveryError(_that.message);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -186,15 +181,14 @@ return autoReconnectMatchFound(_that.device);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Set<PureCastProtocol>? protocols)?  startDiscovery,TResult? Function()?  stopDiscovery,TResult? Function()?  refreshDiscovery,TResult? Function( List<PureCastDevice> devices)?  devicesUpdated,TResult? Function( String message)?  discoveryError,TResult? Function( PureCastDevice device)?  autoReconnectMatchFound,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Set<PureCastProtocol>? protocols)?  startDiscovery,TResult? Function()?  stopDiscovery,TResult? Function()?  refreshDiscovery,TResult? Function( List<PureCastDevice> devices)?  devicesUpdated,TResult? Function( String message)?  discoveryError,}) {final _that = this;
 switch (_that) {
 case StartDiscoveryEvent() when startDiscovery != null:
 return startDiscovery(_that.protocols);case StopDiscoveryEvent() when stopDiscovery != null:
 return stopDiscovery();case RefreshDiscoveryEvent() when refreshDiscovery != null:
 return refreshDiscovery();case DevicesUpdatedEvent() when devicesUpdated != null:
 return devicesUpdated(_that.devices);case DiscoveryErrorEvent() when discoveryError != null:
-return discoveryError(_that.message);case AutoReconnectMatchFoundEvent() when autoReconnectMatchFound != null:
-return autoReconnectMatchFound(_that.device);case _:
+return discoveryError(_that.message);case _:
   return null;
 
 }
@@ -485,77 +479,9 @@ as String,
 }
 
 /// @nodoc
-
-
-class AutoReconnectMatchFoundEvent implements CastDiscoveryEvent {
-  const AutoReconnectMatchFoundEvent(this.device);
-  
-
- final  PureCastDevice device;
-
-/// Create a copy of CastDiscoveryEvent
-/// with the given fields replaced by the non-null parameter values.
-@JsonKey(includeFromJson: false, includeToJson: false)
-@pragma('vm:prefer-inline')
-$AutoReconnectMatchFoundEventCopyWith<AutoReconnectMatchFoundEvent> get copyWith => _$AutoReconnectMatchFoundEventCopyWithImpl<AutoReconnectMatchFoundEvent>(this, _$identity);
-
-
-
-@override
-bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is AutoReconnectMatchFoundEvent&&(identical(other.device, device) || other.device == device));
-}
-
-
-@override
-int get hashCode {
-    return Object.hash(runtimeType,device);
-}
-
-@override
-String toString() {
-    return 'CastDiscoveryEvent.autoReconnectMatchFound(device: $device)';
-}
-
-
-}
-
-/// @nodoc
-abstract mixin class $AutoReconnectMatchFoundEventCopyWith<$Res> implements $CastDiscoveryEventCopyWith<$Res> {
-  factory $AutoReconnectMatchFoundEventCopyWith(AutoReconnectMatchFoundEvent value, $Res Function(AutoReconnectMatchFoundEvent) _then) = _$AutoReconnectMatchFoundEventCopyWithImpl;
-@useResult
-$Res call({
- PureCastDevice device
-});
-
-
-
-
-}
-/// @nodoc
-class _$AutoReconnectMatchFoundEventCopyWithImpl<$Res>
-    implements $AutoReconnectMatchFoundEventCopyWith<$Res> {
-  _$AutoReconnectMatchFoundEventCopyWithImpl(this._self, this._then);
-
-  final AutoReconnectMatchFoundEvent _self;
-  final $Res Function(AutoReconnectMatchFoundEvent) _then;
-
-/// Create a copy of CastDiscoveryEvent
-/// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? device = null,}) {
-  return _then(AutoReconnectMatchFoundEvent(
-null == device ? _self.device : device // ignore: cast_nullable_to_non_nullable
-as PureCastDevice,
-  ));
-}
-
-
-}
-
-/// @nodoc
 mixin _$CastDiscoveryState {
 
- List<PureCastDevice> get devices; StateStatus get discoveryStatus; String? get discoveryError; PureCastDevice? get autoReconnectDevice;
+ List<PureCastDevice> get devices; StateStatus get discoveryStatus; String? get discoveryError;
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -567,20 +493,20 @@ $CastDiscoveryStateCopyWith<CastDiscoveryState> get copyWith => _$CastDiscoveryS
 @override
 bool operator ==(Object other) {
   final _this = this as CastDiscoveryState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _this.devices)&&(identical(other.discoveryStatus, _this.discoveryStatus) || other.discoveryStatus == _this.discoveryStatus)&&(identical(other.discoveryError, _this.discoveryError) || other.discoveryError == _this.discoveryError)&&(identical(other.autoReconnectDevice, _this.autoReconnectDevice) || other.autoReconnectDevice == _this.autoReconnectDevice));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _this.devices)&&(identical(other.discoveryStatus, _this.discoveryStatus) || other.discoveryStatus == _this.discoveryStatus)&&(identical(other.discoveryError, _this.discoveryError) || other.discoveryError == _this.discoveryError));
 }
 
 
 @override
 int get hashCode {
   final _this = this as CastDiscoveryState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.devices),_this.discoveryStatus,_this.discoveryError,_this.autoReconnectDevice);
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.devices),_this.discoveryStatus,_this.discoveryError);
 }
 
 @override
 String toString() {
   final _this = this as CastDiscoveryState;
-  return 'CastDiscoveryState(devices: ${_this.devices}, discoveryStatus: ${_this.discoveryStatus}, discoveryError: ${_this.discoveryError}, autoReconnectDevice: ${_this.autoReconnectDevice})';
+  return 'CastDiscoveryState(devices: ${_this.devices}, discoveryStatus: ${_this.discoveryStatus}, discoveryError: ${_this.discoveryError})';
 }
 
 
@@ -591,7 +517,7 @@ abstract mixin class $CastDiscoveryStateCopyWith<$Res>  {
   factory $CastDiscoveryStateCopyWith(CastDiscoveryState value, $Res Function(CastDiscoveryState) _then) = _$CastDiscoveryStateCopyWithImpl;
 @useResult
 $Res call({
- List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError, PureCastDevice? autoReconnectDevice
+ List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError
 });
 
 
@@ -608,13 +534,12 @@ class _$CastDiscoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,Object? autoReconnectDevice = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,}) {
   return _then(CastDiscoveryState(
 devices: null == devices ? _self.devices : devices // ignore: cast_nullable_to_non_nullable
 as List<PureCastDevice>,discoveryStatus: null == discoveryStatus ? _self.discoveryStatus : discoveryStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,discoveryError: freezed == discoveryError ? _self.discoveryError : discoveryError // ignore: cast_nullable_to_non_nullable
-as String?,autoReconnectDevice: freezed == autoReconnectDevice ? _self.autoReconnectDevice : autoReconnectDevice // ignore: cast_nullable_to_non_nullable
-as PureCastDevice?,
+as String?,
   ));
 }
 
@@ -699,10 +624,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState() when $default != null:
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
   return orElse();
 
 }
@@ -720,10 +645,10 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.a
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)  $default,) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState():
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -740,10 +665,10 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.a
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError,  PureCastDevice? autoReconnectDevice)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastDevice> devices,  StateStatus discoveryStatus,  String? discoveryError)?  $default,) {final _that = this;
 switch (_that) {
 case _CastDiscoveryState() when $default != null:
-return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.autoReconnectDevice);case _:
+return $default(_that.devices,_that.discoveryStatus,_that.discoveryError);case _:
   return null;
 
 }
@@ -755,7 +680,7 @@ return $default(_that.devices,_that.discoveryStatus,_that.discoveryError,_that.a
 
 
 class _CastDiscoveryState implements CastDiscoveryState {
-  const _CastDiscoveryState({ List<PureCastDevice> devices = const [], this.discoveryStatus = StateStatus.initial, this.discoveryError, this.autoReconnectDevice}): _devices = devices;
+  const _CastDiscoveryState({ List<PureCastDevice> devices = const [], this.discoveryStatus = StateStatus.initial, this.discoveryError}): _devices = devices;
   
 
  final  List<PureCastDevice> _devices;
@@ -767,7 +692,6 @@ class _CastDiscoveryState implements CastDiscoveryState {
 
 @override@JsonKey() final  StateStatus discoveryStatus;
 @override final  String? discoveryError;
-@override final  PureCastDevice? autoReconnectDevice;
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
@@ -779,18 +703,18 @@ _$CastDiscoveryStateCopyWith<_CastDiscoveryState> get copyWith => __$CastDiscove
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError)&&(identical(other.autoReconnectDevice, autoReconnectDevice) || other.autoReconnectDevice == autoReconnectDevice));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _CastDiscoveryState&&const DeepCollectionEquality().equals(other.devices, _devices)&&(identical(other.discoveryStatus, discoveryStatus) || other.discoveryStatus == discoveryStatus)&&(identical(other.discoveryError, discoveryError) || other.discoveryError == discoveryError));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError,autoReconnectDevice);
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_devices),discoveryStatus,discoveryError);
 }
 
 @override
 String toString() {
-    return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError, autoReconnectDevice: $autoReconnectDevice)';
+    return 'CastDiscoveryState(devices: $devices, discoveryStatus: $discoveryStatus, discoveryError: $discoveryError)';
 }
 
 
@@ -801,7 +725,7 @@ abstract mixin class _$CastDiscoveryStateCopyWith<$Res> implements $CastDiscover
   factory _$CastDiscoveryStateCopyWith(_CastDiscoveryState value, $Res Function(_CastDiscoveryState) _then) = __$CastDiscoveryStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError, PureCastDevice? autoReconnectDevice
+ List<PureCastDevice> devices, StateStatus discoveryStatus, String? discoveryError
 });
 
 
@@ -818,13 +742,12 @@ class __$CastDiscoveryStateCopyWithImpl<$Res>
 
 /// Create a copy of CastDiscoveryState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,Object? autoReconnectDevice = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? devices = null,Object? discoveryStatus = null,Object? discoveryError = freezed,}) {
   return _then(_CastDiscoveryState(
 devices: null == devices ? _self._devices : devices // ignore: cast_nullable_to_non_nullable
 as List<PureCastDevice>,discoveryStatus: null == discoveryStatus ? _self.discoveryStatus : discoveryStatus // ignore: cast_nullable_to_non_nullable
 as StateStatus,discoveryError: freezed == discoveryError ? _self.discoveryError : discoveryError // ignore: cast_nullable_to_non_nullable
-as String?,autoReconnectDevice: freezed == autoReconnectDevice ? _self.autoReconnectDevice : autoReconnectDevice // ignore: cast_nullable_to_non_nullable
-as PureCastDevice?,
+as String?,
   ));
 }
 

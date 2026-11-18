@@ -35,7 +35,6 @@ class RecordingCastSessionBloc extends CastSessionBloc {
     : super(
         NoopCastService(),
         PlaybackHistoryRepository(NoopAppDatabase()),
-        NoopAppDatabase(),
       );
 
   final List<CastSessionEvent> events = <CastSessionEvent>[];

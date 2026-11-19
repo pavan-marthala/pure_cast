@@ -15,7 +15,7 @@ import 'package:dart_cast/dart_cast.dart';
 import 'package:dart_cast_example/cast_media_demo.dart';
 import 'package:dart_cast_example/device_list_sheet.dart';
 import 'package:dart_cast_example/remote_control_page.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

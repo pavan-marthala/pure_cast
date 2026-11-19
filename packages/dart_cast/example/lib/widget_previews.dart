@@ -7,7 +7,7 @@ library;
 import 'dart:io';
 
 import 'package:dart_cast/dart_cast.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/widget_previews.dart';
 
 import 'cast_media_demo.dart';

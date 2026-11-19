@@ -1,5 +1,5 @@
 import 'package:dart_cast/dart_cast.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shared connection flow used by the discovery page and by the remote
 /// control page when switching devices mid-session.

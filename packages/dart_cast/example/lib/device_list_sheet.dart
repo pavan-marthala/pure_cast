@@ -1,5 +1,5 @@
 import 'package:dart_cast/dart_cast.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Bottom sheet listing discovered devices, grouped by protocol.
 ///

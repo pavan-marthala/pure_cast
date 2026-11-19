@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:dart_cast/dart_cast.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'cast_connector.dart';
 import 'device_list_sheet.dart';

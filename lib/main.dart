@@ -24,6 +24,7 @@ import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_routes.dart';
 import 'package:pure_cast/core/utils/check_platforms.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:window_manager/window_manager.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
@@ -31,6 +32,11 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final window = WindowManager.instance.getCurrent()!;
+  window.maximumSize = const Size(800, double.infinity).toNative();
+  window.center();
+  window.show();
+
   // await dotenv.load(fileName: "app_config.env");
   await configureDependencies();
   await CastPrepareSession.cleanupLeftovers();

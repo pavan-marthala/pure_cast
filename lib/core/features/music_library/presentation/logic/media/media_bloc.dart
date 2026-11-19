@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:injectable/injectable.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'package:pure_cast/core/features/music_library/data/repository/media_repository.dart';
 import 'package:pure_cast/core/utils/state_status.dart';
 
@@ -13,11 +14,14 @@ part 'media_bloc.freezed.dart';
 @injectable
 class MediaBloc extends Bloc<MediaEvent, MediaState> {
   final MediaRepository _mediaRepository;
+  final PlaybackHistoryRepository _historyRepository;
 
-  MediaBloc(this._mediaRepository) : super(const MediaState()) {
+  MediaBloc(this._mediaRepository, this._historyRepository)
+    : super(const MediaState()) {
     on<RequestPermissionMediaEvent>(_onRequestPermission);
     on<LoadMediaItemsEvent>(_onLoadMedia);
     on<LoadNextPageMediaEvent>(_onLoadNextPage);
+    on<RefreshMediaProgressEvent>(_onRefreshProgress);
   }
 
   Future<void> _onRequestPermission(
@@ -82,10 +86,27 @@ class MediaBloc extends Bloc<MediaEvent, MediaState> {
           status: status,
           page: 0,
           hasMore: items.length == 50,
+          resumePositions: await _loadResumePositions(),
         ),
       );
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
+    }
+  }
+
+  Future<void> _onRefreshProgress(
+    RefreshMediaProgressEvent event,
+    Emitter<MediaState> emit,
+  ) async {
+    emit(state.copyWith(resumePositions: await _loadResumePositions()));
+  }
+
+  Future<Map<String, Duration>> _loadResumePositions() async {
+    try {
+      return await _historyRepository.getResumablePositions();
+    } catch (_) {
+      // A history read failure must never block the media library.
+      return const {};
     }
   }
 

@@ -9,6 +9,8 @@ abstract class MediaState with _$MediaState {
     @Default(RequestType.common) RequestType selectedFilter,
     @Default(0) int page,
     @Default(true) bool hasMore,
+    /// Saved resume position per media URI, used for the progress bar.
+    @Default(<String, Duration>{}) Map<String, Duration> resumePositions,
     String? error,
   }) = _MediaState;
 }

@@ -24,6 +24,7 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
 
   bool _isTransitioning = false;
   int? _lastHandledQueueIndex;
+  int _lastHandledPlayRequestId = 0;
   PureCastSessionState? _lastHandledSessionState;
 
   PlaybackCoordinator(this._historyRepo);
@@ -36,6 +37,8 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
 
     _queueBloc = queueBloc;
     _sessionBloc = sessionBloc;
+    _lastHandledQueueIndex = null;
+    _lastHandledPlayRequestId = 0;
 
     _queueSubscription = _queueBloc!.stream.listen(_onQueueStateChanged);
     _sessionSubscription = _sessionBloc!.stream.listen(_onSessionStateChanged);
@@ -48,6 +51,25 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
     final items = queueState.items;
     log("Queue Length ${items.length}", name: "Playback Coordinator");
     final currentIndex = queueState.currentIndex;
+
+    // An explicit user request always wins: it may target the item that is
+    // already selected (or even already playing), so the index comparison
+    // below cannot detect it. The item carries its one-shot start position.
+    if (queueState.playRequestId != _lastHandledPlayRequestId) {
+      _lastHandledPlayRequestId = queueState.playRequestId;
+      if (currentIndex >= 0 && currentIndex < items.length) {
+        _lastHandledQueueIndex = currentIndex;
+        log(
+          "Explicit play request for index $currentIndex",
+          name: "Playback Coordinator",
+        );
+        _loadMediaAtCurrentIndex(
+          items[currentIndex],
+          startPosition: queueState.pendingStartPosition,
+        );
+      }
+      return;
+    }
 
     // A queue restored from storage on launch must not start playback by
     // itself. Remember the index so the first Next/Previous is still detected
@@ -153,12 +175,18 @@ class PlaybackCoordinator implements IPlaybackCoordinator {
     }
   }
 
-  void _loadMediaAtCurrentIndex(PureCastMedia media) {
+  void _loadMediaAtCurrentIndex(
+    PureCastMedia media, {
+    Duration? startPosition,
+  }) {
     if (_isTransitioning || _sessionBloc == null) return;
     _isTransitioning = true;
     try {
       log("Loading media event", name: "Playback Coordinator");
-      _sessionBloc!.add(LoadMediaEvent(media));
+      final mediaToLoad = startPosition != null && startPosition > Duration.zero
+          ? media.copyWith(startPosition: startPosition)
+          : media;
+      _sessionBloc!.add(LoadMediaEvent(mediaToLoad));
     } finally {
       _isTransitioning = false;
     }

@@ -56,13 +56,14 @@ extension MediaEventPatterns on MediaEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RequestPermissionMediaEvent value)?  requestPermission,TResult Function( LoadMediaItemsEvent value)?  loadMediaItems,TResult Function( LoadNextPageMediaEvent value)?  loadNextPage,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( RequestPermissionMediaEvent value)?  requestPermission,TResult Function( LoadMediaItemsEvent value)?  loadMediaItems,TResult Function( LoadNextPageMediaEvent value)?  loadNextPage,TResult Function( RefreshMediaProgressEvent value)?  refreshProgress,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent() when requestPermission != null:
 return requestPermission(_that);case LoadMediaItemsEvent() when loadMediaItems != null:
 return loadMediaItems(_that);case LoadNextPageMediaEvent() when loadNextPage != null:
-return loadNextPage(_that);case _:
+return loadNextPage(_that);case RefreshMediaProgressEvent() when refreshProgress != null:
+return refreshProgress(_that);case _:
   return orElse();
 
 }
@@ -80,13 +81,14 @@ return loadNextPage(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RequestPermissionMediaEvent value)  requestPermission,required TResult Function( LoadMediaItemsEvent value)  loadMediaItems,required TResult Function( LoadNextPageMediaEvent value)  loadNextPage,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( RequestPermissionMediaEvent value)  requestPermission,required TResult Function( LoadMediaItemsEvent value)  loadMediaItems,required TResult Function( LoadNextPageMediaEvent value)  loadNextPage,required TResult Function( RefreshMediaProgressEvent value)  refreshProgress,}){
 final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent():
 return requestPermission(_that);case LoadMediaItemsEvent():
 return loadMediaItems(_that);case LoadNextPageMediaEvent():
-return loadNextPage(_that);case _:
+return loadNextPage(_that);case RefreshMediaProgressEvent():
+return refreshProgress(_that);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -103,13 +105,14 @@ return loadNextPage(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RequestPermissionMediaEvent value)?  requestPermission,TResult? Function( LoadMediaItemsEvent value)?  loadMediaItems,TResult? Function( LoadNextPageMediaEvent value)?  loadNextPage,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( RequestPermissionMediaEvent value)?  requestPermission,TResult? Function( LoadMediaItemsEvent value)?  loadMediaItems,TResult? Function( LoadNextPageMediaEvent value)?  loadNextPage,TResult? Function( RefreshMediaProgressEvent value)?  refreshProgress,}){
 final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent() when requestPermission != null:
 return requestPermission(_that);case LoadMediaItemsEvent() when loadMediaItems != null:
 return loadMediaItems(_that);case LoadNextPageMediaEvent() when loadNextPage != null:
-return loadNextPage(_that);case _:
+return loadNextPage(_that);case RefreshMediaProgressEvent() when refreshProgress != null:
+return refreshProgress(_that);case _:
   return null;
 
 }
@@ -126,12 +129,13 @@ return loadNextPage(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  requestPermission,TResult Function( RequestType filterType)?  loadMediaItems,TResult Function()?  loadNextPage,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  requestPermission,TResult Function( RequestType filterType)?  loadMediaItems,TResult Function()?  loadNextPage,TResult Function()?  refreshProgress,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent() when requestPermission != null:
 return requestPermission();case LoadMediaItemsEvent() when loadMediaItems != null:
 return loadMediaItems(_that.filterType);case LoadNextPageMediaEvent() when loadNextPage != null:
-return loadNextPage();case _:
+return loadNextPage();case RefreshMediaProgressEvent() when refreshProgress != null:
+return refreshProgress();case _:
   return orElse();
 
 }
@@ -149,12 +153,13 @@ return loadNextPage();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  requestPermission,required TResult Function( RequestType filterType)  loadMediaItems,required TResult Function()  loadNextPage,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  requestPermission,required TResult Function( RequestType filterType)  loadMediaItems,required TResult Function()  loadNextPage,required TResult Function()  refreshProgress,}) {final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent():
 return requestPermission();case LoadMediaItemsEvent():
 return loadMediaItems(_that.filterType);case LoadNextPageMediaEvent():
-return loadNextPage();case _:
+return loadNextPage();case RefreshMediaProgressEvent():
+return refreshProgress();case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -171,12 +176,13 @@ return loadNextPage();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  requestPermission,TResult? Function( RequestType filterType)?  loadMediaItems,TResult? Function()?  loadNextPage,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  requestPermission,TResult? Function( RequestType filterType)?  loadMediaItems,TResult? Function()?  loadNextPage,TResult? Function()?  refreshProgress,}) {final _that = this;
 switch (_that) {
 case RequestPermissionMediaEvent() when requestPermission != null:
 return requestPermission();case LoadMediaItemsEvent() when loadMediaItems != null:
 return loadMediaItems(_that.filterType);case LoadNextPageMediaEvent() when loadNextPage != null:
-return loadNextPage();case _:
+return loadNextPage();case RefreshMediaProgressEvent() when refreshProgress != null:
+return refreshProgress();case _:
   return null;
 
 }
@@ -317,9 +323,42 @@ String toString() {
 
 
 /// @nodoc
+
+
+class RefreshMediaProgressEvent implements MediaEvent {
+  const RefreshMediaProgressEvent();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is RefreshMediaProgressEvent);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+    return 'MediaEvent.refreshProgress()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
 mixin _$MediaState {
 
- List<PureCastMedia> get mediaItems; StateStatus get status; bool get hasPermission; RequestType get selectedFilter; int get page; bool get hasMore; String? get error;
+ List<PureCastMedia> get mediaItems; StateStatus get status; bool get hasPermission; RequestType get selectedFilter; int get page; bool get hasMore;/// Saved resume position per media URI, used for the progress bar.
+ Map<String, Duration> get resumePositions; String? get error;
 /// Create a copy of MediaState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -331,20 +370,20 @@ $MediaStateCopyWith<MediaState> get copyWith => _$MediaStateCopyWithImpl<MediaSt
 @override
 bool operator ==(Object other) {
   final _this = this as MediaState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _this.mediaItems)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.hasPermission, _this.hasPermission) || other.hasPermission == _this.hasPermission)&&(identical(other.selectedFilter, _this.selectedFilter) || other.selectedFilter == _this.selectedFilter)&&(identical(other.page, _this.page) || other.page == _this.page)&&(identical(other.hasMore, _this.hasMore) || other.hasMore == _this.hasMore)&&(identical(other.error, _this.error) || other.error == _this.error));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _this.mediaItems)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.hasPermission, _this.hasPermission) || other.hasPermission == _this.hasPermission)&&(identical(other.selectedFilter, _this.selectedFilter) || other.selectedFilter == _this.selectedFilter)&&(identical(other.page, _this.page) || other.page == _this.page)&&(identical(other.hasMore, _this.hasMore) || other.hasMore == _this.hasMore)&&const DeepCollectionEquality().equals(other.resumePositions, _this.resumePositions)&&(identical(other.error, _this.error) || other.error == _this.error));
 }
 
 
 @override
 int get hashCode {
   final _this = this as MediaState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.mediaItems),_this.status,_this.hasPermission,_this.selectedFilter,_this.page,_this.hasMore,_this.error);
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.mediaItems),_this.status,_this.hasPermission,_this.selectedFilter,_this.page,_this.hasMore,const DeepCollectionEquality().hash(_this.resumePositions),_this.error);
 }
 
 @override
 String toString() {
   final _this = this as MediaState;
-  return 'MediaState(mediaItems: ${_this.mediaItems}, status: ${_this.status}, hasPermission: ${_this.hasPermission}, selectedFilter: ${_this.selectedFilter}, page: ${_this.page}, hasMore: ${_this.hasMore}, error: ${_this.error})';
+  return 'MediaState(mediaItems: ${_this.mediaItems}, status: ${_this.status}, hasPermission: ${_this.hasPermission}, selectedFilter: ${_this.selectedFilter}, page: ${_this.page}, hasMore: ${_this.hasMore}, resumePositions: ${_this.resumePositions}, error: ${_this.error})';
 }
 
 
@@ -355,7 +394,7 @@ abstract mixin class $MediaStateCopyWith<$Res>  {
   factory $MediaStateCopyWith(MediaState value, $Res Function(MediaState) _then) = _$MediaStateCopyWithImpl;
 @useResult
 $Res call({
- List<PureCastMedia> mediaItems, StateStatus status, bool hasPermission, RequestType selectedFilter, int page, bool hasMore, String? error
+ List<PureCastMedia> mediaItems, StateStatus status, bool hasPermission, RequestType selectedFilter, int page, bool hasMore, Map<String, Duration> resumePositions, String? error
 });
 
 
@@ -372,7 +411,7 @@ class _$MediaStateCopyWithImpl<$Res>
 
 /// Create a copy of MediaState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? mediaItems = null,Object? status = null,Object? hasPermission = null,Object? selectedFilter = null,Object? page = null,Object? hasMore = null,Object? error = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? mediaItems = null,Object? status = null,Object? hasPermission = null,Object? selectedFilter = null,Object? page = null,Object? hasMore = null,Object? resumePositions = null,Object? error = freezed,}) {
   return _then(MediaState(
 mediaItems: null == mediaItems ? _self.mediaItems : mediaItems // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
@@ -380,7 +419,8 @@ as StateStatus,hasPermission: null == hasPermission ? _self.hasPermission : hasP
 as bool,selectedFilter: null == selectedFilter ? _self.selectedFilter : selectedFilter // ignore: cast_nullable_to_non_nullable
 as RequestType,page: null == page ? _self.page : page // ignore: cast_nullable_to_non_nullable
 as int,hasMore: null == hasMore ? _self.hasMore : hasMore // ignore: cast_nullable_to_non_nullable
-as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as bool,resumePositions: null == resumePositions ? _self.resumePositions : resumePositions // ignore: cast_nullable_to_non_nullable
+as Map<String, Duration>,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -466,10 +506,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  Map<String, Duration> resumePositions,  String? error)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _MediaState() when $default != null:
-return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.error);case _:
+return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.resumePositions,_that.error);case _:
   return orElse();
 
 }
@@ -487,10 +527,10 @@ return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selected
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  String? error)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  Map<String, Duration> resumePositions,  String? error)  $default,) {final _that = this;
 switch (_that) {
 case _MediaState():
-return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.error);case _:
+return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.resumePositions,_that.error);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -507,10 +547,10 @@ return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selected
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  String? error)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> mediaItems,  StateStatus status,  bool hasPermission,  RequestType selectedFilter,  int page,  bool hasMore,  Map<String, Duration> resumePositions,  String? error)?  $default,) {final _that = this;
 switch (_that) {
 case _MediaState() when $default != null:
-return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.error);case _:
+return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selectedFilter,_that.page,_that.hasMore,_that.resumePositions,_that.error);case _:
   return null;
 
 }
@@ -522,7 +562,7 @@ return $default(_that.mediaItems,_that.status,_that.hasPermission,_that.selected
 
 
 class _MediaState implements MediaState {
-  const _MediaState({ List<PureCastMedia> mediaItems = const [], this.status = StateStatus.initial, this.hasPermission = false, this.selectedFilter = RequestType.common, this.page = 0, this.hasMore = true, this.error}): _mediaItems = mediaItems;
+  const _MediaState({ List<PureCastMedia> mediaItems = const [], this.status = StateStatus.initial, this.hasPermission = false, this.selectedFilter = RequestType.common, this.page = 0, this.hasMore = true,  Map<String, Duration> resumePositions = const <String, Duration>{}, this.error}): _mediaItems = mediaItems,_resumePositions = resumePositions;
   
 
  final  List<PureCastMedia> _mediaItems;
@@ -537,6 +577,15 @@ class _MediaState implements MediaState {
 @override@JsonKey() final  RequestType selectedFilter;
 @override@JsonKey() final  int page;
 @override@JsonKey() final  bool hasMore;
+/// Saved resume position per media URI, used for the progress bar.
+ final  Map<String, Duration> _resumePositions;
+/// Saved resume position per media URI, used for the progress bar.
+@override@JsonKey() Map<String, Duration> get resumePositions {
+  if (_resumePositions is EqualUnmodifiableMapView) return _resumePositions;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableMapView(_resumePositions);
+}
+
 @override final  String? error;
 
 /// Create a copy of MediaState
@@ -549,18 +598,18 @@ _$MediaStateCopyWith<_MediaState> get copyWith => __$MediaStateCopyWithImpl<_Med
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _mediaItems)&&(identical(other.status, status) || other.status == status)&&(identical(other.hasPermission, hasPermission) || other.hasPermission == hasPermission)&&(identical(other.selectedFilter, selectedFilter) || other.selectedFilter == selectedFilter)&&(identical(other.page, page) || other.page == page)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&(identical(other.error, error) || other.error == error));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _MediaState&&const DeepCollectionEquality().equals(other.mediaItems, _mediaItems)&&(identical(other.status, status) || other.status == status)&&(identical(other.hasPermission, hasPermission) || other.hasPermission == hasPermission)&&(identical(other.selectedFilter, selectedFilter) || other.selectedFilter == selectedFilter)&&(identical(other.page, page) || other.page == page)&&(identical(other.hasMore, hasMore) || other.hasMore == hasMore)&&const DeepCollectionEquality().equals(other.resumePositions, _resumePositions)&&(identical(other.error, error) || other.error == error));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_mediaItems),status,hasPermission,selectedFilter,page,hasMore,error);
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_mediaItems),status,hasPermission,selectedFilter,page,hasMore,const DeepCollectionEquality().hash(_resumePositions),error);
 }
 
 @override
 String toString() {
-    return 'MediaState(mediaItems: $mediaItems, status: $status, hasPermission: $hasPermission, selectedFilter: $selectedFilter, page: $page, hasMore: $hasMore, error: $error)';
+    return 'MediaState(mediaItems: $mediaItems, status: $status, hasPermission: $hasPermission, selectedFilter: $selectedFilter, page: $page, hasMore: $hasMore, resumePositions: $resumePositions, error: $error)';
 }
 
 
@@ -571,7 +620,7 @@ abstract mixin class _$MediaStateCopyWith<$Res> implements $MediaStateCopyWith<$
   factory _$MediaStateCopyWith(_MediaState value, $Res Function(_MediaState) _then) = __$MediaStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<PureCastMedia> mediaItems, StateStatus status, bool hasPermission, RequestType selectedFilter, int page, bool hasMore, String? error
+ List<PureCastMedia> mediaItems, StateStatus status, bool hasPermission, RequestType selectedFilter, int page, bool hasMore, Map<String, Duration> resumePositions, String? error
 });
 
 
@@ -588,7 +637,7 @@ class __$MediaStateCopyWithImpl<$Res>
 
 /// Create a copy of MediaState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? mediaItems = null,Object? status = null,Object? hasPermission = null,Object? selectedFilter = null,Object? page = null,Object? hasMore = null,Object? error = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? mediaItems = null,Object? status = null,Object? hasPermission = null,Object? selectedFilter = null,Object? page = null,Object? hasMore = null,Object? resumePositions = null,Object? error = freezed,}) {
   return _then(_MediaState(
 mediaItems: null == mediaItems ? _self._mediaItems : mediaItems // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
@@ -596,7 +645,8 @@ as StateStatus,hasPermission: null == hasPermission ? _self.hasPermission : hasP
 as bool,selectedFilter: null == selectedFilter ? _self.selectedFilter : selectedFilter // ignore: cast_nullable_to_non_nullable
 as RequestType,page: null == page ? _self.page : page // ignore: cast_nullable_to_non_nullable
 as int,hasMore: null == hasMore ? _self.hasMore : hasMore // ignore: cast_nullable_to_non_nullable
-as bool,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
+as bool,resumePositions: null == resumePositions ? _self._resumePositions : resumePositions // ignore: cast_nullable_to_non_nullable
+as Map<String, Duration>,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

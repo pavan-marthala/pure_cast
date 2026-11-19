@@ -11,5 +11,15 @@ abstract class QueueState with _$QueueState {
     /// produced by a user action. The playback coordinator must not start
     /// playback for a restored queue.
     @Default(false) bool restoredFromStorage,
+
+    /// Incremented whenever the user explicitly asks to play a queue item.
+    /// The playback coordinator loads that item (with its start position)
+    /// even when the selected index did not change.
+    @Default(0) int playRequestId,
+
+    /// Offset applied to the next explicit play request only.
+    ///
+    /// Transient: it is never persisted and auto-advance never reads it.
+    Duration? pendingStartPosition,
   }) = _QueueState;
 }

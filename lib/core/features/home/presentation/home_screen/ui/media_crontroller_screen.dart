@@ -122,12 +122,10 @@ class Body extends StatelessWidget {
           seekPreview,
         ) = state;
         if (preparing) {
-          return const SliverToBoxAdapter(
-            child: Center(child: Text('Preparing video for Chromecast...')),
-          );
+          return Center(child: Text('Preparing video for Chromecast...'));
         }
         if (prepareError != null) {
-          return SliverToBoxAdapter(child: Center(child: Text(prepareError)));
+          return Center(child: Text(prepareError));
         }
         return SafeArea(
           child: Padding(

@@ -24,6 +24,11 @@ class NoopCastService implements ICastService {
 
 class NoopAppDatabase implements AppDatabase {
   @override
+  Future<void> recordPlaybackHistory(
+    PlaybackHistoryTableCompanion entry,
+  ) async {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       super.noSuchMethod(invocation);
 }

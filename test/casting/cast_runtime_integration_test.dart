@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:fake_async/fake_async.dart';
@@ -253,6 +254,9 @@ class FakeAppDatabase implements AppDatabase {
   List<PlaybackQueueTableData> queueData = [];
   PlaybackHistoryTableData? mostRecentHistory;
   PlaybackHistoryTableCompanion? recordedHistoryCompanion;
+  final List<PlaybackHistoryTableCompanion> recordedHistoryCompanions = [];
+  Map<String, PlaybackHistoryTableData> historyData = {};
+  final List<String> clearedPositions = [];
   UserPreferencesTableData preferencesData = const UserPreferencesTableData(
     id: 1,
     preferredAudioLanguage: 'en',
@@ -271,6 +275,7 @@ class FakeAppDatabase implements AppDatabase {
       mediaType: i.mediaType.value,
       title: i.title.value,
       thumbnail: i.thumbnail.value,
+      thumbnailBytes: i.thumbnailBytes.value,
       durationMs: i.durationMs.value,
       isLocalFile: i.isLocalFile.value,
       queueOrder: i.queueOrder.value,
@@ -287,8 +292,73 @@ class FakeAppDatabase implements AppDatabase {
   Future<PlaybackHistoryTableData?> getMostRecentHistory() async => mostRecentHistory;
 
   @override
+  Future<PlaybackHistoryTableData?> getHistoryFor(String id) async {
+    final direct = historyData[id];
+    if (direct != null) return direct;
+    if (mostRecentHistory?.id == id) return mostRecentHistory;
+    return null;
+  }
+
+  @override
+  Future<void> clearPlaybackPosition(String id) async {
+    clearedPositions.add(id);
+    final row = historyData.remove(id);
+    if (row != null) {
+      historyData[id] = PlaybackHistoryTableData(
+        id: row.id,
+        title: row.title,
+        mediaUri: row.mediaUri,
+        mediaType: row.mediaType,
+        isLocalFile: row.isLocalFile,
+        thumbnailUrl: row.thumbnailUrl,
+        thumbnailBytes: row.thumbnailBytes,
+        lastPositionMs: 0,
+        totalDurationMs: row.totalDurationMs,
+        lastPlayedAt: row.lastPlayedAt,
+        completed: false,
+      );
+    }
+  }
+
+  @override
   Future<void> recordPlaybackHistory(PlaybackHistoryTableCompanion entry) async {
     recordedHistoryCompanion = entry;
+    recordedHistoryCompanions.add(entry);
+
+    // Mirror the write into the readable rows so resume lookups work.
+    final id = entry.id.value;
+    final existing = historyData[id];
+    historyData[id] = PlaybackHistoryTableData(
+      id: id,
+      title: entry.title.present ? entry.title.value : existing?.title ?? '',
+      mediaUri: entry.mediaUri.present
+          ? entry.mediaUri.value
+          : existing?.mediaUri ?? id,
+      mediaType: entry.mediaType.present
+          ? entry.mediaType.value
+          : existing?.mediaType ?? 'mp4',
+      isLocalFile: entry.isLocalFile.present
+          ? entry.isLocalFile.value
+          : existing?.isLocalFile ?? false,
+      thumbnailUrl: entry.thumbnailUrl.present
+          ? entry.thumbnailUrl.value
+          : existing?.thumbnailUrl,
+      thumbnailBytes: entry.thumbnailBytes.present
+          ? entry.thumbnailBytes.value
+          : existing?.thumbnailBytes,
+      lastPositionMs: entry.lastPositionMs.present
+          ? entry.lastPositionMs.value
+          : existing?.lastPositionMs ?? 0,
+      totalDurationMs: entry.totalDurationMs.present
+          ? entry.totalDurationMs.value
+          : existing?.totalDurationMs ?? 0,
+      lastPlayedAt: entry.lastPlayedAt.present
+          ? entry.lastPlayedAt.value
+          : existing?.lastPlayedAt ?? DateTime.now(),
+      completed: entry.completed.present
+          ? entry.completed.value
+          : existing?.completed ?? false,
+    );
   }
 
   @override
@@ -853,6 +923,43 @@ void main() {
       await sessionBloc.close();
     });
 
+    test('1c. Cancelling the file picker does not start a restored queue', () async {
+      fakeDb.queueData = [
+        PlaybackQueueTableData(
+          id: 'saved_video',
+          mediaUri: 'http://example.com/saved.mp4',
+          mediaType: 'mp4',
+          title: 'Saved',
+          isLocalFile: false,
+          queueOrder: 0,
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+
+      coordinator.start(queueBloc, sessionBloc);
+      queueBloc.add(const LoadQueueEvent());
+      await pumpEventQueue();
+
+      expect(queueBloc.state.restoredFromStorage, isTrue);
+
+      // The fake picker returns no files, i.e. the user cancelled.
+      queueBloc.add(const PicFilesEvent());
+      await pumpEventQueue();
+
+      expect(queueBloc.state.restoredFromStorage, isTrue);
+      expect(queueBloc.state.items.length, equals(1));
+      expect(sessionBloc.state.activeMedia, isNull);
+      expect(fakeCastService.loadedMedia, isNull);
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
     test('2. First item added to empty queue triggers LoadMediaEvent on CastSessionBloc', () async {
       final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
       final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
@@ -1101,6 +1208,343 @@ void main() {
       expect(sessionBloc.state.activeDevice, equals(savedDevice));
 
       await discoveryBloc.close();
+      await sessionBloc.close();
+    });
+  });
+
+  group('Queue de-duplication, thumbnails and resume', () {
+    const mediaA = PureCastMedia(
+      uri: 'http://example.com/a.mp4',
+      type: PureCastMediaType.mp4,
+      title: 'A',
+    );
+    const mediaB = PureCastMedia(
+      uri: 'http://example.com/b.mp4',
+      type: PureCastMediaType.mp4,
+      title: 'B',
+    );
+    const device = PureCastDevice(
+      id: 'tv_resume',
+      name: 'Resume TV',
+      protocol: PureCastProtocol.chromecast,
+      host: '192.168.1.30',
+      port: 8009,
+      capabilities: PureCastCapabilities(),
+    );
+
+    test('1. Adding the same media twice keeps a single queue entry', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+
+      expect(queueBloc.state.items.length, equals(1));
+      expect(queueBloc.state.items.single.uri, equals(mediaA.uri));
+      expect(fakeDb.queueData.length, equals(1));
+
+      await queueBloc.close();
+    });
+
+    test('2. Playing an already queued item reuses it and keeps the start position', () async {
+      const startAt = Duration(minutes: 5);
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final requestIds = <int>[];
+      final subscription = queueBloc.stream.listen(
+        (state) => requestIds.add(state.playRequestId),
+      );
+
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      queueBloc.add(const AddToQueueEvent(mediaB));
+      await pumpEventQueue();
+
+      queueBloc.add(
+        const QueueEvent.playMedia(mediaA, startPosition: startAt),
+      );
+      await pumpEventQueue();
+
+      expect(queueBloc.state.items.length, equals(2));
+      expect(queueBloc.state.currentIndex, equals(0));
+      expect(queueBloc.state.items[0].startPosition, isNull);
+      expect(queueBloc.state.pendingStartPosition, equals(startAt));
+      expect(requestIds.last, equals(1));
+      expect(fakeDb.queueData.length, equals(2));
+
+      await subscription.cancel();
+      await queueBloc.close();
+    });
+
+    test('3. Explicit play request loads the selected item even when the index did not change', () async {
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      final coordinator = PlaybackCoordinator(historyRepo);
+      coordinator.start(queueBloc, sessionBloc);
+
+      queueBloc.add(const AddToQueueEvent(mediaA));
+      await pumpEventQueue();
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+
+      const startAt = Duration(seconds: 90);
+      queueBloc.add(
+        const QueueEvent.playMedia(mediaA, startPosition: startAt),
+      );
+      await pumpEventQueue();
+
+      expect(queueBloc.state.items.length, equals(1));
+      expect(sessionBloc.state.activeMedia?.uri, equals(mediaA.uri));
+      expect(sessionBloc.state.activeMedia?.startPosition, equals(startAt));
+
+      await coordinator.dispose();
+      await queueBloc.close();
+      await sessionBloc.close();
+    });
+
+    test('4. Restored queue keeps its thumbnail bytes', () async {
+      fakeDb.queueData = [
+        PlaybackQueueTableData(
+          id: mediaA.uri,
+          mediaUri: mediaA.uri,
+          mediaType: 'mp4',
+          title: mediaA.title,
+          thumbnailBytes: Uint8List.fromList([1, 2, 3]),
+          isLocalFile: false,
+          queueOrder: 0,
+          createdAt: DateTime.now(),
+        ),
+      ];
+
+      final queueBloc = QueueBloc(fakeDb, fakeMediaRepo);
+      queueBloc.add(const LoadQueueEvent());
+      await pumpEventQueue();
+
+      expect(
+        queueBloc.state.items.single.thumbnailBytes,
+        equals(Uint8List.fromList([1, 2, 3])),
+      );
+
+      await queueBloc.close();
+    });
+
+    test('5. Loading media with a start position seeks after the load', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      sessionBloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+
+      const startAt = Duration(seconds: 42);
+      const media = PureCastMedia(
+        uri: 'http://example.com/resume.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Resume',
+        startPosition: startAt,
+      );
+
+      sessionBloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+
+      expect(fakeCastService.loadedMedia?.uri, equals(media.uri));
+      expect(fakeCastService.seekCalled, greaterThanOrEqualTo(1));
+      expect(fakeCastService.seekPosition, equals(startAt));
+
+      await sessionBloc.close();
+    });
+
+    test('6. Pausing writes the current position to playback history', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      sessionBloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+
+      const media = PureCastMedia(
+        uri: 'http://example.com/checkpoint.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Checkpoint',
+        duration: Duration(minutes: 10),
+      );
+      sessionBloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+
+      sessionBloc.add(const DurationUpdatedEvent(Duration(minutes: 10)));
+      sessionBloc.add(const PositionUpdatedEvent(Duration(minutes: 3)));
+      await pumpEventQueue();
+
+      sessionBloc.add(const PauseMediaEvent());
+      await pumpEventQueue();
+
+      final checkpoint = fakeDb.recordedHistoryCompanion;
+      expect(checkpoint, isNotNull);
+      expect(checkpoint!.lastPositionMs.value, equals(180000));
+      expect(checkpoint.totalDurationMs.value, equals(600000));
+      expect(checkpoint.completed.value, isFalse);
+
+      await sessionBloc.close();
+    });
+
+    test('7. Resume info is based on remaining time, not the completed flag', () async {
+      const resumable = PureCastMedia(
+        uri: 'http://example.com/resume-info.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Resume info',
+      );
+      fakeDb.historyData[resumable.uri] = PlaybackHistoryTableData(
+        id: resumable.uri,
+        title: resumable.title,
+        mediaUri: resumable.uri,
+        mediaType: 'mp4',
+        isLocalFile: false,
+        lastPositionMs: 120000,
+        totalDurationMs: 600000,
+        lastPlayedAt: DateTime.now(),
+        completed: false,
+      );
+
+      final info = await historyRepo.getResumeInfo(resumable.uri);
+      expect(info, isNotNull);
+      expect(info!.canResume, isTrue);
+      expect(info.position, equals(const Duration(minutes: 2)));
+
+      // Receivers report "completed" on idle, including a manual stop, so a
+      // row with plenty left must still be resumable.
+      fakeDb.historyData[resumable.uri] = PlaybackHistoryTableData(
+        id: resumable.uri,
+        title: resumable.title,
+        mediaUri: resumable.uri,
+        mediaType: 'mp4',
+        isLocalFile: false,
+        lastPositionMs: 120000,
+        totalDurationMs: 600000,
+        lastPlayedAt: DateTime.now(),
+        completed: true,
+      );
+
+      final stopped = await historyRepo.getResumeInfo(resumable.uri);
+      expect(stopped!.canResume, isTrue);
+
+      // A genuinely finished video has too little left to resume.
+      fakeDb.historyData[resumable.uri] = PlaybackHistoryTableData(
+        id: resumable.uri,
+        title: resumable.title,
+        mediaUri: resumable.uri,
+        mediaType: 'mp4',
+        isLocalFile: false,
+        lastPositionMs: 590000,
+        totalDurationMs: 600000,
+        lastPlayedAt: DateTime.now(),
+        completed: true,
+      );
+
+      final finished = await historyRepo.getResumeInfo(resumable.uri);
+      expect(finished!.canResume, isFalse);
+    });
+
+    test('8. Stopping keeps progress and a reset to zero does not erase it', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      sessionBloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+
+      const media = PureCastMedia(
+        uri: 'http://example.com/stop-reset.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Stop then reset',
+        duration: Duration(minutes: 82),
+      );
+      sessionBloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+
+      sessionBloc.add(const PositionUpdatedEvent(Duration(minutes: 10)));
+      await pumpEventQueue();
+      sessionBloc.add(const StopMediaEvent());
+      await pumpEventQueue();
+
+      expect(
+        fakeDb.recordedHistoryCompanion?.lastPositionMs.value,
+        equals(600000),
+      );
+
+      // The receiver goes idle after a stop, which the adapter maps to
+      // `completed`. That must not mark the saved progress as finished.
+      sessionBloc.add(const PositionUpdatedEvent(Duration.zero));
+      sessionBloc.add(
+        const SessionStateChangedEvent(PureCastSessionState.completed),
+      );
+      await pumpEventQueue();
+
+      expect(
+        fakeDb.recordedHistoryCompanion?.lastPositionMs.value,
+        equals(600000),
+        reason: 'a zero position must never overwrite saved progress',
+      );
+      expect(fakeDb.recordedHistoryCompanion?.completed.value, isFalse);
+
+      final resume = await historyRepo.getResumeInfo(media.uri);
+      expect(resume, isNotNull);
+      expect(resume!.canResume, isTrue);
+      expect(resume.position, equals(const Duration(minutes: 10)));
+
+      await sessionBloc.close();
+    });
+
+    test('9. Loading media seeds the duration so checkpoints work without a device duration', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      sessionBloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+
+      const media = PureCastMedia(
+        uri: 'http://example.com/seeded-duration.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Seeded duration',
+        duration: Duration(minutes: 82),
+      );
+      sessionBloc.add(const LoadMediaEvent(media));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.position, equals(Duration.zero));
+      expect(sessionBloc.state.duration, equals(const Duration(minutes: 82)));
+
+      // No DurationUpdatedEvent: the media duration is the fallback.
+      sessionBloc.add(const PositionUpdatedEvent(Duration(minutes: 10)));
+      await pumpEventQueue();
+      sessionBloc.add(const StopMediaEvent());
+      await pumpEventQueue();
+
+      final checkpoint = fakeDb.recordedHistoryCompanion;
+      expect(checkpoint, isNotNull);
+      expect(checkpoint!.totalDurationMs.value, equals(4920000));
+      expect(checkpoint.lastPositionMs.value, equals(600000));
+      expect(checkpoint.completed.value, isFalse);
+
+      await sessionBloc.close();
+    });
+
+    test('10. Loading a new media clears the previous media position', () async {
+      final sessionBloc = CastSessionBloc(fakeCastService, historyRepo);
+      sessionBloc.add(const ConnectDeviceEvent(device));
+      await pumpEventQueue();
+
+      const first = PureCastMedia(
+        uri: 'http://example.com/first.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'First',
+        duration: Duration(minutes: 10),
+      );
+      sessionBloc.add(const LoadMediaEvent(first));
+      await pumpEventQueue();
+      sessionBloc.add(const PositionUpdatedEvent(Duration(minutes: 9)));
+      await pumpEventQueue();
+
+      const second = PureCastMedia(
+        uri: 'http://example.com/second.mp4',
+        type: PureCastMediaType.mp4,
+        title: 'Second',
+        duration: Duration(minutes: 82),
+      );
+      sessionBloc.add(const LoadMediaEvent(second));
+      await pumpEventQueue();
+
+      expect(sessionBloc.state.position, equals(Duration.zero));
+      expect(sessionBloc.state.duration, equals(const Duration(minutes: 82)));
+      expect(sessionBloc.state.activeMedia?.uri, equals(second.uri));
+
       await sessionBloc.close();
     });
   });

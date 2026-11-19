@@ -38,6 +38,13 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   /// How long relative-seek taps are collected before one seek is issued.
   static const Duration _seekRelativeDelay = Duration(milliseconds: 600);
 
+  /// How much playback progress is collected before another history checkpoint
+  /// is written while playing.
+  static const Duration _checkpointInterval = Duration(seconds: 10);
+
+  /// Position of the last written checkpoint, used to throttle writes.
+  Duration? _lastCheckpointPosition;
+
   /// Upper bound for a single connect attempt, including the teardown of any
   /// previous session.
   ///
@@ -172,9 +179,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   ) async {
     try {
       await _castService.disconnect();
+      _checkpointHistory(force: true);
       _isLoadingMedia = false;
       _restartInFlight = false;
       _cancelSeekPreview();
+      _lastCheckpointPosition = null;
       emit(const CastSessionState());
     } catch (e) {
       emit(state.copyWith(connectionError: e.toString()));
@@ -194,6 +203,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       );
       return;
     }
+    // Save where the outgoing media stopped before its state is replaced.
+    if (state.activeMedia != null && state.activeMedia!.uri != event.media.uri) {
+      _checkpointHistory(force: true);
+    }
+    _lastCheckpointPosition = null;
     _isLoadingMedia = true;
     _cancelSeekPreview();
 
@@ -202,6 +216,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         playbackStatus: StateStatus.loading,
         activeMedia: event.media,
         playbackError: null,
+        // The previous media's progress must not leak into this one. Seed the
+        // duration from the media so checkpoints work even when the device
+        // never reports one; a real duration from the receiver replaces it.
+        position: Duration.zero,
+        duration: event.media.duration ?? Duration.zero,
         // A new load invalidates any audio/seeking state from the previous
         // media.
         audioTracks: const [],
@@ -230,6 +249,24 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       await _castService.loadMedia(event.media);
       if (event.media.isLocalFile) {
         emit(state.copyWith(preparing: false));
+      }
+
+      // Apply the one-shot resume offset (if the user chose to continue).
+      final startAt = event.media.startPosition;
+      if (startAt != null && startAt > Duration.zero) {
+        try {
+          log(
+            "Seeking to resume position $startAt",
+            name: "Cast Session Bloc",
+          );
+          await _castService.seek(startAt);
+        } catch (e) {
+          // Resuming is best effort: playback still starts from the beginning.
+          log(
+            "Failed to seek to resume position: $e",
+            name: "Cast Session Bloc",
+          );
+        }
       }
 
       // Fill the audio state from the engine. Remux plans are live and expose
@@ -315,6 +352,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   ) async {
     try {
       await _castService.pause();
+      _checkpointHistory(force: true);
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
     }
@@ -341,6 +379,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
           seekPreview: null,
         ),
       );
+      _checkpointHistory(force: true);
     }
   }
 
@@ -905,9 +944,11 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         emit(state.copyWith(sessionState: event.newState));
         return;
       }
+      _checkpointHistory(force: true);
       _isLoadingMedia = false;
       _restartInFlight = false;
       _cancelSeekPreview();
+      _lastCheckpointPosition = null;
       emit(const CastSessionState());
       return;
     }
@@ -929,21 +970,50 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         connectionStatus: healedConnectionStatus,
       ),
     );
-    _checkpointHistory(
-      completed: event.newState == PureCastSessionState.completed,
-    );
+    // Never derive "completed" from the session state here: an idle receiver
+    // (a normal stop) maps to `completed` too. Completion is inferred from the
+    // position instead, otherwise stopping would disable the resume prompt.
+    _checkpointHistory(force: true);
   }
 
-  void _checkpointHistory({bool completed = false}) {
+  void _checkpointHistory({bool force = false}) {
     final media = state.activeMedia;
-    if (media != null) {
-      _historyRepo.recordHistoryCheckpoint(
-        media: media,
-        position: state.position,
-        duration: state.duration,
-        completed: completed,
-      );
+    final duration = state.duration;
+    if (media == null || duration <= Duration.zero) return;
+
+    final position = state.position;
+    final isCompleted = position >= duration - const Duration(seconds: 2);
+
+    // A zero position is either a fresh load or the receiver resetting to the
+    // start while it stops. Writing it would erase real saved progress (and
+    // disable the resume prompt), so it is never persisted — even when forced.
+    if (!isCompleted && position <= Duration.zero) return;
+
+    // While playing, only write when enough new progress has accumulated.
+    if (!force && !isCompleted) {
+      final last = _lastCheckpointPosition;
+      if (last != null &&
+          (position - last).abs() < _checkpointInterval) {
+        return;
+      }
     }
+
+    _lastCheckpointPosition = position;
+    unawaited(
+      _historyRepo
+          .recordHistoryCheckpoint(
+            media: media,
+            position: position,
+            duration: duration,
+            completed: isCompleted,
+          )
+          .catchError((Object e) {
+            log(
+              'Failed to write playback checkpoint: $e',
+              name: 'Cast Session Bloc',
+            );
+          }),
+    );
   }
 
   void _onPositionUpdated(
@@ -951,6 +1021,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     Emitter<CastSessionState> emit,
   ) {
     emit(state.copyWith(position: event.position));
+    _checkpointHistory();
   }
 
   void _onDurationUpdated(
@@ -962,6 +1033,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
   @override
   Future<void> close() {
+    _checkpointHistory(force: true);
     _isLoadingMedia = false;
     _restartInFlight = false;
     _connectingDeviceId = null;

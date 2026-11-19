@@ -3,7 +3,9 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:pure_cast/core/database/app_database.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
+import 'package:pure_cast/core/features/casting/data/repository/playback_history_repository.dart';
 import 'package:pure_cast/core/features/music_library/data/data_source/photo_manager_media_source.dart';
 import 'package:pure_cast/core/features/music_library/data/repository/media_repository.dart';
 import 'package:pure_cast/core/features/music_library/presentation/logic/media/media_bloc.dart';
@@ -38,13 +40,30 @@ class FakeLocalMediaDataSource implements LocalMediaDataSource {
   }
 }
 
+class _FakeHistoryDatabase implements AppDatabase {
+  _FakeHistoryDatabase({this.rows = const []});
+
+  final List<PlaybackHistoryTableData> rows;
+
+  @override
+  Future<List<PlaybackHistoryTableData>> getRecentHistory({
+    int limit = 20,
+  }) async => rows.take(limit).toList();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
 void main() {
   late FakeLocalMediaDataSource fakeDataSource;
   late MediaRepository repository;
+  late PlaybackHistoryRepository historyRepository;
 
   setUp(() {
     fakeDataSource = FakeLocalMediaDataSource();
     repository = MediaRepositoryImpl(fakeDataSource);
+    historyRepository = PlaybackHistoryRepository(_FakeHistoryDatabase());
   });
 
   group(
@@ -63,7 +82,7 @@ void main() {
             ),
           ];
 
-          final bloc = MediaBloc(repository);
+          final bloc = MediaBloc(repository, historyRepository);
           expect(bloc.state.status, equals(StateStatus.initial));
 
           bloc.add(const MediaEvent.requestPermission());
@@ -91,7 +110,7 @@ void main() {
           ),
         ];
 
-        final bloc = MediaBloc(repository);
+        final bloc = MediaBloc(repository, historyRepository);
         bloc.add(const MediaEvent.requestPermission());
         await pumpEventQueue();
 
@@ -180,6 +199,47 @@ void main() {
         expect(fallbackMedia.title, equals('corrupted.mp3'));
         expect(fallbackMedia.duration, isNull);
         expect(fallbackMedia.thumbnailBytes, isNull);
+      });
+
+      test('9. Media list exposes resumable progress from history', () async {
+        const uri = '/storage/emulated/0/Download/progress.mp4';
+        fakeDataSource.mockMedia = [
+          const PureCastMedia(
+            uri: uri,
+            type: PureCastMediaType.video,
+            title: 'progress.mp4',
+            duration: Duration(minutes: 10),
+            isLocalFile: true,
+          ),
+        ];
+
+        final rows = [
+          PlaybackHistoryTableData(
+            id: uri,
+            title: 'progress.mp4',
+            mediaUri: uri,
+            mediaType: 'video',
+            isLocalFile: true,
+            lastPositionMs: 120000,
+            totalDurationMs: 600000,
+            lastPlayedAt: DateTime.now(),
+            completed: false,
+          ),
+        ];
+
+        final bloc = MediaBloc(
+          repository,
+          PlaybackHistoryRepository(_FakeHistoryDatabase(rows: rows)),
+        );
+        bloc.add(const MediaEvent.loadMediaItems());
+        await pumpEventQueue();
+
+        expect(
+          bloc.state.resumePositions[uri],
+          equals(const Duration(minutes: 2)),
+        );
+
+        await bloc.close();
       });
     },
   );

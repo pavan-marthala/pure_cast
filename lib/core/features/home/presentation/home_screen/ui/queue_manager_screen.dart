@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/queue/queue_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/ui/media_launch.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_utils.dart';
 
@@ -97,12 +98,7 @@ class _QueueManagerScreenState extends State<QueueManagerScreen> {
                                       PureCastSessionState.completed;
                               return GestureDetector(
                                 onTap: () {
-                                  context.read<QueueBloc>().add(
-                                    SetCurrentIndexEvent(index),
-                                  );
-                                  context.read<CastSessionBloc>().add(
-                                    LoadMediaEvent(queue),
-                                  );
+                                  MediaLaunch.play(context, queue);
                                 },
                                 child: Row(
                                   spacing: 12,

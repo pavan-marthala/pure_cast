@@ -17,6 +17,7 @@ class PlaybackQueueTable extends Table {
   TextColumn get mediaType => text()(); // 'video' | 'audio' | 'hls' | 'mp4' | 'mkv'
   TextColumn get title => text()();
   TextColumn get thumbnail => text().nullable()();
+  BlobColumn get thumbnailBytes => blob().nullable()();
   IntColumn get durationMs => integer().nullable()();
   BoolColumn get isLocalFile => boolean().withDefault(const Constant(false))();
   IntColumn get queueOrder => integer()();
@@ -37,6 +38,7 @@ class PlaybackHistoryTable extends Table {
   TextColumn get mediaType => text()();
   BoolColumn get isLocalFile => boolean().withDefault(const Constant(false))();
   TextColumn get thumbnailUrl => text().nullable()();
+  BlobColumn get thumbnailBytes => blob().nullable()();
   IntColumn get lastPositionMs => integer().withDefault(const Constant(0))();
   IntColumn get totalDurationMs => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastPlayedAt => dateTime()();
@@ -70,8 +72,11 @@ class UserPreferencesTable extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Creates the database on [executor]; used by tests.
+  AppDatabase.forTesting(super.executor);
+
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -79,6 +84,15 @@ class AppDatabase extends _$AppDatabase {
       // Devices are no longer remembered between launches.
       if (from < 2) {
         await m.deleteTable('last_casted_device');
+      }
+      // Thumbnails are now kept with the queue and history rows so they
+      // survive a restart.
+      if (from < 3) {
+        await m.addColumn(playbackQueueTable, playbackQueueTable.thumbnailBytes);
+        await m.addColumn(
+          playbackHistoryTable,
+          playbackHistoryTable.thumbnailBytes,
+        );
       }
     },
   );
@@ -125,6 +139,23 @@ class AppDatabase extends _$AppDatabase {
           ..limit(1))
         .get();
     return list.isNotEmpty ? list.first : null;
+  }
+
+  Future<PlaybackHistoryTableData?> getHistoryFor(String id) async {
+    final list = await (select(playbackHistoryTable)
+          ..where((t) => t.id.equals(id))
+          ..limit(1))
+        .get();
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  Future<void> clearPlaybackPosition(String id) async {
+    await (update(playbackHistoryTable)..where((t) => t.id.equals(id))).write(
+      const PlaybackHistoryTableCompanion(
+        lastPositionMs: Value(0),
+        completed: Value(false),
+      ),
+    );
   }
 
   Future<void> recordPlaybackHistory(PlaybackHistoryTableCompanion entry) async {

@@ -27,6 +27,26 @@ class FakePlaybackHistoryRepository implements PlaybackHistoryRepository {
   }
 
   @override
+  Future<ResumeInfo?> getResumeInfo(String mediaUri) async {
+    final row = historyData.where((item) => item.mediaUri == mediaUri);
+    if (row.isEmpty) return null;
+    final item = row.first;
+    return ResumeInfo(
+      position: Duration(milliseconds: item.lastPositionMs),
+      duration: Duration(milliseconds: item.totalDurationMs),
+      completed: item.completed,
+    );
+  }
+
+  @override
+  Future<Map<String, Duration>> getResumablePositions({
+    int limit = 500,
+  }) async => const {};
+
+  @override
+  Future<void> clearResumePosition(String mediaUri) async {}
+
+  @override
   Future<void> recordHistoryCheckpoint({
     required PureCastMedia media,
     required Duration position,

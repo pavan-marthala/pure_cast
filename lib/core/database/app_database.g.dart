@@ -60,6 +60,18 @@ class $PlaybackQueueTableTable extends PlaybackQueueTable
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _thumbnailBytesMeta = const VerificationMeta(
+    'thumbnailBytes',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> thumbnailBytes =
+      GeneratedColumn<Uint8List>(
+        'thumbnail_bytes',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _durationMsMeta = const VerificationMeta(
     'durationMs',
   );
@@ -115,6 +127,7 @@ class $PlaybackQueueTableTable extends PlaybackQueueTable
     mediaType,
     title,
     thumbnail,
+    thumbnailBytes,
     durationMs,
     isLocalFile,
     queueOrder,
@@ -165,6 +178,15 @@ class $PlaybackQueueTableTable extends PlaybackQueueTable
       context.handle(
         _thumbnailMeta,
         thumbnail.isAcceptableOrUnknown(data['thumbnail']!, _thumbnailMeta),
+      );
+    }
+    if (data.containsKey('thumbnail_bytes')) {
+      context.handle(
+        _thumbnailBytesMeta,
+        thumbnailBytes.isAcceptableOrUnknown(
+          data['thumbnail_bytes']!,
+          _thumbnailBytesMeta,
+        ),
       );
     }
     if (data.containsKey('duration_ms')) {
@@ -227,6 +249,10 @@ class $PlaybackQueueTableTable extends PlaybackQueueTable
         DriftSqlType.string,
         data['${effectivePrefix}thumbnail'],
       ),
+      thumbnailBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}thumbnail_bytes'],
+      ),
       durationMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}duration_ms'],
@@ -259,6 +285,7 @@ class PlaybackQueueTableData extends DataClass
   final String mediaType;
   final String title;
   final String? thumbnail;
+  final Uint8List? thumbnailBytes;
   final int? durationMs;
   final bool isLocalFile;
   final int queueOrder;
@@ -269,6 +296,7 @@ class PlaybackQueueTableData extends DataClass
     required this.mediaType,
     required this.title,
     this.thumbnail,
+    this.thumbnailBytes,
     this.durationMs,
     required this.isLocalFile,
     required this.queueOrder,
@@ -283,6 +311,9 @@ class PlaybackQueueTableData extends DataClass
     map['title'] = Variable<String>(title);
     if (!nullToAbsent || thumbnail != null) {
       map['thumbnail'] = Variable<String>(thumbnail);
+    }
+    if (!nullToAbsent || thumbnailBytes != null) {
+      map['thumbnail_bytes'] = Variable<Uint8List>(thumbnailBytes);
     }
     if (!nullToAbsent || durationMs != null) {
       map['duration_ms'] = Variable<int>(durationMs);
@@ -302,6 +333,9 @@ class PlaybackQueueTableData extends DataClass
       thumbnail: thumbnail == null && nullToAbsent
           ? const Value.absent()
           : Value(thumbnail),
+      thumbnailBytes: thumbnailBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailBytes),
       durationMs: durationMs == null && nullToAbsent
           ? const Value.absent()
           : Value(durationMs),
@@ -322,6 +356,7 @@ class PlaybackQueueTableData extends DataClass
       mediaType: serializer.fromJson<String>(json['mediaType']),
       title: serializer.fromJson<String>(json['title']),
       thumbnail: serializer.fromJson<String?>(json['thumbnail']),
+      thumbnailBytes: serializer.fromJson<Uint8List?>(json['thumbnailBytes']),
       durationMs: serializer.fromJson<int?>(json['durationMs']),
       isLocalFile: serializer.fromJson<bool>(json['isLocalFile']),
       queueOrder: serializer.fromJson<int>(json['queueOrder']),
@@ -337,6 +372,7 @@ class PlaybackQueueTableData extends DataClass
       'mediaType': serializer.toJson<String>(mediaType),
       'title': serializer.toJson<String>(title),
       'thumbnail': serializer.toJson<String?>(thumbnail),
+      'thumbnailBytes': serializer.toJson<Uint8List?>(thumbnailBytes),
       'durationMs': serializer.toJson<int?>(durationMs),
       'isLocalFile': serializer.toJson<bool>(isLocalFile),
       'queueOrder': serializer.toJson<int>(queueOrder),
@@ -350,6 +386,7 @@ class PlaybackQueueTableData extends DataClass
     String? mediaType,
     String? title,
     Value<String?> thumbnail = const Value.absent(),
+    Value<Uint8List?> thumbnailBytes = const Value.absent(),
     Value<int?> durationMs = const Value.absent(),
     bool? isLocalFile,
     int? queueOrder,
@@ -360,6 +397,9 @@ class PlaybackQueueTableData extends DataClass
     mediaType: mediaType ?? this.mediaType,
     title: title ?? this.title,
     thumbnail: thumbnail.present ? thumbnail.value : this.thumbnail,
+    thumbnailBytes: thumbnailBytes.present
+        ? thumbnailBytes.value
+        : this.thumbnailBytes,
     durationMs: durationMs.present ? durationMs.value : this.durationMs,
     isLocalFile: isLocalFile ?? this.isLocalFile,
     queueOrder: queueOrder ?? this.queueOrder,
@@ -372,6 +412,9 @@ class PlaybackQueueTableData extends DataClass
       mediaType: data.mediaType.present ? data.mediaType.value : this.mediaType,
       title: data.title.present ? data.title.value : this.title,
       thumbnail: data.thumbnail.present ? data.thumbnail.value : this.thumbnail,
+      thumbnailBytes: data.thumbnailBytes.present
+          ? data.thumbnailBytes.value
+          : this.thumbnailBytes,
       durationMs: data.durationMs.present
           ? data.durationMs.value
           : this.durationMs,
@@ -393,6 +436,7 @@ class PlaybackQueueTableData extends DataClass
           ..write('mediaType: $mediaType, ')
           ..write('title: $title, ')
           ..write('thumbnail: $thumbnail, ')
+          ..write('thumbnailBytes: $thumbnailBytes, ')
           ..write('durationMs: $durationMs, ')
           ..write('isLocalFile: $isLocalFile, ')
           ..write('queueOrder: $queueOrder, ')
@@ -408,6 +452,7 @@ class PlaybackQueueTableData extends DataClass
     mediaType,
     title,
     thumbnail,
+    $driftBlobEquality.hash(thumbnailBytes),
     durationMs,
     isLocalFile,
     queueOrder,
@@ -422,6 +467,10 @@ class PlaybackQueueTableData extends DataClass
           other.mediaType == this.mediaType &&
           other.title == this.title &&
           other.thumbnail == this.thumbnail &&
+          $driftBlobEquality.equals(
+            other.thumbnailBytes,
+            this.thumbnailBytes,
+          ) &&
           other.durationMs == this.durationMs &&
           other.isLocalFile == this.isLocalFile &&
           other.queueOrder == this.queueOrder &&
@@ -435,6 +484,7 @@ class PlaybackQueueTableCompanion
   final Value<String> mediaType;
   final Value<String> title;
   final Value<String?> thumbnail;
+  final Value<Uint8List?> thumbnailBytes;
   final Value<int?> durationMs;
   final Value<bool> isLocalFile;
   final Value<int> queueOrder;
@@ -446,6 +496,7 @@ class PlaybackQueueTableCompanion
     this.mediaType = const Value.absent(),
     this.title = const Value.absent(),
     this.thumbnail = const Value.absent(),
+    this.thumbnailBytes = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.isLocalFile = const Value.absent(),
     this.queueOrder = const Value.absent(),
@@ -458,6 +509,7 @@ class PlaybackQueueTableCompanion
     required String mediaType,
     required String title,
     this.thumbnail = const Value.absent(),
+    this.thumbnailBytes = const Value.absent(),
     this.durationMs = const Value.absent(),
     this.isLocalFile = const Value.absent(),
     required int queueOrder,
@@ -475,6 +527,7 @@ class PlaybackQueueTableCompanion
     Expression<String>? mediaType,
     Expression<String>? title,
     Expression<String>? thumbnail,
+    Expression<Uint8List>? thumbnailBytes,
     Expression<int>? durationMs,
     Expression<bool>? isLocalFile,
     Expression<int>? queueOrder,
@@ -487,6 +540,7 @@ class PlaybackQueueTableCompanion
       if (mediaType != null) 'media_type': mediaType,
       if (title != null) 'title': title,
       if (thumbnail != null) 'thumbnail': thumbnail,
+      if (thumbnailBytes != null) 'thumbnail_bytes': thumbnailBytes,
       if (durationMs != null) 'duration_ms': durationMs,
       if (isLocalFile != null) 'is_local_file': isLocalFile,
       if (queueOrder != null) 'queue_order': queueOrder,
@@ -501,6 +555,7 @@ class PlaybackQueueTableCompanion
     Value<String>? mediaType,
     Value<String>? title,
     Value<String?>? thumbnail,
+    Value<Uint8List?>? thumbnailBytes,
     Value<int?>? durationMs,
     Value<bool>? isLocalFile,
     Value<int>? queueOrder,
@@ -513,6 +568,7 @@ class PlaybackQueueTableCompanion
       mediaType: mediaType ?? this.mediaType,
       title: title ?? this.title,
       thumbnail: thumbnail ?? this.thumbnail,
+      thumbnailBytes: thumbnailBytes ?? this.thumbnailBytes,
       durationMs: durationMs ?? this.durationMs,
       isLocalFile: isLocalFile ?? this.isLocalFile,
       queueOrder: queueOrder ?? this.queueOrder,
@@ -538,6 +594,9 @@ class PlaybackQueueTableCompanion
     }
     if (thumbnail.present) {
       map['thumbnail'] = Variable<String>(thumbnail.value);
+    }
+    if (thumbnailBytes.present) {
+      map['thumbnail_bytes'] = Variable<Uint8List>(thumbnailBytes.value);
     }
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
@@ -565,6 +624,7 @@ class PlaybackQueueTableCompanion
           ..write('mediaType: $mediaType, ')
           ..write('title: $title, ')
           ..write('thumbnail: $thumbnail, ')
+          ..write('thumbnailBytes: $thumbnailBytes, ')
           ..write('durationMs: $durationMs, ')
           ..write('isLocalFile: $isLocalFile, ')
           ..write('queueOrder: $queueOrder, ')
@@ -647,6 +707,18 @@ class $PlaybackHistoryTableTable extends PlaybackHistoryTable
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _thumbnailBytesMeta = const VerificationMeta(
+    'thumbnailBytes',
+  );
+  @override
+  late final GeneratedColumn<Uint8List> thumbnailBytes =
+      GeneratedColumn<Uint8List>(
+        'thumbnail_bytes',
+        aliasedName,
+        true,
+        type: DriftSqlType.blob,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _lastPositionMsMeta = const VerificationMeta(
     'lastPositionMs',
   );
@@ -705,6 +777,7 @@ class $PlaybackHistoryTableTable extends PlaybackHistoryTable
     mediaType,
     isLocalFile,
     thumbnailUrl,
+    thumbnailBytes,
     lastPositionMs,
     totalDurationMs,
     lastPlayedAt,
@@ -766,6 +839,15 @@ class $PlaybackHistoryTableTable extends PlaybackHistoryTable
         thumbnailUrl.isAcceptableOrUnknown(
           data['thumbnail_url']!,
           _thumbnailUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('thumbnail_bytes')) {
+      context.handle(
+        _thumbnailBytesMeta,
+        thumbnailBytes.isAcceptableOrUnknown(
+          data['thumbnail_bytes']!,
+          _thumbnailBytesMeta,
         ),
       );
     }
@@ -840,6 +922,10 @@ class $PlaybackHistoryTableTable extends PlaybackHistoryTable
         DriftSqlType.string,
         data['${effectivePrefix}thumbnail_url'],
       ),
+      thumbnailBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.blob,
+        data['${effectivePrefix}thumbnail_bytes'],
+      ),
       lastPositionMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}last_position_ms'],
@@ -873,6 +959,7 @@ class PlaybackHistoryTableData extends DataClass
   final String mediaType;
   final bool isLocalFile;
   final String? thumbnailUrl;
+  final Uint8List? thumbnailBytes;
   final int lastPositionMs;
   final int totalDurationMs;
   final DateTime lastPlayedAt;
@@ -884,6 +971,7 @@ class PlaybackHistoryTableData extends DataClass
     required this.mediaType,
     required this.isLocalFile,
     this.thumbnailUrl,
+    this.thumbnailBytes,
     required this.lastPositionMs,
     required this.totalDurationMs,
     required this.lastPlayedAt,
@@ -899,6 +987,9 @@ class PlaybackHistoryTableData extends DataClass
     map['is_local_file'] = Variable<bool>(isLocalFile);
     if (!nullToAbsent || thumbnailUrl != null) {
       map['thumbnail_url'] = Variable<String>(thumbnailUrl);
+    }
+    if (!nullToAbsent || thumbnailBytes != null) {
+      map['thumbnail_bytes'] = Variable<Uint8List>(thumbnailBytes);
     }
     map['last_position_ms'] = Variable<int>(lastPositionMs);
     map['total_duration_ms'] = Variable<int>(totalDurationMs);
@@ -917,6 +1008,9 @@ class PlaybackHistoryTableData extends DataClass
       thumbnailUrl: thumbnailUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(thumbnailUrl),
+      thumbnailBytes: thumbnailBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbnailBytes),
       lastPositionMs: Value(lastPositionMs),
       totalDurationMs: Value(totalDurationMs),
       lastPlayedAt: Value(lastPlayedAt),
@@ -936,6 +1030,7 @@ class PlaybackHistoryTableData extends DataClass
       mediaType: serializer.fromJson<String>(json['mediaType']),
       isLocalFile: serializer.fromJson<bool>(json['isLocalFile']),
       thumbnailUrl: serializer.fromJson<String?>(json['thumbnailUrl']),
+      thumbnailBytes: serializer.fromJson<Uint8List?>(json['thumbnailBytes']),
       lastPositionMs: serializer.fromJson<int>(json['lastPositionMs']),
       totalDurationMs: serializer.fromJson<int>(json['totalDurationMs']),
       lastPlayedAt: serializer.fromJson<DateTime>(json['lastPlayedAt']),
@@ -952,6 +1047,7 @@ class PlaybackHistoryTableData extends DataClass
       'mediaType': serializer.toJson<String>(mediaType),
       'isLocalFile': serializer.toJson<bool>(isLocalFile),
       'thumbnailUrl': serializer.toJson<String?>(thumbnailUrl),
+      'thumbnailBytes': serializer.toJson<Uint8List?>(thumbnailBytes),
       'lastPositionMs': serializer.toJson<int>(lastPositionMs),
       'totalDurationMs': serializer.toJson<int>(totalDurationMs),
       'lastPlayedAt': serializer.toJson<DateTime>(lastPlayedAt),
@@ -966,6 +1062,7 @@ class PlaybackHistoryTableData extends DataClass
     String? mediaType,
     bool? isLocalFile,
     Value<String?> thumbnailUrl = const Value.absent(),
+    Value<Uint8List?> thumbnailBytes = const Value.absent(),
     int? lastPositionMs,
     int? totalDurationMs,
     DateTime? lastPlayedAt,
@@ -977,6 +1074,9 @@ class PlaybackHistoryTableData extends DataClass
     mediaType: mediaType ?? this.mediaType,
     isLocalFile: isLocalFile ?? this.isLocalFile,
     thumbnailUrl: thumbnailUrl.present ? thumbnailUrl.value : this.thumbnailUrl,
+    thumbnailBytes: thumbnailBytes.present
+        ? thumbnailBytes.value
+        : this.thumbnailBytes,
     lastPositionMs: lastPositionMs ?? this.lastPositionMs,
     totalDurationMs: totalDurationMs ?? this.totalDurationMs,
     lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
@@ -996,6 +1096,9 @@ class PlaybackHistoryTableData extends DataClass
       thumbnailUrl: data.thumbnailUrl.present
           ? data.thumbnailUrl.value
           : this.thumbnailUrl,
+      thumbnailBytes: data.thumbnailBytes.present
+          ? data.thumbnailBytes.value
+          : this.thumbnailBytes,
       lastPositionMs: data.lastPositionMs.present
           ? data.lastPositionMs.value
           : this.lastPositionMs,
@@ -1018,6 +1121,7 @@ class PlaybackHistoryTableData extends DataClass
           ..write('mediaType: $mediaType, ')
           ..write('isLocalFile: $isLocalFile, ')
           ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('thumbnailBytes: $thumbnailBytes, ')
           ..write('lastPositionMs: $lastPositionMs, ')
           ..write('totalDurationMs: $totalDurationMs, ')
           ..write('lastPlayedAt: $lastPlayedAt, ')
@@ -1034,6 +1138,7 @@ class PlaybackHistoryTableData extends DataClass
     mediaType,
     isLocalFile,
     thumbnailUrl,
+    $driftBlobEquality.hash(thumbnailBytes),
     lastPositionMs,
     totalDurationMs,
     lastPlayedAt,
@@ -1049,6 +1154,10 @@ class PlaybackHistoryTableData extends DataClass
           other.mediaType == this.mediaType &&
           other.isLocalFile == this.isLocalFile &&
           other.thumbnailUrl == this.thumbnailUrl &&
+          $driftBlobEquality.equals(
+            other.thumbnailBytes,
+            this.thumbnailBytes,
+          ) &&
           other.lastPositionMs == this.lastPositionMs &&
           other.totalDurationMs == this.totalDurationMs &&
           other.lastPlayedAt == this.lastPlayedAt &&
@@ -1063,6 +1172,7 @@ class PlaybackHistoryTableCompanion
   final Value<String> mediaType;
   final Value<bool> isLocalFile;
   final Value<String?> thumbnailUrl;
+  final Value<Uint8List?> thumbnailBytes;
   final Value<int> lastPositionMs;
   final Value<int> totalDurationMs;
   final Value<DateTime> lastPlayedAt;
@@ -1075,6 +1185,7 @@ class PlaybackHistoryTableCompanion
     this.mediaType = const Value.absent(),
     this.isLocalFile = const Value.absent(),
     this.thumbnailUrl = const Value.absent(),
+    this.thumbnailBytes = const Value.absent(),
     this.lastPositionMs = const Value.absent(),
     this.totalDurationMs = const Value.absent(),
     this.lastPlayedAt = const Value.absent(),
@@ -1088,6 +1199,7 @@ class PlaybackHistoryTableCompanion
     required String mediaType,
     this.isLocalFile = const Value.absent(),
     this.thumbnailUrl = const Value.absent(),
+    this.thumbnailBytes = const Value.absent(),
     this.lastPositionMs = const Value.absent(),
     this.totalDurationMs = const Value.absent(),
     required DateTime lastPlayedAt,
@@ -1105,6 +1217,7 @@ class PlaybackHistoryTableCompanion
     Expression<String>? mediaType,
     Expression<bool>? isLocalFile,
     Expression<String>? thumbnailUrl,
+    Expression<Uint8List>? thumbnailBytes,
     Expression<int>? lastPositionMs,
     Expression<int>? totalDurationMs,
     Expression<DateTime>? lastPlayedAt,
@@ -1118,6 +1231,7 @@ class PlaybackHistoryTableCompanion
       if (mediaType != null) 'media_type': mediaType,
       if (isLocalFile != null) 'is_local_file': isLocalFile,
       if (thumbnailUrl != null) 'thumbnail_url': thumbnailUrl,
+      if (thumbnailBytes != null) 'thumbnail_bytes': thumbnailBytes,
       if (lastPositionMs != null) 'last_position_ms': lastPositionMs,
       if (totalDurationMs != null) 'total_duration_ms': totalDurationMs,
       if (lastPlayedAt != null) 'last_played_at': lastPlayedAt,
@@ -1133,6 +1247,7 @@ class PlaybackHistoryTableCompanion
     Value<String>? mediaType,
     Value<bool>? isLocalFile,
     Value<String?>? thumbnailUrl,
+    Value<Uint8List?>? thumbnailBytes,
     Value<int>? lastPositionMs,
     Value<int>? totalDurationMs,
     Value<DateTime>? lastPlayedAt,
@@ -1146,6 +1261,7 @@ class PlaybackHistoryTableCompanion
       mediaType: mediaType ?? this.mediaType,
       isLocalFile: isLocalFile ?? this.isLocalFile,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      thumbnailBytes: thumbnailBytes ?? this.thumbnailBytes,
       lastPositionMs: lastPositionMs ?? this.lastPositionMs,
       totalDurationMs: totalDurationMs ?? this.totalDurationMs,
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
@@ -1175,6 +1291,9 @@ class PlaybackHistoryTableCompanion
     if (thumbnailUrl.present) {
       map['thumbnail_url'] = Variable<String>(thumbnailUrl.value);
     }
+    if (thumbnailBytes.present) {
+      map['thumbnail_bytes'] = Variable<Uint8List>(thumbnailBytes.value);
+    }
     if (lastPositionMs.present) {
       map['last_position_ms'] = Variable<int>(lastPositionMs.value);
     }
@@ -1202,6 +1321,7 @@ class PlaybackHistoryTableCompanion
           ..write('mediaType: $mediaType, ')
           ..write('isLocalFile: $isLocalFile, ')
           ..write('thumbnailUrl: $thumbnailUrl, ')
+          ..write('thumbnailBytes: $thumbnailBytes, ')
           ..write('lastPositionMs: $lastPositionMs, ')
           ..write('totalDurationMs: $totalDurationMs, ')
           ..write('lastPlayedAt: $lastPlayedAt, ')
@@ -1586,6 +1706,7 @@ typedef $$PlaybackQueueTableTableCreateCompanionBuilder =
       required String mediaType,
       required String title,
       Value<String?> thumbnail,
+      Value<Uint8List?> thumbnailBytes,
       Value<int?> durationMs,
       Value<bool> isLocalFile,
       required int queueOrder,
@@ -1599,6 +1720,7 @@ typedef $$PlaybackQueueTableTableUpdateCompanionBuilder =
       Value<String> mediaType,
       Value<String> title,
       Value<String?> thumbnail,
+      Value<Uint8List?> thumbnailBytes,
       Value<int?> durationMs,
       Value<bool> isLocalFile,
       Value<int> queueOrder,
@@ -1637,6 +1759,11 @@ class $$PlaybackQueueTableTableFilterComposer
 
   ColumnFilters<String> get thumbnail => $composableBuilder(
     column: $table.thumbnail,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1695,6 +1822,11 @@ class $$PlaybackQueueTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
     builder: (column) => ColumnOrderings(column),
@@ -1739,6 +1871,11 @@ class $$PlaybackQueueTableTableAnnotationComposer
 
   GeneratedColumn<String> get thumbnail =>
       $composableBuilder(column: $table.thumbnail, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
@@ -1804,6 +1941,7 @@ class $$PlaybackQueueTableTableTableManager
                 Value<String> mediaType = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> thumbnail = const Value.absent(),
+                Value<Uint8List?> thumbnailBytes = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
                 Value<bool> isLocalFile = const Value.absent(),
                 Value<int> queueOrder = const Value.absent(),
@@ -1815,6 +1953,7 @@ class $$PlaybackQueueTableTableTableManager
                 mediaType: mediaType,
                 title: title,
                 thumbnail: thumbnail,
+                thumbnailBytes: thumbnailBytes,
                 durationMs: durationMs,
                 isLocalFile: isLocalFile,
                 queueOrder: queueOrder,
@@ -1828,6 +1967,7 @@ class $$PlaybackQueueTableTableTableManager
                 required String mediaType,
                 required String title,
                 Value<String?> thumbnail = const Value.absent(),
+                Value<Uint8List?> thumbnailBytes = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
                 Value<bool> isLocalFile = const Value.absent(),
                 required int queueOrder,
@@ -1839,6 +1979,7 @@ class $$PlaybackQueueTableTableTableManager
                 mediaType: mediaType,
                 title: title,
                 thumbnail: thumbnail,
+                thumbnailBytes: thumbnailBytes,
                 durationMs: durationMs,
                 isLocalFile: isLocalFile,
                 queueOrder: queueOrder,
@@ -1893,6 +2034,7 @@ typedef $$PlaybackHistoryTableTableCreateCompanionBuilder =
       required String mediaType,
       Value<bool> isLocalFile,
       Value<String?> thumbnailUrl,
+      Value<Uint8List?> thumbnailBytes,
       Value<int> lastPositionMs,
       Value<int> totalDurationMs,
       required DateTime lastPlayedAt,
@@ -1907,6 +2049,7 @@ typedef $$PlaybackHistoryTableTableUpdateCompanionBuilder =
       Value<String> mediaType,
       Value<bool> isLocalFile,
       Value<String?> thumbnailUrl,
+      Value<Uint8List?> thumbnailBytes,
       Value<int> lastPositionMs,
       Value<int> totalDurationMs,
       Value<DateTime> lastPlayedAt,
@@ -1950,6 +2093,11 @@ class $$PlaybackHistoryTableTableFilterComposer
 
   ColumnFilters<String> get thumbnailUrl => $composableBuilder(
     column: $table.thumbnailUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2013,6 +2161,11 @@ class $$PlaybackHistoryTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get lastPositionMs => $composableBuilder(
     column: $table.lastPositionMs,
     builder: (column) => ColumnOrderings(column),
@@ -2062,6 +2215,11 @@ class $$PlaybackHistoryTableTableAnnotationComposer
 
   GeneratedColumn<String> get thumbnailUrl => $composableBuilder(
     column: $table.thumbnailUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<Uint8List> get thumbnailBytes => $composableBuilder(
+    column: $table.thumbnailBytes,
     builder: (column) => column,
   );
 
@@ -2133,6 +2291,7 @@ class $$PlaybackHistoryTableTableTableManager
                 Value<String> mediaType = const Value.absent(),
                 Value<bool> isLocalFile = const Value.absent(),
                 Value<String?> thumbnailUrl = const Value.absent(),
+                Value<Uint8List?> thumbnailBytes = const Value.absent(),
                 Value<int> lastPositionMs = const Value.absent(),
                 Value<int> totalDurationMs = const Value.absent(),
                 Value<DateTime> lastPlayedAt = const Value.absent(),
@@ -2145,6 +2304,7 @@ class $$PlaybackHistoryTableTableTableManager
                 mediaType: mediaType,
                 isLocalFile: isLocalFile,
                 thumbnailUrl: thumbnailUrl,
+                thumbnailBytes: thumbnailBytes,
                 lastPositionMs: lastPositionMs,
                 totalDurationMs: totalDurationMs,
                 lastPlayedAt: lastPlayedAt,
@@ -2159,6 +2319,7 @@ class $$PlaybackHistoryTableTableTableManager
                 required String mediaType,
                 Value<bool> isLocalFile = const Value.absent(),
                 Value<String?> thumbnailUrl = const Value.absent(),
+                Value<Uint8List?> thumbnailBytes = const Value.absent(),
                 Value<int> lastPositionMs = const Value.absent(),
                 Value<int> totalDurationMs = const Value.absent(),
                 required DateTime lastPlayedAt,
@@ -2171,6 +2332,7 @@ class $$PlaybackHistoryTableTableTableManager
                 mediaType: mediaType,
                 isLocalFile: isLocalFile,
                 thumbnailUrl: thumbnailUrl,
+                thumbnailBytes: thumbnailBytes,
                 lastPositionMs: lastPositionMs,
                 totalDurationMs: totalDurationMs,
                 lastPlayedAt: lastPlayedAt,

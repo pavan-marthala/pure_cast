@@ -217,6 +217,12 @@ class PureCastMedia {
   final List<PureCastSubtitleTrack> subtitles;
   final PureCastSubtitleTrack? defaultSubtitle;
 
+  /// Where the first load of this item should start.
+  ///
+  /// This is a transient UI hint: it is never written to the queue database and
+  /// is ignored by [==]. Auto-advance loads items with no start position.
+  final Duration? startPosition;
+
   const PureCastMedia({
     required this.uri,
     required this.type,
@@ -227,6 +233,7 @@ class PureCastMedia {
     this.isLocalFile = false,
     this.subtitles = const [],
     this.defaultSubtitle,
+    this.startPosition,
   });
 
   @override
@@ -257,6 +264,7 @@ class PureCastMedia {
     bool? isLocalFile,
     List<PureCastSubtitleTrack>? subtitles,
     PureCastSubtitleTrack? defaultSubtitle,
+    Duration? startPosition,
   }) {
     return PureCastMedia(
       uri: uri ?? this.uri,
@@ -268,6 +276,7 @@ class PureCastMedia {
       isLocalFile: isLocalFile ?? this.isLocalFile,
       subtitles: subtitles ?? this.subtitles,
       defaultSubtitle: defaultSubtitle ?? this.defaultSubtitle,
+      startPosition: startPosition ?? this.startPosition,
     );
   }
 

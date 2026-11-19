@@ -18,6 +18,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
   QueueBloc(this._db, this._mediaRepository) : super(const QueueState()) {
     on<LoadQueueEvent>(_onLoadQueue);
     on<AddToQueueEvent>(_onAddToQueue);
+    on<PlayMediaInQueueEvent>(_onPlayMediaInQueue);
     on<RemoveFromQueueEvent>(_onRemoveFromQueue);
     on<ReorderQueueEvent>(_onReorderQueue);
     on<ClearQueueEvent>(_onClearQueue);
@@ -41,6 +42,7 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
               type: _mapStringToMediaType(r.mediaType),
               title: r.title,
               thumbnailUrl: r.thumbnail,
+              thumbnailBytes: r.thumbnailBytes,
               duration: r.durationMs != null
                   ? Duration(milliseconds: r.durationMs!)
                   : null,
@@ -68,6 +70,24 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     Emitter<QueueState> emit,
   ) async {
     try {
+      // Never queue the same media twice. Selecting the existing entry also
+      // makes a repeated tap play it instead of creating a duplicate.
+      final existingIndex = state.items.indexWhere(
+        (i) => i.uri == event.media.uri,
+      );
+      if (existingIndex != -1) {
+        emit(
+          state.copyWith(
+            currentIndex: existingIndex,
+            status: StateStatus.loaded,
+            restoredFromStorage: false,
+            playRequestId: state.playRequestId + 1,
+            pendingStartPosition: null,
+          ),
+        );
+        return;
+      }
+
       final updatedItems = List<PureCastMedia>.from(state.items)
         ..add(event.media);
 
@@ -83,6 +103,45 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
         ),
       );
       await _persistQueue(updatedItems);
+    } catch (e) {
+      emit(state.copyWith(status: StateStatus.error, error: e.toString()));
+    }
+  }
+
+  Future<void> _onPlayMediaInQueue(
+    PlayMediaInQueueEvent event,
+    Emitter<QueueState> emit,
+  ) async {
+    try {
+      // The queue entry itself never stores the one-shot resume offset.
+      final item = _withoutStartPosition(event.media);
+      final updatedItems = List<PureCastMedia>.from(state.items);
+      final existingIndex = updatedItems.indexWhere((i) => i.uri == item.uri);
+
+      final int index;
+      var shouldPersist = false;
+      if (existingIndex == -1) {
+        updatedItems.add(item);
+        index = updatedItems.length - 1;
+        shouldPersist = true;
+      } else {
+        updatedItems[existingIndex] = item;
+        index = existingIndex;
+      }
+
+      emit(
+        state.copyWith(
+          items: updatedItems,
+          currentIndex: index,
+          status: StateStatus.loaded,
+          restoredFromStorage: false,
+          playRequestId: state.playRequestId + 1,
+          pendingStartPosition: event.startPosition,
+        ),
+      );
+      if (shouldPersist) {
+        await _persistQueue(updatedItems);
+      }
     } catch (e) {
       emit(state.copyWith(status: StateStatus.error, error: e.toString()));
     }
@@ -111,7 +170,6 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
           items: updatedItems,
           currentIndex: newIndex,
           status: status,
-          restoredFromStorage: false,
         ),
       );
       await _persistQueue(updatedItems);
@@ -135,7 +193,6 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
         state.copyWith(
           items: updatedItems,
           status: StateStatus.loaded,
-          restoredFromStorage: false,
         ),
       );
       await _persistQueue(updatedItems);
@@ -215,17 +272,38 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       if (pickedItems.isEmpty) {
         emit(
           state.copyWith(
-            status: StateStatus.loaded,
+            status: state.items.isEmpty
+                ? StateStatus.empty
+                : StateStatus.loaded,
             error: null,
-            restoredFromStorage: false,
           ),
         );
         return;
       }
 
-      // Add picked files to the existing queue instead of replacing it.
+      // Add picked files to the existing queue instead of replacing it, and
+      // skip files that are already queued.
+      final knownUris = state.items.map((i) => i.uri).toSet();
+      final newItems = <PureCastMedia>[];
+      for (final item in pickedItems) {
+        if (knownUris.add(item.uri)) {
+          newItems.add(item);
+        }
+      }
+      if (newItems.isEmpty) {
+        emit(
+          state.copyWith(
+            status: state.items.isEmpty
+                ? StateStatus.empty
+                : StateStatus.loaded,
+            error: null,
+          ),
+        );
+        return;
+      }
+
       final updatedItems = List<PureCastMedia>.from(state.items)
-        ..addAll(pickedItems);
+        ..addAll(newItems);
 
       // If the queue was previously empty, start at the first item.
       final newIndex = state.items.isEmpty ? 0 : state.currentIndex;
@@ -250,11 +328,12 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
       final index = e.key;
       final media = e.value;
       return PlaybackQueueTableCompanion(
-        id: drift.Value('${media.uri}_$index'),
+        id: drift.Value(media.uri),
         mediaUri: drift.Value(media.uri),
         mediaType: drift.Value(media.type.name),
         title: drift.Value(media.title),
         thumbnail: drift.Value(media.thumbnailUrl),
+        thumbnailBytes: drift.Value(media.thumbnailBytes),
         durationMs: drift.Value(media.duration?.inMilliseconds),
         isLocalFile: drift.Value(media.isLocalFile),
         queueOrder: drift.Value(index),
@@ -263,6 +342,24 @@ class QueueBloc extends Bloc<QueueEvent, QueueState> {
     }).toList();
 
     await _db.saveQueue(companions);
+  }
+
+  /// A copy of [media] without the transient resume offset.
+  ///
+  /// Queue entries must never carry a start position: auto-advance loads the
+  /// next entry without seeking.
+  static PureCastMedia _withoutStartPosition(PureCastMedia media) {
+    return PureCastMedia(
+      uri: media.uri,
+      type: media.type,
+      title: media.title,
+      thumbnailUrl: media.thumbnailUrl,
+      thumbnailBytes: media.thumbnailBytes,
+      duration: media.duration,
+      isLocalFile: media.isLocalFile,
+      subtitles: media.subtitles,
+      defaultSubtitle: media.defaultSubtitle,
+    );
   }
 
   static PureCastMediaType _mapStringToMediaType(String str) {

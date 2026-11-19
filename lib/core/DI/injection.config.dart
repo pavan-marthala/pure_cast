@@ -63,12 +63,15 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i187.PlaybackHistoryRepository>(
       () => _i187.PlaybackHistoryRepository(gh<_i600.AppDatabase>()),
     );
-    gh.factory<_i597.MediaBloc>(
-      () => _i597.MediaBloc(gh<_i270.MediaRepository>()),
-    );
     gh.factory<_i723.QueueBloc>(
       () =>
           _i723.QueueBloc(gh<_i600.AppDatabase>(), gh<_i270.MediaRepository>()),
+    );
+    gh.factory<_i597.MediaBloc>(
+      () => _i597.MediaBloc(
+        gh<_i270.MediaRepository>(),
+        gh<_i187.PlaybackHistoryRepository>(),
+      ),
     );
     gh.factory<_i36.RecentlyPlayedBloc>(
       () => _i36.RecentlyPlayedBloc(gh<_i187.PlaybackHistoryRepository>()),
@@ -79,12 +82,11 @@ extension GetItInjectableX on _i174.GetIt {
     gh.lazySingleton<_i1041.SubtitleExtractionService>(
       () => _i1041.SubtitleExtractionService(gh<_i215.SubtitleMetadataCache>()),
     );
+    gh.factory<_i619.CastDiscoveryBloc>(
+      () => _i619.CastDiscoveryBloc(gh<_i1071.ICastService>()),
+    );
     gh.lazySingleton<_i755.PlaybackCoordinator>(
       () => _i755.PlaybackCoordinator(gh<_i187.PlaybackHistoryRepository>()),
-    );
-    gh.factory<_i436.SubtitleExtractionBloc>(
-      () =>
-          _i436.SubtitleExtractionBloc(gh<_i1041.SubtitleExtractionService>()),
     );
     gh.factory<_i445.CastSessionBloc>(
       () => _i445.CastSessionBloc(
@@ -92,8 +94,9 @@ extension GetItInjectableX on _i174.GetIt {
         gh<_i187.PlaybackHistoryRepository>(),
       ),
     );
-    gh.factory<_i619.CastDiscoveryBloc>(
-      () => _i619.CastDiscoveryBloc(gh<_i1071.ICastService>()),
+    gh.factory<_i436.SubtitleExtractionBloc>(
+      () =>
+          _i436.SubtitleExtractionBloc(gh<_i1041.SubtitleExtractionService>()),
     );
     return this;
   }

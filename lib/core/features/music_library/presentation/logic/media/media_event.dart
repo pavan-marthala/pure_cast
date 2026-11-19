@@ -7,4 +7,5 @@ abstract class MediaEvent with _$MediaEvent {
     @Default(RequestType.common) RequestType filterType,
   }) = LoadMediaItemsEvent;
   const factory MediaEvent.loadNextPage() = LoadNextPageMediaEvent;
+  const factory MediaEvent.refreshProgress() = RefreshMediaProgressEvent;
 }

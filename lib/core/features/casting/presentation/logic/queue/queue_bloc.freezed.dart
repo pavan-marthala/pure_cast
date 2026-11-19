@@ -56,12 +56,13 @@ extension QueueEventPatterns on QueueEvent {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( LoadQueueEvent value)?  loadQueue,TResult Function( AddToQueueEvent value)?  addToQueue,TResult Function( RemoveFromQueueEvent value)?  removeFromQueue,TResult Function( ReorderQueueEvent value)?  reorderQueue,TResult Function( ClearQueueEvent value)?  clearQueue,TResult Function( NextQueueItemEvent value)?  nextQueueItem,TResult Function( PreviousQueueItemEvent value)?  previousQueueItem,TResult Function( SetCurrentIndexEvent value)?  setCurrentIndex,TResult Function( PicFilesEvent value)?  pickFiles,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( LoadQueueEvent value)?  loadQueue,TResult Function( AddToQueueEvent value)?  addToQueue,TResult Function( PlayMediaInQueueEvent value)?  playMedia,TResult Function( RemoveFromQueueEvent value)?  removeFromQueue,TResult Function( ReorderQueueEvent value)?  reorderQueue,TResult Function( ClearQueueEvent value)?  clearQueue,TResult Function( NextQueueItemEvent value)?  nextQueueItem,TResult Function( PreviousQueueItemEvent value)?  previousQueueItem,TResult Function( SetCurrentIndexEvent value)?  setCurrentIndex,TResult Function( PicFilesEvent value)?  pickFiles,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case LoadQueueEvent() when loadQueue != null:
 return loadQueue(_that);case AddToQueueEvent() when addToQueue != null:
-return addToQueue(_that);case RemoveFromQueueEvent() when removeFromQueue != null:
+return addToQueue(_that);case PlayMediaInQueueEvent() when playMedia != null:
+return playMedia(_that);case RemoveFromQueueEvent() when removeFromQueue != null:
 return removeFromQueue(_that);case ReorderQueueEvent() when reorderQueue != null:
 return reorderQueue(_that);case ClearQueueEvent() when clearQueue != null:
 return clearQueue(_that);case NextQueueItemEvent() when nextQueueItem != null:
@@ -86,12 +87,13 @@ return pickFiles(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( LoadQueueEvent value)  loadQueue,required TResult Function( AddToQueueEvent value)  addToQueue,required TResult Function( RemoveFromQueueEvent value)  removeFromQueue,required TResult Function( ReorderQueueEvent value)  reorderQueue,required TResult Function( ClearQueueEvent value)  clearQueue,required TResult Function( NextQueueItemEvent value)  nextQueueItem,required TResult Function( PreviousQueueItemEvent value)  previousQueueItem,required TResult Function( SetCurrentIndexEvent value)  setCurrentIndex,required TResult Function( PicFilesEvent value)  pickFiles,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( LoadQueueEvent value)  loadQueue,required TResult Function( AddToQueueEvent value)  addToQueue,required TResult Function( PlayMediaInQueueEvent value)  playMedia,required TResult Function( RemoveFromQueueEvent value)  removeFromQueue,required TResult Function( ReorderQueueEvent value)  reorderQueue,required TResult Function( ClearQueueEvent value)  clearQueue,required TResult Function( NextQueueItemEvent value)  nextQueueItem,required TResult Function( PreviousQueueItemEvent value)  previousQueueItem,required TResult Function( SetCurrentIndexEvent value)  setCurrentIndex,required TResult Function( PicFilesEvent value)  pickFiles,}){
 final _that = this;
 switch (_that) {
 case LoadQueueEvent():
 return loadQueue(_that);case AddToQueueEvent():
-return addToQueue(_that);case RemoveFromQueueEvent():
+return addToQueue(_that);case PlayMediaInQueueEvent():
+return playMedia(_that);case RemoveFromQueueEvent():
 return removeFromQueue(_that);case ReorderQueueEvent():
 return reorderQueue(_that);case ClearQueueEvent():
 return clearQueue(_that);case NextQueueItemEvent():
@@ -115,12 +117,13 @@ return pickFiles(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( LoadQueueEvent value)?  loadQueue,TResult? Function( AddToQueueEvent value)?  addToQueue,TResult? Function( RemoveFromQueueEvent value)?  removeFromQueue,TResult? Function( ReorderQueueEvent value)?  reorderQueue,TResult? Function( ClearQueueEvent value)?  clearQueue,TResult? Function( NextQueueItemEvent value)?  nextQueueItem,TResult? Function( PreviousQueueItemEvent value)?  previousQueueItem,TResult? Function( SetCurrentIndexEvent value)?  setCurrentIndex,TResult? Function( PicFilesEvent value)?  pickFiles,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( LoadQueueEvent value)?  loadQueue,TResult? Function( AddToQueueEvent value)?  addToQueue,TResult? Function( PlayMediaInQueueEvent value)?  playMedia,TResult? Function( RemoveFromQueueEvent value)?  removeFromQueue,TResult? Function( ReorderQueueEvent value)?  reorderQueue,TResult? Function( ClearQueueEvent value)?  clearQueue,TResult? Function( NextQueueItemEvent value)?  nextQueueItem,TResult? Function( PreviousQueueItemEvent value)?  previousQueueItem,TResult? Function( SetCurrentIndexEvent value)?  setCurrentIndex,TResult? Function( PicFilesEvent value)?  pickFiles,}){
 final _that = this;
 switch (_that) {
 case LoadQueueEvent() when loadQueue != null:
 return loadQueue(_that);case AddToQueueEvent() when addToQueue != null:
-return addToQueue(_that);case RemoveFromQueueEvent() when removeFromQueue != null:
+return addToQueue(_that);case PlayMediaInQueueEvent() when playMedia != null:
+return playMedia(_that);case RemoveFromQueueEvent() when removeFromQueue != null:
 return removeFromQueue(_that);case ReorderQueueEvent() when reorderQueue != null:
 return reorderQueue(_that);case ClearQueueEvent() when clearQueue != null:
 return clearQueue(_that);case NextQueueItemEvent() when nextQueueItem != null:
@@ -144,11 +147,12 @@ return pickFiles(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loadQueue,TResult Function( PureCastMedia media)?  addToQueue,TResult Function( String mediaUri)?  removeFromQueue,TResult Function( int oldIndex,  int newIndex)?  reorderQueue,TResult Function()?  clearQueue,TResult Function()?  nextQueueItem,TResult Function()?  previousQueueItem,TResult Function( int index)?  setCurrentIndex,TResult Function()?  pickFiles,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  loadQueue,TResult Function( PureCastMedia media)?  addToQueue,TResult Function( PureCastMedia media,  Duration? startPosition)?  playMedia,TResult Function( String mediaUri)?  removeFromQueue,TResult Function( int oldIndex,  int newIndex)?  reorderQueue,TResult Function()?  clearQueue,TResult Function()?  nextQueueItem,TResult Function()?  previousQueueItem,TResult Function( int index)?  setCurrentIndex,TResult Function()?  pickFiles,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case LoadQueueEvent() when loadQueue != null:
 return loadQueue();case AddToQueueEvent() when addToQueue != null:
-return addToQueue(_that.media);case RemoveFromQueueEvent() when removeFromQueue != null:
+return addToQueue(_that.media);case PlayMediaInQueueEvent() when playMedia != null:
+return playMedia(_that.media,_that.startPosition);case RemoveFromQueueEvent() when removeFromQueue != null:
 return removeFromQueue(_that.mediaUri);case ReorderQueueEvent() when reorderQueue != null:
 return reorderQueue(_that.oldIndex,_that.newIndex);case ClearQueueEvent() when clearQueue != null:
 return clearQueue();case NextQueueItemEvent() when nextQueueItem != null:
@@ -173,11 +177,12 @@ return pickFiles();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loadQueue,required TResult Function( PureCastMedia media)  addToQueue,required TResult Function( String mediaUri)  removeFromQueue,required TResult Function( int oldIndex,  int newIndex)  reorderQueue,required TResult Function()  clearQueue,required TResult Function()  nextQueueItem,required TResult Function()  previousQueueItem,required TResult Function( int index)  setCurrentIndex,required TResult Function()  pickFiles,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  loadQueue,required TResult Function( PureCastMedia media)  addToQueue,required TResult Function( PureCastMedia media,  Duration? startPosition)  playMedia,required TResult Function( String mediaUri)  removeFromQueue,required TResult Function( int oldIndex,  int newIndex)  reorderQueue,required TResult Function()  clearQueue,required TResult Function()  nextQueueItem,required TResult Function()  previousQueueItem,required TResult Function( int index)  setCurrentIndex,required TResult Function()  pickFiles,}) {final _that = this;
 switch (_that) {
 case LoadQueueEvent():
 return loadQueue();case AddToQueueEvent():
-return addToQueue(_that.media);case RemoveFromQueueEvent():
+return addToQueue(_that.media);case PlayMediaInQueueEvent():
+return playMedia(_that.media,_that.startPosition);case RemoveFromQueueEvent():
 return removeFromQueue(_that.mediaUri);case ReorderQueueEvent():
 return reorderQueue(_that.oldIndex,_that.newIndex);case ClearQueueEvent():
 return clearQueue();case NextQueueItemEvent():
@@ -201,11 +206,12 @@ return pickFiles();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loadQueue,TResult? Function( PureCastMedia media)?  addToQueue,TResult? Function( String mediaUri)?  removeFromQueue,TResult? Function( int oldIndex,  int newIndex)?  reorderQueue,TResult? Function()?  clearQueue,TResult? Function()?  nextQueueItem,TResult? Function()?  previousQueueItem,TResult? Function( int index)?  setCurrentIndex,TResult? Function()?  pickFiles,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  loadQueue,TResult? Function( PureCastMedia media)?  addToQueue,TResult? Function( PureCastMedia media,  Duration? startPosition)?  playMedia,TResult? Function( String mediaUri)?  removeFromQueue,TResult? Function( int oldIndex,  int newIndex)?  reorderQueue,TResult? Function()?  clearQueue,TResult? Function()?  nextQueueItem,TResult? Function()?  previousQueueItem,TResult? Function( int index)?  setCurrentIndex,TResult? Function()?  pickFiles,}) {final _that = this;
 switch (_that) {
 case LoadQueueEvent() when loadQueue != null:
 return loadQueue();case AddToQueueEvent() when addToQueue != null:
-return addToQueue(_that.media);case RemoveFromQueueEvent() when removeFromQueue != null:
+return addToQueue(_that.media);case PlayMediaInQueueEvent() when playMedia != null:
+return playMedia(_that.media,_that.startPosition);case RemoveFromQueueEvent() when removeFromQueue != null:
 return removeFromQueue(_that.mediaUri);case ReorderQueueEvent() when reorderQueue != null:
 return reorderQueue(_that.oldIndex,_that.newIndex);case ClearQueueEvent() when clearQueue != null:
 return clearQueue();case NextQueueItemEvent() when nextQueueItem != null:
@@ -314,6 +320,76 @@ class _$AddToQueueEventCopyWithImpl<$Res>
   return _then(AddToQueueEvent(
 null == media ? _self.media : media // ignore: cast_nullable_to_non_nullable
 as PureCastMedia,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class PlayMediaInQueueEvent implements QueueEvent {
+  const PlayMediaInQueueEvent(this.media, {this.startPosition});
+  
+
+ final  PureCastMedia media;
+ final  Duration? startPosition;
+
+/// Create a copy of QueueEvent
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$PlayMediaInQueueEventCopyWith<PlayMediaInQueueEvent> get copyWith => _$PlayMediaInQueueEventCopyWithImpl<PlayMediaInQueueEvent>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is PlayMediaInQueueEvent&&(identical(other.media, media) || other.media == media)&&(identical(other.startPosition, startPosition) || other.startPosition == startPosition));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,media,startPosition);
+}
+
+@override
+String toString() {
+    return 'QueueEvent.playMedia(media: $media, startPosition: $startPosition)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $PlayMediaInQueueEventCopyWith<$Res> implements $QueueEventCopyWith<$Res> {
+  factory $PlayMediaInQueueEventCopyWith(PlayMediaInQueueEvent value, $Res Function(PlayMediaInQueueEvent) _then) = _$PlayMediaInQueueEventCopyWithImpl;
+@useResult
+$Res call({
+ PureCastMedia media, Duration? startPosition
+});
+
+
+
+
+}
+/// @nodoc
+class _$PlayMediaInQueueEventCopyWithImpl<$Res>
+    implements $PlayMediaInQueueEventCopyWith<$Res> {
+  _$PlayMediaInQueueEventCopyWithImpl(this._self, this._then);
+
+  final PlayMediaInQueueEvent _self;
+  final $Res Function(PlayMediaInQueueEvent) _then;
+
+/// Create a copy of QueueEvent
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? media = null,Object? startPosition = freezed,}) {
+  return _then(PlayMediaInQueueEvent(
+null == media ? _self.media : media // ignore: cast_nullable_to_non_nullable
+as PureCastMedia,startPosition: freezed == startPosition ? _self.startPosition : startPosition // ignore: cast_nullable_to_non_nullable
+as Duration?,
   ));
 }
 
@@ -660,7 +736,13 @@ mixin _$QueueState {
  List<PureCastMedia> get items; int get currentIndex; StateStatus get status; String? get error;/// True when [items] were restored from storage on launch rather than
 /// produced by a user action. The playback coordinator must not start
 /// playback for a restored queue.
- bool get restoredFromStorage;
+ bool get restoredFromStorage;/// Incremented whenever the user explicitly asks to play a queue item.
+/// The playback coordinator loads that item (with its start position)
+/// even when the selected index did not change.
+ int get playRequestId;/// Offset applied to the next explicit play request only.
+///
+/// Transient: it is never persisted and auto-advance never reads it.
+ Duration? get pendingStartPosition;
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -672,20 +754,20 @@ $QueueStateCopyWith<QueueState> get copyWith => _$QueueStateCopyWithImpl<QueueSt
 @override
 bool operator ==(Object other) {
   final _this = this as QueueState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.currentIndex, _this.currentIndex) || other.currentIndex == _this.currentIndex)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error)&&(identical(other.restoredFromStorage, _this.restoredFromStorage) || other.restoredFromStorage == _this.restoredFromStorage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is QueueState&&const DeepCollectionEquality().equals(other.items, _this.items)&&(identical(other.currentIndex, _this.currentIndex) || other.currentIndex == _this.currentIndex)&&(identical(other.status, _this.status) || other.status == _this.status)&&(identical(other.error, _this.error) || other.error == _this.error)&&(identical(other.restoredFromStorage, _this.restoredFromStorage) || other.restoredFromStorage == _this.restoredFromStorage)&&(identical(other.playRequestId, _this.playRequestId) || other.playRequestId == _this.playRequestId)&&(identical(other.pendingStartPosition, _this.pendingStartPosition) || other.pendingStartPosition == _this.pendingStartPosition));
 }
 
 
 @override
 int get hashCode {
   final _this = this as QueueState;
-  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.items),_this.currentIndex,_this.status,_this.error,_this.restoredFromStorage);
+  return Object.hash(runtimeType,const DeepCollectionEquality().hash(_this.items),_this.currentIndex,_this.status,_this.error,_this.restoredFromStorage,_this.playRequestId,_this.pendingStartPosition);
 }
 
 @override
 String toString() {
   final _this = this as QueueState;
-  return 'QueueState(items: ${_this.items}, currentIndex: ${_this.currentIndex}, status: ${_this.status}, error: ${_this.error}, restoredFromStorage: ${_this.restoredFromStorage})';
+  return 'QueueState(items: ${_this.items}, currentIndex: ${_this.currentIndex}, status: ${_this.status}, error: ${_this.error}, restoredFromStorage: ${_this.restoredFromStorage}, playRequestId: ${_this.playRequestId}, pendingStartPosition: ${_this.pendingStartPosition})';
 }
 
 
@@ -696,7 +778,7 @@ abstract mixin class $QueueStateCopyWith<$Res>  {
   factory $QueueStateCopyWith(QueueState value, $Res Function(QueueState) _then) = _$QueueStateCopyWithImpl;
 @useResult
 $Res call({
- List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage
+ List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage, int playRequestId, Duration? pendingStartPosition
 });
 
 
@@ -713,14 +795,16 @@ class _$QueueStateCopyWithImpl<$Res>
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,Object? playRequestId = null,Object? pendingStartPosition = freezed,}) {
   return _then(QueueState(
 items: null == items ? _self.items : items // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,currentIndex: null == currentIndex ? _self.currentIndex : currentIndex // ignore: cast_nullable_to_non_nullable
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as StateStatus,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,restoredFromStorage: null == restoredFromStorage ? _self.restoredFromStorage : restoredFromStorage // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,playRequestId: null == playRequestId ? _self.playRequestId : playRequestId // ignore: cast_nullable_to_non_nullable
+as int,pendingStartPosition: freezed == pendingStartPosition ? _self.pendingStartPosition : pendingStartPosition // ignore: cast_nullable_to_non_nullable
+as Duration?,
   ));
 }
 
@@ -805,10 +889,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage,  int playRequestId,  Duration? pendingStartPosition)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _QueueState() when $default != null:
-return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage,_that.playRequestId,_that.pendingStartPosition);case _:
   return orElse();
 
 }
@@ -826,10 +910,10 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.re
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage,  int playRequestId,  Duration? pendingStartPosition)  $default,) {final _that = this;
 switch (_that) {
 case _QueueState():
-return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage,_that.playRequestId,_that.pendingStartPosition);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -846,10 +930,10 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.re
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<PureCastMedia> items,  int currentIndex,  StateStatus status,  String? error,  bool restoredFromStorage,  int playRequestId,  Duration? pendingStartPosition)?  $default,) {final _that = this;
 switch (_that) {
 case _QueueState() when $default != null:
-return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage);case _:
+return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.restoredFromStorage,_that.playRequestId,_that.pendingStartPosition);case _:
   return null;
 
 }
@@ -861,7 +945,7 @@ return $default(_that.items,_that.currentIndex,_that.status,_that.error,_that.re
 
 
 class _QueueState implements QueueState {
-  const _QueueState({ List<PureCastMedia> items = const [], this.currentIndex = 0, this.status = StateStatus.initial, this.error, this.restoredFromStorage = false}): _items = items;
+  const _QueueState({ List<PureCastMedia> items = const [], this.currentIndex = 0, this.status = StateStatus.initial, this.error, this.restoredFromStorage = false, this.playRequestId = 0, this.pendingStartPosition}): _items = items;
   
 
  final  List<PureCastMedia> _items;
@@ -878,6 +962,14 @@ class _QueueState implements QueueState {
 /// produced by a user action. The playback coordinator must not start
 /// playback for a restored queue.
 @override@JsonKey() final  bool restoredFromStorage;
+/// Incremented whenever the user explicitly asks to play a queue item.
+/// The playback coordinator loads that item (with its start position)
+/// even when the selected index did not change.
+@override@JsonKey() final  int playRequestId;
+/// Offset applied to the next explicit play request only.
+///
+/// Transient: it is never persisted and auto-advance never reads it.
+@override final  Duration? pendingStartPosition;
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
@@ -889,18 +981,18 @@ _$QueueStateCopyWith<_QueueState> get copyWith => __$QueueStateCopyWithImpl<_Que
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error)&&(identical(other.restoredFromStorage, restoredFromStorage) || other.restoredFromStorage == restoredFromStorage));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _QueueState&&const DeepCollectionEquality().equals(other.items, _items)&&(identical(other.currentIndex, currentIndex) || other.currentIndex == currentIndex)&&(identical(other.status, status) || other.status == status)&&(identical(other.error, error) || other.error == error)&&(identical(other.restoredFromStorage, restoredFromStorage) || other.restoredFromStorage == restoredFromStorage)&&(identical(other.playRequestId, playRequestId) || other.playRequestId == playRequestId)&&(identical(other.pendingStartPosition, pendingStartPosition) || other.pendingStartPosition == pendingStartPosition));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error,restoredFromStorage);
+    return Object.hash(runtimeType,const DeepCollectionEquality().hash(_items),currentIndex,status,error,restoredFromStorage,playRequestId,pendingStartPosition);
 }
 
 @override
 String toString() {
-    return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error, restoredFromStorage: $restoredFromStorage)';
+    return 'QueueState(items: $items, currentIndex: $currentIndex, status: $status, error: $error, restoredFromStorage: $restoredFromStorage, playRequestId: $playRequestId, pendingStartPosition: $pendingStartPosition)';
 }
 
 
@@ -911,7 +1003,7 @@ abstract mixin class _$QueueStateCopyWith<$Res> implements $QueueStateCopyWith<$
   factory _$QueueStateCopyWith(_QueueState value, $Res Function(_QueueState) _then) = __$QueueStateCopyWithImpl;
 @override @useResult
 $Res call({
- List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage
+ List<PureCastMedia> items, int currentIndex, StateStatus status, String? error, bool restoredFromStorage, int playRequestId, Duration? pendingStartPosition
 });
 
 
@@ -928,14 +1020,16 @@ class __$QueueStateCopyWithImpl<$Res>
 
 /// Create a copy of QueueState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? items = null,Object? currentIndex = null,Object? status = null,Object? error = freezed,Object? restoredFromStorage = null,Object? playRequestId = null,Object? pendingStartPosition = freezed,}) {
   return _then(_QueueState(
 items: null == items ? _self._items : items // ignore: cast_nullable_to_non_nullable
 as List<PureCastMedia>,currentIndex: null == currentIndex ? _self.currentIndex : currentIndex // ignore: cast_nullable_to_non_nullable
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as StateStatus,error: freezed == error ? _self.error : error // ignore: cast_nullable_to_non_nullable
 as String?,restoredFromStorage: null == restoredFromStorage ? _self.restoredFromStorage : restoredFromStorage // ignore: cast_nullable_to_non_nullable
-as bool,
+as bool,playRequestId: null == playRequestId ? _self.playRequestId : playRequestId // ignore: cast_nullable_to_non_nullable
+as int,pendingStartPosition: freezed == pendingStartPosition ? _self.pendingStartPosition : pendingStartPosition // ignore: cast_nullable_to_non_nullable
+as Duration?,
   ));
 }
 

@@ -65,6 +65,7 @@ class RecentlyPlayedBloc extends Bloc<RecentlyPlayedEvent, RecentlyPlayedState> 
           type: _mapStringToMediaType(item.mediaType),
           title: item.title,
           thumbnailUrl: item.thumbnailUrl,
+          thumbnailBytes: item.thumbnailBytes,
           duration: item.totalDurationMs > 0
               ? Duration(milliseconds: item.totalDurationMs)
               : null,

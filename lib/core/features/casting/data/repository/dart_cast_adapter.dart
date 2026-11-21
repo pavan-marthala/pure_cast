@@ -199,13 +199,8 @@ class DartCastAdapter implements ICastService {
     if (session == null) {
       throw const PureCastException('No active cast session');
     }
-    if (session is! dart_cast.ChromecastSession) {
-      throw const PureCastException(
-        'Live MKV cast requires a Chromecast session',
-      );
-    }
     // Drop late position events from the media session being replaced.
-    _liveTimeline.armRestart(session.mediaSessionId);
+    _liveTimeline.armRestart(session.liveSessionToken);
     try {
       await session.switchLiveAudio(
         filePath: filePath,
@@ -240,16 +235,12 @@ class DartCastAdapter implements ICastService {
     if (session == null) {
       throw const PureCastException('No active cast session');
     }
-    if (session is! dart_cast.ChromecastSession) {
-      throw const PureCastException(
-        'Live MKV cast requires a Chromecast session',
-      );
-    }
-    // A subtitle restarts the live stream (new media session) exactly like an
-    // audio switch, so late events from the replaced session must be dropped.
-    // Disabling subtitles keeps the session, so the guard stays disarmed.
+    // A subtitle restarts the live stream (new playback session) exactly like
+    // an audio switch, so late events from the replaced session must be
+    // dropped. Disabling subtitles on Chromecast keeps the session, but the
+    // guard is harmless there because no replacement happens.
     if (subtitle != null) {
-      _liveTimeline.armRestart(session.mediaSessionId);
+      _liveTimeline.armRestart(session.liveSessionToken);
     }
     try {
       await session.switchLiveSubtitle(
@@ -303,23 +294,18 @@ class DartCastAdapter implements ICastService {
 
   @override
   Duration get liveStartOffset {
-    final session = _castService.activeSession;
-    if (session is dart_cast.ChromecastSession) {
-      return session.liveStartOffset;
-    }
-    return Duration.zero;
+    return _castService.activeSession?.liveStartOffset ?? Duration.zero;
   }
 
   @override
   bool get isLiveStream {
-    final session = _castService.activeSession;
-    return session is dart_cast.ChromecastSession && session.isLive;
+    return _castService.activeSession?.isLive ?? false;
   }
 
   @override
   List<PureCastAudioTrack> get audioTracks {
     final session = _castService.activeSession;
-    if (session is! dart_cast.ChromecastSession || !session.isLive) {
+    if (session == null || !session.isLive) {
       return const [];
     }
     final streams = session.liveAudioTracks;
@@ -337,8 +323,7 @@ class DartCastAdapter implements ICastService {
 
   @override
   int get activeAudioIndex {
-    final session = _castService.activeSession;
-    return session is dart_cast.ChromecastSession ? session.liveAudioIndex : 0;
+    return _castService.activeSession?.liveAudioIndex ?? 0;
   }
 
   @override
@@ -378,15 +363,13 @@ class DartCastAdapter implements ICastService {
               ReceiverCodecMemory.record(receiverId, codecKey, directOk),
         );
       } else {
-        // DLNA / others: direct load
-        await loadMedia(
-          PureCastMedia(
-            uri: path,
-            type: PureCastMediaType.video,
-            title: '',
-            isLocalFile: true,
-            subtitles: subtitle != null ? [subtitle] : const [],
-          ),
+        // DLNA probes and plans the file itself (direct / remux / transcode).
+        await session.loadLocalFile(
+          path,
+          audioStreamIndex: audioStreamIndex,
+          caps: await _detectCaps(),
+          subtitle: dartSubtitle,
+          streamType: streamType,
         );
       }
     } catch (e) {
@@ -453,8 +436,7 @@ class DartCastAdapter implements ICastService {
   Future<void> seek(Duration position) async {
     final session = _castService.activeSession;
     if (session == null) throw const PureCastException('No active session');
-    final chromecast = session is dart_cast.ChromecastSession ? session : null;
-    final isLive = chromecast?.isLive ?? false;
+    final isLive = session.isLive;
     try {
       if (session.state == dart_cast.SessionState.idle ||
           session.state == dart_cast.SessionState.disconnected) {
@@ -462,7 +444,7 @@ class DartCastAdapter implements ICastService {
       }
       if (isLive) {
         // Live seek restarts the stream; ignore late events from the old one.
-        _liveTimeline.armRestart(chromecast!.mediaSessionId);
+        _liveTimeline.armRestart(session.liveSessionToken);
       }
       await session.seek(position);
     } catch (e) {
@@ -571,23 +553,20 @@ class DartCastAdapter implements ICastService {
     });
 
     _positionSub = session.positionStream.listen((pos) {
-      final chromecast = session is dart_cast.ChromecastSession
-          ? session
-          : null;
-      if (chromecast != null && chromecast.isLive) {
+      if (session.isLive) {
         // The receiver's clock restarts at ~0 on every live restart, so the
         // real position is offset + receiver time.
         final mapped = _liveTimeline.mapPosition(
           receiverPosition: pos,
-          offset: chromecast.liveStartOffset,
-          mediaSessionId: chromecast.mediaSessionId,
+          offset: session.liveStartOffset,
+          mediaSessionId: session.liveSessionToken,
         );
         if (mapped == null) return; // stale event from the replaced session
         _positionController.add(mapped);
         // The live stream reports no duration. Push the known source
         // duration as soon as playback produces a position event so the UI
         // has a seekable range.
-        final known = chromecast.liveDuration;
+        final known = session.liveDuration;
         if (known != null && known != _lastDurationEmitted) {
           _lastDurationEmitted = known;
           _durationController.add(known);
@@ -598,13 +577,10 @@ class DartCastAdapter implements ICastService {
     });
 
     _durationSub = session.durationStream.listen((dur) {
-      final chromecast = session is dart_cast.ChromecastSession
-          ? session
-          : null;
-      if (chromecast != null && chromecast.isLive) {
+      if (session.isLive) {
         final mapped = _liveTimeline.mapDuration(
           reportedDuration: dur,
-          knownLiveDuration: chromecast.liveDuration,
+          knownLiveDuration: session.liveDuration,
         );
         _lastDurationEmitted = mapped;
         _durationController.add(mapped);

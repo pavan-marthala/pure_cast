@@ -1,11 +1,21 @@
 import 'dart:async' show Timer, unawaited;
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
+
+import '../../core/cast_decision.dart';
 import '../../core/cast_device.dart';
+import '../../core/cast_exceptions.dart';
+import '../../core/cast_ffmpeg_commands.dart';
 import '../../core/cast_media.dart';
+import '../../core/cast_prepare_session.dart';
 import '../../core/cast_session.dart';
+import '../../core/live_mkv_stream.dart';
+import '../../core/media_probe.dart';
+import '../../core/media_prober.dart';
 import '../../core/media_proxy.dart';
 import '../../core/media_transformer.dart';
+import '../../core/webvtt_time_shifter.dart';
 import '../../utils/logger.dart';
 import '../../utils/network_utils.dart';
 import 'dlna_controller.dart';
@@ -45,7 +55,43 @@ class DlnaSession extends CastSession {
   CastSubtitle? _currentSubtitle;
   String? _currentProxyUrl;
   String? _currentProtocolInfo;
+  int? _currentFileSize;
   Duration? _pendingSeekPosition;
+
+  // ── Live remux state ──
+  //
+  // A local file whose audio/container is not directly usable is remuxed into
+  // an MKV stream on demand (video copied, audio re-encoded to AAC). The
+  // renderer's clock for such a stream starts at the point the remux began,
+  // so restarts (audio/subtitle changes, seeks) are handled by opening a new
+  // stream at the requested source offset.
+  final MediaProber _prober;
+  final Future<MediaProbe> Function(String input)? _probeFile;
+  final LiveMkvRunManager _liveRuns;
+  final Directory? _liveSubtitleTempDir;
+  Future<void> Function()? _stopPrepare;
+  Future<CastPrepareSession> Function({
+    required String inputPath,
+    required List<String> Function(String outputDir) buildArgs,
+  })?
+  _prepareStarter;
+
+  bool _isLive = false;
+  String? _liveFilePath;
+  int _liveAudioIndex = 0;
+  List<AudioStream> _liveAudioTracks = const [];
+  Duration? _liveDuration;
+  String _liveStreamType = 'BUFFERED';
+  String? _liveToken;
+  CastSubtitle? _liveSubtitle;
+  int _liveSessionToken = 0;
+  bool _restartInFlight = false;
+  bool _handingPreparedToLoad = false;
+  String? _shiftedSubtitlePath;
+  int _shiftedSubtitleSequence = 0;
+
+  /// How often the renderer is polled for position/state.
+  final Duration pollInterval;
 
   /// Creates a [DlnaSession] for the given [device] and [description].
   ///
@@ -55,16 +101,59 @@ class DlnaSession extends CastSession {
   /// the device description from the metadata set by [DlnaDiscoveryProvider].
   /// An optional [mediaTransformer] can customize how media is prepared
   /// before casting (e.g., custom segmentation, transcoding).
+  ///
+  /// [prober] overrides media probing; [probeFile] is a test seam that
+  /// replaces it entirely. [liveRuns] is a test seam for the live remux
+  /// lifecycle and [liveSubtitleTempDir] overrides where shifted live
+  /// subtitles are written.
   DlnaSession({
     required CastDevice device,
     required this.description,
     DlnaHttpClient? httpClient,
     MediaProxy? proxy,
     MediaTransformer? mediaTransformer,
+    MediaProber? prober,
+    Future<MediaProbe> Function(String input)? probeFile,
+    LiveMkvRunManager? liveRuns,
+    Directory? liveSubtitleTempDir,
+    Future<CastPrepareSession> Function({
+      required String inputPath,
+      required List<String> Function(String outputDir) buildArgs,
+    })?
+    prepareStarter,
+    this.pollInterval = const Duration(seconds: 1),
   }) : _httpClient = httpClient ?? DlnaHttpClient(),
        _proxy = proxy ?? MediaProxy(),
        _mediaTransformer = mediaTransformer ?? const DefaultMediaTransformer(),
+       _prober = prober ?? const FfprobeMediaProber(),
+       _probeFile = probeFile,
+       _liveRuns = liveRuns ?? LiveMkvRunManager.production(),
+       _liveSubtitleTempDir = liveSubtitleTempDir,
+       _prepareStarter = prepareStarter,
        super(device);
+
+  // ── Live state (parity with Chromecast) ──
+
+  @override
+  bool get isLive => _isLive;
+
+  @override
+  String? get liveFilePath => _liveFilePath;
+
+  @override
+  int get liveAudioIndex => _liveAudioIndex;
+
+  @override
+  List<AudioStream> get liveAudioTracks => _liveAudioTracks;
+
+  @override
+  Duration? get liveDuration => _liveDuration;
+
+  @override
+  Duration get liveStartOffset => _isLive ? _pipedStartOffset : Duration.zero;
+
+  @override
+  int get liveSessionToken => _liveSessionToken;
 
   /// Creates a [DlnaSession] from a [CastDevice] discovered by
   /// [DlnaDiscoveryProvider].
@@ -141,6 +230,14 @@ class DlnaSession extends CastSession {
     }
     _isLoadingMedia = true;
     try {
+      // A plain load replaces whatever live remux / prepared HLS / prepare
+      // session the previous item owned — except when the prepared HLS URL is
+      // being handed to this very load.
+      if (!_handingPreparedToLoad) {
+        await _cleanupCastResources();
+        _releaseLiveToken();
+        _resetLiveMetadata();
+      }
       await _loadMediaInternal(media);
     } catch (_) {
       // Don't get stuck in `loading` if anything below throws.
@@ -153,17 +250,32 @@ class DlnaSession extends CastSession {
     }
   }
 
-  Future<void> _loadMediaInternal(CastMedia media) async {
+  /// Loads [media] through the proxy.
+  ///
+  /// [proxyUrlOverride] skips the transformer for URLs this session already
+  /// registered itself (live remux routes). [live] marks the load as a live
+  /// remux stream, which changes the advertised seek mode and stops the poll
+  /// from adding the live offset twice.
+  Future<void> _loadMediaInternal(
+    CastMedia media, {
+    String? proxyUrlOverride,
+    bool live = false,
+  }) async {
     CastLogger.info('DLNA: loadMedia called, state=${stateMachine.state}');
     stateMachine.transitionTo(SessionState.loading);
     _currentMedia = media;
+    _currentSubtitle = media.defaultSubtitle;
 
     // Start proxy and transform media
     await _proxy.start(targetDeviceIp: device.address.address);
 
     // Use transformer for media preparation (register, wrap TS in HLS, etc.)
-    final transformed = await _mediaTransformer.transform(media, _proxy);
-    String proxyUrl = transformed.proxyUrl;
+    // unless the caller already registered the route.
+    final transformed = proxyUrlOverride == null
+        ? await _mediaTransformer.transform(media, _proxy)
+        : null;
+    String proxyUrl = proxyUrlOverride ?? transformed!.proxyUrl;
+    final effectiveType = transformed?.effectiveType ?? media.type;
     final String protocolInfo;
 
     // DLNA flags must match between DIDL-Lite protocolInfo and HTTP headers.
@@ -182,7 +294,12 @@ class DlnaSession extends CastSession {
     var isPipedStream = false;
     Duration? probedDuration;
 
-    if (media.type == CastMediaType.hls) {
+    if (live) {
+      // Live remux: no length, no byte ranges. Time seek is advertised because
+      // this session implements it by restarting the remux at the target.
+      protocolInfo =
+          'http-get:*:video/x-matroska:$opTimeSeek;DLNA.ORG_CI=1;DLNA.ORG_FLAGS=$dlnaFlags';
+    } else if (media.type == CastMediaType.hls) {
       // Remote HLS → pipe as continuous MPEG-TS stream for DLNA. The
       // handler internally detects alternate-audio HLS and muxes
       // video+audio per segment via [TsAltAudioRemuxer] so the TV
@@ -201,17 +318,17 @@ class DlnaSession extends CastSession {
       );
       protocolInfo =
           'http-get:*:video/mp2t:DLNA.ORG_PN=MPEG_TS_HD_NA_ISO;$opTimeSeek;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=$dlnaFlags';
-    } else if (transformed.effectiveType == CastMediaType.hls) {
+    } else if (effectiveType == CastMediaType.hls) {
       // Transformer wrapped media in HLS → pipe as TS stream for DLNA
       isPipedStream = true;
       probedDuration = await _proxy.probeHlsDuration(proxyUrl);
       proxyUrl = _proxy.registerHlsAsStream(proxyUrl);
       protocolInfo =
           'http-get:*:video/mp2t:DLNA.ORG_PN=MPEG_TS_HD_NA_ISO;$opTimeSeek;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=$dlnaFlags';
-    } else if (transformed.effectiveType == CastMediaType.mpegTs) {
+    } else if (effectiveType == CastMediaType.mpegTs) {
       protocolInfo =
           'http-get:*:video/mp2t:DLNA.ORG_PN=MPEG_TS_HD_NA_ISO;$opByteSeek;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=$dlnaFlags';
-    } else if (transformed.effectiveType == CastMediaType.mkv) {
+    } else if (effectiveType == CastMediaType.mkv) {
       protocolInfo =
           'http-get:*:video/x-matroska:$opByteSeek;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=$dlnaFlags';
     } else {
@@ -223,7 +340,7 @@ class DlnaSession extends CastSession {
     _currentProtocolInfo = protocolInfo;
 
     CastLogger.info(
-      'DLNA: loading media, effectiveType=${transformed.effectiveType.name}',
+      'DLNA: loading media, effectiveType=$effectiveType.name',
     );
     CastLogger.debug('DLNA: proxy URL = $proxyUrl');
     CastLogger.debug('DLNA: protocolInfo=$protocolInfo');
@@ -260,6 +377,7 @@ class DlnaSession extends CastSession {
 
     // File size for local files — helps DLNA renderer know the content length
     final fileSize = media.isLocalFile ? File(media.url).lengthSync() : null;
+    _currentFileSize = fileSize;
 
     // Send SetAVTransportURI with proxy URL (not original URL)
     await _sendAvTransport(
@@ -279,7 +397,10 @@ class DlnaSession extends CastSession {
     _knownDuration = effectiveDuration;
     _isPipedStream = isPipedStream;
     _currentTitle = media.title;
-    _pipedStartOffset = Duration.zero;
+    // A live restart sets its own source offset before loading; every other
+    // load starts at zero.
+    if (!live) _pipedStartOffset = Duration.zero;
+    _liveSessionToken++;
     if (effectiveDuration != null) {
       updateDuration(effectiveDuration);
     }
@@ -333,6 +454,32 @@ class DlnaSession extends CastSession {
   @override
   Future<void> seek(Duration position) async {
     CastLogger.info('DLNA: Seek to ${position.inSeconds}s');
+
+    if (_isLive) {
+      // A live remux has no length and no byte offsets; the only seek is a
+      // restart of the remux at the target source position.
+      if (_restartInFlight) {
+        throw StateError('A live restart is already in progress');
+      }
+      final filePath = _liveFilePath;
+      if (filePath == null) {
+        throw StateError('Live seek requested without a live source file');
+      }
+      var target = position;
+      final duration = _liveDuration;
+      if (target < Duration.zero) {
+        target = Duration.zero;
+      } else if (duration != null && target > duration) {
+        target = duration;
+      }
+      await _restartLiveStream(
+        filePath: filePath,
+        audioIndex: _liveAudioIndex,
+        position: target,
+        streamType: _liveStreamType,
+      );
+      return;
+    }
 
     if (_isPipedStream) {
       // A piped TS has no length and no byte offsets, so a renderer cannot
@@ -398,32 +545,557 @@ class DlnaSession extends CastSession {
 
   @override
   Future<void> setSubtitle(CastSubtitle? subtitle) async {
+    // A live remux is restarted at the current position so the subtitle can
+    // be re-derived for the new stream's zero point.
+    if (_isLive) {
+      await switchLiveSubtitle(subtitle: subtitle, position: position);
+      return;
+    }
+
     _currentSubtitle = subtitle;
     final media = _currentMedia;
     if (media == null || _currentProxyUrl == null) return;
 
-    String? subtitleProxyUrl;
+    // Re-issuing SetAVTransportURI resets the renderer to zero, so remember
+    // where playback was and restore it: a subtitle change must never rewind
+    // the viewer.
+    final resumeAt = position;
+
+    List<({String url, String format})>? subtitleVariants;
     if (subtitle != null) {
-      subtitleProxyUrl = _proxy.registerSubtitle(
+      subtitleVariants = _proxy.registerSubtitleVariants(
         subtitle.url,
         headers: media.httpHeaders,
       );
     }
 
-    // Re-send SetAVTransportURI with proxy URL and proxied subtitle
+    var uri = _currentProxyUrl!;
+    Duration? deferredSeek;
+    if (_isPipedStream) {
+      // Piped routes carry the start offset in the URL; there is no REL_TIME
+      // seek to fall back on.
+      if (resumeAt > Duration.zero) {
+        final seconds = resumeAt.inMilliseconds / 1000.0;
+        final separator = uri.contains('?') ? '&' : '?';
+        uri = '$uri${separator}t=${seconds.toStringAsFixed(3)}';
+        _pipedStartOffset = resumeAt;
+      } else {
+        _pipedStartOffset = Duration.zero;
+      }
+    } else if (resumeAt > Duration.zero) {
+      deferredSeek = resumeAt;
+    }
+
     await _sendAvTransport(
       'SetAVTransportURI',
       DlnaSoapBuilder.buildSetAVTransportURI(
-        _currentProxyUrl!,
+        uri,
         title: media.title,
-        subtitleUrl: subtitleProxyUrl,
+        subtitleVariants: subtitleVariants,
         protocolInfo: _currentProtocolInfo ?? 'http-get:*:video/mp4:*',
+        duration:
+            _knownDuration != null
+                ? NetworkUtils.formatDuration(_knownDuration!)
+                : null,
+        size: _isPipedStream ? null : _currentFileSize,
       ),
     );
 
-    // Resume playback
+    // Resume playback, then restore the previous position once the renderer
+    // reports PLAYING (seeking immediately after a URI change is ignored).
     await _sendAvTransport('Play', DlnaSoapBuilder.buildPlay());
+    _pendingSeekPosition = deferredSeek;
+    _startPolling();
   }
+
+  /// Loads a local file, choosing direct play, live remux or transcode.
+  ///
+  /// Mirrors the Chromecast pipeline: the file is probed once and [decide]
+  /// picks the cheapest strategy that can work. Direct play keeps the original
+  /// file; a remux plan streams an MKV with audio re-encoded to AAC; a
+  /// transcode plan prepares an HLS stream with an H.264 encoder.
+  @override
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    CastDeviceCaps caps = const CastDeviceCaps(),
+    CastSubtitle? subtitle,
+    String streamType = 'BUFFERED',
+  }) async {
+    // A new load replaces any live run / prepared HLS / previous prepare.
+    await _cleanupCastResources();
+    _releaseLiveToken();
+    _resetLiveMetadata();
+
+    final input = _localPathOf(path);
+    MediaProbe probe;
+    try {
+      final probeFile = _probeFile;
+      probe =
+          probeFile != null
+              ? await probeFile(input)
+              : await _prober.probe(input);
+    } on ProbeFailedException {
+      rethrow;
+    } catch (e) {
+      throw ProbeFailedException('Probe failed: $e', e);
+    }
+
+    final plan = decide(probe, caps);
+    final audioIdx =
+        audioStreamIndex == 0
+            ? _defaultAudioIndex(probe.audio)
+            : audioStreamIndex;
+    final mediaType = CastCompat.mediaTypeForContainer(probe.container);
+
+    if (plan is DirectPlan || plan is UncertainDirectPlan) {
+      try {
+        await loadMedia(
+          CastMedia.file(
+            filePath: path,
+            type: mediaType,
+            duration: probe.duration,
+            subtitles: subtitle != null ? [subtitle] : const [],
+            defaultSubtitle: subtitle,
+          ),
+        );
+        return;
+      } catch (e) {
+        // Only a direct attempt we were already unsure about falls through to
+        // a transcode; a definite direct plan failing is a hard error.
+        final canTranscode =
+            caps.transcodeEnabled &&
+            (caps.hasH264Encoder ||
+                caps.hasLibx264 ||
+                caps.hasH264Mediacodec);
+        if (plan is! UncertainDirectPlan || !canTranscode) {
+          throw UnsupportedMediaException(
+            'This DLNA device can\'t play this video '
+            '(${probe.video?.codec ?? 'unknown'})',
+          );
+        }
+      }
+    }
+
+    if (plan is RemuxAudioPlan || plan is RemuxContainerPlan) {
+      await loadLiveMkv(
+        filePath: path,
+        audioIndex: audioIdx,
+        streamType: streamType,
+        duration: probe.duration,
+        audioTracks: probe.audio,
+        subtitle: subtitle,
+      );
+      return;
+    }
+
+    if (plan is TranscodeVideoPlan || plan is UncertainDirectPlan) {
+      await _loadTranscoded(
+        path: path,
+        audioIndex: audioIdx,
+        caps: caps,
+        duration: probe.duration,
+        subtitle: subtitle,
+      );
+      return;
+    }
+
+    if (plan is UnsupportedPlan) {
+      throw UnsupportedMediaException('Unsupported: ${plan.reason}');
+    }
+    throw UnsupportedMediaException('Unsupported: ${plan.runtimeType}');
+  }
+
+  /// Loads a local file as a live remux stream (no disk buffering).
+  ///
+  /// [duration] and [audioTracks] let a caller that already probed the file
+  /// hand the results in, avoiding a second FFprobe.
+  Future<void> loadLiveMkv({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    Duration? duration,
+    List<AudioStream> audioTracks = const [],
+    CastSubtitle? subtitle,
+  }) async {
+    await _cleanupCastResources();
+    _releaseLiveToken();
+    _resetLiveMetadata();
+    _liveSubtitle = subtitle;
+    _pipedStartOffset = Duration.zero;
+    await _proxy.start(targetDeviceIp: device.address.address);
+
+    await _startLiveStream(
+      filePath: filePath,
+      audioIndex: audioIndex,
+      streamType: streamType,
+      duration: duration,
+      audioTracks: audioTracks,
+    );
+  }
+
+  /// Registers and loads one live MKV remux stream.
+  ///
+  /// The caller must already have closed the previous live run and released
+  /// its URL. Live metadata is published before the URI is sent so the domain
+  /// layer can map receiver time onto the source timeline right away.
+  Future<void> _startLiveStream({
+    required String filePath,
+    required int audioIndex,
+    required String streamType,
+    required Duration? duration,
+    required List<AudioStream> audioTracks,
+    double? startSeconds,
+  }) async {
+    _liveFilePath = filePath;
+    _liveAudioIndex = audioIndex;
+    _liveAudioTracks = List.unmodifiable(audioTracks);
+    _liveDuration = duration;
+    _liveStreamType = streamType;
+    _isLive = true;
+
+    final liveUrl = _proxy.registerLiveStream(
+      open: () => _liveRuns.open(
+        filePath: filePath,
+        audioIndex: audioIndex,
+        startSeconds: startSeconds,
+      ),
+      contentType: 'video/x-matroska',
+    );
+    _liveToken = Uri.parse(liveUrl).pathSegments.last;
+    CastLogger.info(
+      'DLNA: live remux registered (audio=$audioIndex, '
+      'start=${startSeconds ?? 0}s)',
+    );
+
+    // A failure to prepare subtitles downgrades the stream to "no subtitles"
+    // instead of failing the cast.
+    final liveSubtitle = await _preparedLiveSubtitle(startSeconds);
+
+    try {
+      await _loadMediaInternal(
+        CastMedia(
+          url: liveUrl,
+          type: CastMediaType.mkv,
+          title: 'Live MKV',
+          duration: duration,
+          subtitles: liveSubtitle != null ? [liveSubtitle] : const [],
+          defaultSubtitle: liveSubtitle,
+        ),
+        proxyUrlOverride: liveUrl,
+        live: true,
+      );
+    } catch (e) {
+      await _liveRuns.closeAll();
+      _releaseLiveToken();
+      _resetLiveMetadata();
+      rethrow;
+    }
+  }
+
+  /// Closes the current live stream and starts a new one at [position].
+  Future<void> _restartLiveStream({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
+  }) async {
+    if (_restartInFlight || _isLoadingMedia) {
+      throw StateError('Another cast load is already in progress');
+    }
+    _restartInFlight = true;
+    try {
+      // Switching away from a direct load has no live metadata to keep, so
+      // the caller supplies the probe results.
+      final effectiveDuration = duration ?? _liveDuration;
+      final effectiveTracks = audioTracks ?? _liveAudioTracks;
+      await _cleanupCastResources();
+      _releaseLiveToken();
+      _pipedStartOffset = position;
+      await _proxy.start(targetDeviceIp: device.address.address);
+      await _startLiveStream(
+        filePath: filePath,
+        audioIndex: audioIndex,
+        streamType: streamType,
+        duration: effectiveDuration,
+        audioTracks: effectiveTracks,
+        startSeconds: position.inMilliseconds / 1000.0,
+      );
+      CastLogger.info(
+        'DLNA: live restart complete (audio=$audioIndex, '
+        'offset=${position.inSeconds}s)',
+      );
+    } catch (e) {
+      await _liveRuns.closeAll();
+      _releaseLiveToken();
+      _resetLiveMetadata();
+      rethrow;
+    } finally {
+      _restartInFlight = false;
+    }
+  }
+
+  /// Restarts the live remux with a different audio track at [position].
+  @override
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
+  }) => _restartLiveStream(
+    filePath: filePath,
+    audioIndex: audioIndex,
+    position: position,
+    streamType: streamType,
+    duration: duration,
+    audioTracks: audioTracks,
+  );
+
+  /// Attaches, replaces or clears the live stream's subtitle.
+  ///
+  /// The remux restarts at [position] with a time-shifted copy of [subtitle],
+  /// so receiver time zero matches that source position. [subtitle] must be a
+  /// full-timeline WebVTT file; it is validated before anything changes.
+  @override
+  Future<void> switchLiveSubtitle({
+    required CastSubtitle? subtitle,
+    required Duration position,
+  }) async {
+    final filePath = _liveFilePath;
+    if (!_isLive || filePath == null) {
+      throw StateError('switchLiveSubtitle requires a live remux stream');
+    }
+    if (subtitle != null) {
+      await _validateLiveSubtitleSource(subtitle, position);
+    }
+    _liveSubtitle = subtitle;
+    await _restartLiveStream(
+      filePath: filePath,
+      audioIndex: _liveAudioIndex,
+      position: position,
+      streamType: _liveStreamType,
+    );
+  }
+
+  /// Prepares an HLS stream with an H.264 encoder and loads it.
+  ///
+  /// DLNA receives the prepared playlist as a continuous MPEG-TS pipe, which
+  /// is the same route remote HLS uses and the format TVs handle best.
+  Future<void> _loadTranscoded({
+    required String path,
+    required int audioIndex,
+    required CastDeviceCaps caps,
+    required Duration? duration,
+    CastSubtitle? subtitle,
+  }) async {
+    List<String> Function(String outputDir) builder;
+    if (caps.hasH264Mediacodec) {
+      builder =
+          (out) => CastFfmpegCommands.transcodeVideoMediacodec(
+            input: path,
+            outputDir: out,
+            audioStreamIndex: audioIndex,
+          );
+    } else if (caps.hasLibx264) {
+      builder =
+          (out) => CastFfmpegCommands.transcodeVideo(
+            input: path,
+            outputDir: out,
+            audioStreamIndex: audioIndex,
+            videoEncoder: 'libx264',
+          );
+    } else {
+      throw UnsupportedMediaException('Unsupported: no usable H.264 encoder');
+    }
+
+    final prepareStarter = _prepareStarter;
+    final prepare =
+        prepareStarter != null
+            ? await prepareStarter(inputPath: path, buildArgs: builder)
+            : await CastPrepareSession.start(
+              inputPath: path,
+              buildArgs: builder,
+            );
+    _stopPrepare = prepare.stop;
+
+    await prepare.stateStream.firstWhere(
+      (s) => s == PrepareState.ready || s == PrepareState.failed,
+    );
+    if (prepare.state != PrepareState.ready) {
+      await _cleanupCastResources();
+      throw PrepareFailedException('Prepare failed: ${prepare.error}');
+    }
+
+    await _proxy.start(targetDeviceIp: device.address.address);
+    final hlsUrl = _proxy.registerHlsDirectory(
+      prepare.sessionId,
+      prepare.tempDir.path,
+    );
+
+    // This prepare session belongs to this load — keep loadMedia's cleanup
+    // from deleting the temp dir we just prepared.
+    _handingPreparedToLoad = true;
+    try {
+      await loadMedia(
+        CastMedia(
+          url: hlsUrl,
+          type: CastMediaType.hls,
+          duration: duration,
+          subtitles: subtitle != null ? [subtitle] : const [],
+          defaultSubtitle: subtitle,
+        ),
+      );
+    } finally {
+      _handingPreparedToLoad = false;
+    }
+  }
+
+  /// Validates [subtitle] for [position] without touching live state.
+  Future<void> _validateLiveSubtitleSource(
+    CastSubtitle subtitle,
+    Duration position,
+  ) async {
+    final String text;
+    try {
+      text = await File(_localPathOf(subtitle.url)).readAsString();
+    } catch (e) {
+      throw SubtitleAttachException(
+        'Live subtitle source could not be read',
+        e,
+      );
+    }
+
+    final body = text.startsWith('\uFEFF') ? text.substring(1) : text;
+    if (!body.startsWith('WEBVTT')) {
+      throw SubtitleAttachException('Live subtitle source is not a WebVTT file');
+    }
+
+    try {
+      WebVttTimeShifter.shift(text, position);
+    } catch (e) {
+      throw SubtitleAttachException(
+        'Live subtitle source could not be time-shifted',
+        e,
+      );
+    }
+  }
+
+  /// Builds the shifted copy of [_liveSubtitle] for a run starting at
+  /// [startSeconds], or null when there is nothing to attach.
+  Future<CastSubtitle?> _preparedLiveSubtitle(double? startSeconds) async {
+    final source = _liveSubtitle;
+    if (source == null) return null;
+
+    try {
+      final text = await File(_localPathOf(source.url)).readAsString();
+      final body = text.startsWith('\uFEFF') ? text.substring(1) : text;
+      if (!body.startsWith('WEBVTT')) {
+        throw const FormatException('Not a WebVTT document');
+      }
+      final offset = Duration(
+        milliseconds: ((startSeconds ?? 0) * 1000).round(),
+      );
+      final shifted = WebVttTimeShifter.shift(text, offset);
+      final path = await _writeShiftedLiveSubtitle(shifted);
+      return CastSubtitle(
+        url: Uri.file(path).toString(),
+        label: source.label,
+        language: source.language,
+        format: 'vtt',
+      );
+    } catch (_) {
+      CastLogger.warning(
+        'DLNA: live subtitle could not be prepared; continuing without '
+        'subtitles',
+      );
+      _liveSubtitle = null;
+      await _deleteShiftedLiveSubtitle();
+      return null;
+    }
+  }
+
+  /// Writes [content] to a fresh shifted-subtitle file and returns its path.
+  Future<String> _writeShiftedLiveSubtitle(String content) async {
+    await _deleteShiftedLiveSubtitle();
+    final dir = await _resolveLiveSubtitleTempDir();
+    final path =
+        '${dir.path}/dlna_live_sub_'
+        '${DateTime.now().microsecondsSinceEpoch}_'
+        '${_shiftedSubtitleSequence++}.vtt';
+    await File(path).writeAsString(content, flush: true);
+    _shiftedSubtitlePath = path;
+    return path;
+  }
+
+  Future<Directory> _resolveLiveSubtitleTempDir() async {
+    final override = _liveSubtitleTempDir;
+    final dir =
+        override ??
+        Directory('${(await getTemporaryDirectory()).path}/dlna_live_sub_');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
+  Future<void> _deleteShiftedLiveSubtitle() async {
+    final path = _shiftedSubtitlePath;
+    _shiftedSubtitlePath = null;
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<void> _cleanupCastResources() async {
+    await _liveRuns.closeAll();
+    await _stopPrepareSession();
+    await _deleteShiftedLiveSubtitle();
+  }
+
+  Future<void> _stopPrepareSession() async {
+    final stop = _stopPrepare;
+    _stopPrepare = null;
+    if (stop != null) {
+      try {
+        await stop();
+      } catch (_) {}
+    }
+  }
+
+  /// Unregisters the live route so a late renderer request cannot start a
+  /// new run after teardown.
+  void _releaseLiveToken() {
+    final token = _liveToken;
+    _liveToken = null;
+    if (token != null) _proxy.unregisterLiveStream(token);
+  }
+
+  void _resetLiveMetadata() {
+    _isLive = false;
+    _liveFilePath = null;
+    _liveAudioIndex = 0;
+    _liveAudioTracks = const [];
+    _liveDuration = null;
+    _liveStreamType = 'BUFFERED';
+    _liveSubtitle = null;
+    unawaited(_deleteShiftedLiveSubtitle());
+  }
+
+  int _defaultAudioIndex(List<AudioStream> audio) {
+    for (var i = 0; i < audio.length; i++) {
+      if (audio[i].isDefault) return i;
+    }
+    return 0;
+  }
+
+  String _localPathOf(String url) =>
+      url.startsWith('file://') ? Uri.parse(url).toFilePath() : url;
 
   @override
   Future<void> disconnect() async {
@@ -437,6 +1109,9 @@ class DlnaSession extends CastSession {
       CastLogger.warning('DLNA: error sending Stop during disconnect: $e');
     }
 
+    await _cleanupCastResources();
+    _releaseLiveToken();
+    _resetLiveMetadata();
     await _proxy.stop();
     stateMachine.transitionTo(SessionState.disconnected);
     CastLogger.info('DLNA: disconnected from ${device.name}');
@@ -451,6 +1126,8 @@ class DlnaSession extends CastSession {
     _stopPolling();
     _httpClient.close();
     // Fire-and-forget — callers should await disconnect() before dispose() for clean shutdown
+    unawaited(_cleanupCastResources());
+    _releaseLiveToken();
     unawaited(_proxy.stop());
     super.dispose();
   }
@@ -516,7 +1193,7 @@ class DlnaSession extends CastSession {
 
   void _startPolling() {
     _stopPolling();
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
+    _pollTimer = Timer.periodic(pollInterval, (_) => _poll());
   }
 
   void _stopPolling() {
@@ -537,7 +1214,20 @@ class DlnaSession extends CastSession {
       CastLogger.debug(
         'DLNA: poll position=${posInfo.position.inSeconds}s, duration=${posInfo.duration.inSeconds}s',
       );
-      updatePosition(posInfo.position + _pipedStartOffset);
+      // A live remux restarts at a source offset, but the receiver's clock
+      // begins at zero for the new run. The domain layer adds
+      // `liveStartOffset` to map it back, so the raw value is emitted here.
+      // Piped (non-live) streams have no such mapping and are made absolute
+      // in this session.
+      // While a live restart is in flight the renderer can still answer for
+      // the stream we just replaced (or report 0 before it starts). Emitting
+      // either would move the UI's position to a bogus spot, so hold the
+      // previous position until the new run reports for itself.
+      if (!(_isLive && _restartInFlight)) {
+        updatePosition(
+          _isLive ? posInfo.position : posInfo.position + _pipedStartOffset,
+        );
+      }
       // Only trust the device's duration when we have nothing better.
       // A renderer fed a length-less piped TS reports a placeholder — this TV
       // says 0:00:01 — which would otherwise clobber the real duration probed
@@ -610,6 +1300,16 @@ class DlnaSession extends CastSession {
         }
         break;
       case 'STOPPED':
+        // The renderer briefly reports STOPPED while it swaps the transport
+        // URI for a live restart. Treating that as idle would look like
+        // playback completion to the app (which can auto-advance the queue)
+        // and would also stop polling for the new stream.
+        if (_restartInFlight || _isLoadingMedia) {
+          CastLogger.debug(
+            'DLNA: ignoring transient STOPPED during a load/restart',
+          );
+          break;
+        }
         CastLogger.info('DLNA: device reported STOPPED, transitioning to idle');
         if (state != SessionState.idle &&
             stateMachine.canTransitionTo(SessionState.idle)) {

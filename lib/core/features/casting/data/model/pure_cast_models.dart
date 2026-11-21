@@ -57,8 +57,8 @@ class PureCastCapabilities {
           canPause: true,
           canSeek: true,
           canSetVolume: true,
-          canChangeAudioTrack: false,
-          canChangeSubtitle: false,
+          canChangeAudioTrack: true,
+          canChangeSubtitle: true,
           canQueue: false,
         );
     }

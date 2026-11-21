@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:dart_cast/src/core/cast_device.dart';
 import 'package:dart_cast/src/core/cast_media.dart';
 import 'package:dart_cast/src/core/cast_session.dart';
+import 'package:dart_cast/src/core/live_mkv_stream.dart';
+import 'package:dart_cast/src/core/local_tcp_source.dart';
+import 'package:dart_cast/src/core/media_probe.dart';
 import 'package:dart_cast/src/protocols/dlna/dlna_controller.dart';
 import 'package:dart_cast/src/protocols/dlna/dlna_device.dart';
 import 'package:dart_cast/src/protocols/dlna/dlna_session.dart';
@@ -166,6 +169,36 @@ class _CapturedSoapAction {
 
   _CapturedSoapAction({required this.action, required this.body});
 }
+
+/// A [TcpSource] that never accepts a connection.
+///
+/// Live remux tests only need the route registration; the renderer never
+/// requests the URL, so no FFmpeg process should be started.
+class _IdleTcpSource implements TcpSource {
+  @override
+  final int port;
+  final StreamController<List<int>> _controller =
+      StreamController<List<int>>();
+
+  _IdleTcpSource(this.port);
+
+  @override
+  Future<Stream<List<int>>> accept({
+    Duration timeout = const Duration(seconds: 15),
+  }) async => _controller.stream;
+
+  @override
+  Future<void> close() async {
+    if (!_controller.isClosed) await _controller.close();
+  }
+}
+
+/// Builds a [LiveMkvRunManager] that never runs FFmpeg in tests.
+LiveMkvRunManager _fakeLiveRuns() => LiveMkvRunManager(
+  start: (_) async => 1,
+  cancel: (_) async {},
+  createSource: () async => _IdleTcpSource(0),
+);
 
 void main() {
   late MockDlnaServer mockServer;
@@ -862,5 +895,288 @@ void main() {
         await mockServer.stop();
       },
     );
+  });
+
+  group('DlnaSession - Chromecast feature parity', () {
+    late MockDlnaServer server;
+    late CastDevice device;
+    late DlnaDeviceDescription description;
+    late Directory workDir;
+    late String mediaPath;
+
+    const mp4Probe = MediaProbe(
+      container: 'mov,mp4,m4a,3gp,3g2,mj2',
+      durationSeconds: 4920,
+      video: VideoStream(codec: 'h264', level: 41, pixFmt: 'yuv420p'),
+      audio: [
+        AudioStream(
+          index: 1,
+          trackIndex: 0,
+          codec: 'aac',
+          channels: 2,
+          isDefault: true,
+        ),
+      ],
+    );
+
+    const mkvProbe = MediaProbe(
+      container: 'matroska,webm',
+      durationSeconds: 4920,
+      video: VideoStream(codec: 'h264', level: 41, pixFmt: 'yuv420p'),
+      audio: [
+        AudioStream(
+          index: 1,
+          trackIndex: 0,
+          codec: 'dts',
+          channels: 6,
+          language: 'eng',
+          isDefault: true,
+        ),
+        AudioStream(
+          index: 2,
+          trackIndex: 1,
+          codec: 'dts',
+          channels: 6,
+          language: 'spa',
+        ),
+      ],
+    );
+
+    setUp(() async {
+      server = MockDlnaServer();
+      await server.start();
+      server.transportState = 'PLAYING';
+      server.trackDuration = '01:22:00';
+
+      device = CastDevice(
+        id: 'uuid:parity-device',
+        name: 'Parity TV',
+        protocol: CastProtocol.dlna,
+        address: InternetAddress('127.0.0.1'),
+        port: 8080,
+      );
+      description = DlnaDeviceDescription(
+        friendlyName: 'Parity TV',
+        udn: 'uuid:parity-device',
+        avTransportControlUrl: server.avTransportUrl,
+        renderingControlUrl: server.renderingControlUrl,
+        connectionManagerControlUrl: server.connectionManagerUrl,
+        locationUrl: server.baseUrl,
+      );
+
+      workDir = await Directory.systemTemp.createTemp('dlna_parity_');
+      mediaPath = '${workDir.path}/movie.mkv';
+      await File(mediaPath).writeAsBytes(List<int>.filled(1024, 0));
+    });
+
+    tearDown(() async {
+      await server.stop();
+      if (await workDir.exists()) await workDir.delete(recursive: true);
+    });
+
+    DlnaSession buildSession({
+      MediaProbe probe = mkvProbe,
+      Future<MediaProbe> Function(String)? probeFile,
+      Duration pollInterval = const Duration(seconds: 1),
+      Directory? subtitleTempDir,
+    }) {
+      return DlnaSession(
+        device: device,
+        description: description,
+        probeFile: probeFile ?? (_) async => probe,
+        liveRuns: _fakeLiveRuns(),
+        pollInterval: pollInterval,
+        liveSubtitleTempDir: subtitleTempDir,
+      );
+    }
+
+    String lastSetUriBody() => server.capturedActions
+        .lastWhere((a) => a.action == 'SetAVTransportURI')
+        .body;
+
+    test('a directly playable file keeps the original container', () async {
+      final session = buildSession(probe: mp4Probe);
+      addTearDown(session.dispose);
+      await session.connect();
+
+      await session.loadLocalFile(mediaPath, subtitle: null);
+
+      expect(session.isLive, isFalse);
+      expect(lastSetUriBody(), contains('http-get:*:video/mp4'));
+      expect(session.liveAudioTracks, isEmpty);
+    });
+
+    test('an incompatible audio track selects the live MKV remux', () async {
+      final session = buildSession();
+      addTearDown(session.dispose);
+      await session.connect();
+
+      await session.loadLocalFile(mediaPath);
+
+      expect(session.isLive, isTrue);
+      expect(session.liveAudioIndex, 0);
+      expect(session.liveAudioTracks, hasLength(2));
+      expect(session.liveAudioTracks[1].language, 'spa');
+      expect(session.liveDuration, const Duration(minutes: 82));
+      expect(session.liveStartOffset, Duration.zero);
+      expect(lastSetUriBody(), contains('video/x-matroska'));
+      expect(lastSetUriBody(), contains('DLNA.ORG_OP=10'));
+      expect(lastSetUriBody(), contains('01:22:00'));
+    });
+
+    test('switching audio restarts the remux at the current position', () async {
+      final session = buildSession();
+      addTearDown(session.dispose);
+      await session.connect();
+      await session.loadLocalFile(mediaPath);
+      final tokenBefore = session.liveSessionToken;
+
+      await session.switchLiveAudio(
+        filePath: mediaPath,
+        audioIndex: 1,
+        position: const Duration(minutes: 10),
+        streamType: 'BUFFERED',
+      );
+
+      expect(session.liveAudioIndex, 1);
+      expect(session.liveStartOffset, const Duration(minutes: 10));
+      expect(session.liveDuration, const Duration(minutes: 82));
+      expect(session.liveSessionToken, isNot(tokenBefore));
+      expect(
+        server.capturedActions.where((a) => a.action == 'SetAVTransportURI'),
+        hasLength(2),
+      );
+    });
+
+    test('a live seek restarts the remux instead of sending REL_TIME', () async {
+      final session = buildSession();
+      addTearDown(session.dispose);
+      await session.connect();
+      await session.loadLocalFile(mediaPath);
+      final setUriBefore = server.capturedActions
+          .where((a) => a.action == 'SetAVTransportURI')
+          .length;
+
+      await session.seek(const Duration(minutes: 5));
+
+      expect(session.liveStartOffset, const Duration(minutes: 5));
+      expect(
+        server.capturedActions.where((a) => a.action == 'Seek'),
+        isEmpty,
+      );
+      expect(
+        server.capturedActions
+            .where((a) => a.action == 'SetAVTransportURI')
+            .length,
+        setUriBefore + 1,
+      );
+    });
+
+    test('audio switching works from a direct load by probing it first',
+        () async {
+      final session = buildSession(probe: mp4Probe);
+      addTearDown(session.dispose);
+      await session.connect();
+
+      await session.loadLocalFile(mediaPath);
+      expect(session.isLive, isFalse);
+
+      await session.switchLiveAudio(
+        filePath: mediaPath,
+        audioIndex: 1,
+        position: const Duration(seconds: 90),
+        streamType: 'BUFFERED',
+        duration: const Duration(minutes: 82),
+        audioTracks: mkvProbe.audio,
+      );
+
+      expect(session.isLive, isTrue);
+      expect(session.liveAudioIndex, 1);
+      expect(session.liveStartOffset, const Duration(seconds: 90));
+      expect(session.liveAudioTracks, hasLength(2));
+    });
+
+    test('a subtitle change restores the previous position', () async {
+      final session = buildSession(
+        probe: mp4Probe,
+        pollInterval: const Duration(milliseconds: 20),
+      );
+      addTearDown(session.dispose);
+      await session.connect();
+      await session.loadLocalFile(mediaPath);
+
+      session.updatePosition(const Duration(minutes: 10));
+      await session.setSubtitle(
+        CastSubtitle(
+          url: 'https://example.com/movie.srt',
+          label: 'English',
+          language: 'en',
+          format: 'srt',
+        ),
+      );
+
+      // The URI is re-sent with the known duration, not the default fallback.
+      expect(lastSetUriBody(), contains('01:22:00'));
+
+      // Once the renderer reports PLAYING the deferred seek restores 10:00.
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (DateTime.now().isBefore(deadline) &&
+          !server.capturedActions.any(
+            (a) => a.action == 'Seek' && a.body.contains('00:10:00'),
+          )) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+
+      expect(
+        server.capturedActions.any(
+          (a) => a.action == 'Seek' && a.body.contains('00:10:00'),
+        ),
+        isTrue,
+        reason: 'a subtitle change must not rewind playback',
+      );
+    });
+
+    test('a live subtitle is shifted to the restart position', () async {
+      final subtitleDir = await Directory.systemTemp.createTemp('dlna_sub_');
+      addTearDown(() async {
+        if (await subtitleDir.exists()) {
+          await subtitleDir.delete(recursive: true);
+        }
+      });
+      final sourceVtt = File('${workDir.path}/source.vtt');
+      await sourceVtt.writeAsString(
+        'WEBVTT\n\n00:10:00.000 --> 00:10:02.000\nhello\n',
+        flush: true,
+      );
+
+      final session = buildSession(subtitleTempDir: subtitleDir);
+      addTearDown(session.dispose);
+      await session.connect();
+      await session.loadLocalFile(mediaPath);
+      expect(session.isLive, isTrue);
+
+      await session.switchLiveSubtitle(
+        subtitle: CastSubtitle(
+          url: sourceVtt.path,
+          label: 'English',
+          language: 'en',
+          format: 'vtt',
+        ),
+        position: const Duration(minutes: 10),
+      );
+
+      // Restarted at 10:00, so the first cue must start at 00:00.
+      expect(session.liveStartOffset, const Duration(minutes: 10));
+      final shifted = subtitleDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.vtt'))
+          .toList();
+      expect(shifted, hasLength(1));
+      expect(
+        await shifted.single.readAsString(),
+        contains('00:00:00.000 --> 00:00:02.000'),
+      );
+    });
   });
 }

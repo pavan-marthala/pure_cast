@@ -11,8 +11,8 @@ void main() {
       expect(chromecastCaps.canChangeSubtitle, isTrue);
       expect(chromecastCaps.canQueue, isTrue);
 
-      expect(dlnaCaps.canChangeAudioTrack, isFalse);
-      expect(dlnaCaps.canChangeSubtitle, isFalse);
+      expect(dlnaCaps.canChangeAudioTrack, isTrue);
+      expect(dlnaCaps.canChangeSubtitle, isTrue);
       expect(dlnaCaps.canQueue, isFalse);
     });
 

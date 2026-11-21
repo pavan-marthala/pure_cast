@@ -223,21 +223,27 @@ class ChromecastSession extends CastSession {
   ///
   /// The restarted stream's receiver time starts at 0, so the real position
   /// is `liveStartOffset + position`.
+  @override
   Duration get liveStartOffset => _liveStartOffset;
 
   /// Whether the current media is served by the live MKV path.
+  @override
   bool get isLive => _isLive;
 
   /// Source file backing the current live stream, if any.
+  @override
   String? get liveFilePath => _liveFilePath;
 
   /// Audio index (`0:a:N`, 0-based among audio streams) in use right now.
+  @override
   int get liveAudioIndex => _liveAudioIndex;
 
   /// Audio tracks found by the probe when the live stream was started.
+  @override
   List<AudioStream> get liveAudioTracks => _liveAudioTracks;
 
   /// Known duration of the live source (null when the probe had none).
+  @override
   Duration? get liveDuration => _liveDuration;
 
   /// Subtitle source attached to the live stream, if any.
@@ -247,7 +253,11 @@ class ChromecastSession extends CastSession {
   /// live (re)start. Null when no live subtitles are attached.
   CastSubtitle? get liveSubtitle => _liveSubtitle;
 
+  @override
   int? get mediaSessionId => _mediaSessionId;
+
+  @override
+  int get liveSessionToken => _mediaSessionId ?? 0;
   Timer? _heartbeatTimer;
   StreamSubscription<dynamic>? _messageSubscription;
 
@@ -500,6 +510,7 @@ class ChromecastSession extends CastSession {
   }
 
   /// Loads a local file, probing and preparing it first.
+  @override
   Future<void> loadLocalFile(
     String path, {
     int audioStreamIndex = 0,
@@ -960,6 +971,7 @@ class ChromecastSession extends CastSession {
   /// when switching away from a direct (non-live) load, because a direct load
   /// has no live metadata to keep. When omitted, the current live metadata is
   /// preserved (the normal live-to-live switch).
+  @override
   Future<void> switchLiveAudio({
     required String filePath,
     required int audioIndex,
@@ -992,6 +1004,7 @@ class ChromecastSession extends CastSession {
   ///
   /// Throws a [StateError] when the session is not connected or the current
   /// media is not a live MKV stream.
+  @override
   Future<void> switchLiveSubtitle({
     required CastSubtitle? subtitle,
     required Duration position,

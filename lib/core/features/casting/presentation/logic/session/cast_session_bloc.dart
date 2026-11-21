@@ -482,7 +482,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     if (media == null || device == null) return;
     if (state.restarting || _restartInFlight) return;
     if (event.index == state.activeAudioIndex) return;
-    if (device.protocol != PureCastProtocol.chromecast) return;
     if (!device.capabilities.canChangeAudioTrack) return;
     if (!state.audioTracks.any((t) => t.index == event.index)) return;
 
@@ -602,10 +601,14 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         }
       }
 
-      // If a device is connected, make sure the subtitle track is declared in
-      // the loaded media before activating it. Reload at the current position.
+      // Chromecast needs the subtitle declared in the LOAD's track list before
+      // EDIT_TRACKS_INFO can activate it. DLNA registers subtitles through its
+      // own SetAVTransportURI, so reloading there would restart playback twice
+      // for no benefit.
       final media = state.activeMedia;
-      if (subtitle != null && state.activeDevice != null && media != null) {
+      if (subtitle != null &&
+          state.activeDevice?.protocol == PureCastProtocol.chromecast &&
+          media != null) {
         final updatedSubtitles = [...media.subtitles];
         final idx = updatedSubtitles.indexWhere((s) => s.id == subtitle!.id);
         if (idx >= 0) {
@@ -675,10 +678,12 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
 
   /// Applies a subtitle choice to the live MKV stream.
   ///
-  /// Passing null disables subtitles in place. A non-null subtitle is
-  /// extracted first when it still points at the media file, then the live
-  /// stream is restarted at the current position with a time-shifted copy
-  /// attached. Both paths mirror the guards of [_onSelectAudio].
+  /// Passing null disables subtitles (in place on Chromecast; by restarting
+  /// the stream on DLNA, where subtitles live in the transport URI). A
+  /// non-null subtitle is extracted first when it still points at the media
+  /// file, then the live stream is restarted at the current position with a
+  /// time-shifted copy attached. Both paths mirror the guards of
+  /// [_onSelectAudio].
   Future<void> _setLiveSubtitle(
     PureCastSubtitleTrack? subtitle,
     Emitter<CastSessionState> emit,
@@ -687,7 +692,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     final device = state.activeDevice;
     if (media == null || device == null) return;
     if (state.restarting || _restartInFlight) return;
-    if (device.protocol != PureCastProtocol.chromecast) return;
 
     if (subtitle == null) {
       _restartInFlight = true;

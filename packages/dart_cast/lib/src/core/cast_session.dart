@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'cast_decision.dart';
 import 'cast_device.dart';
 import 'cast_media.dart';
+import 'media_probe.dart';
 
 /// Possible states of a cast session.
 enum SessionState {
@@ -157,6 +159,45 @@ abstract class CastSession {
   /// Stream of volume changes.
   Stream<double> get volumeStream => _volumeController.stream;
 
+  // -- Live / remux state --
+  //
+  // Protocol implementations that can remux a local file into a stream that
+  // starts at an arbitrary source position (so an audio or subtitle change is
+  // a restart rather than a re-encode) expose that state here. The default
+  // implementation reports "not live", which keeps direct-play protocols
+  // working unchanged.
+
+  /// Whether the current load is served by a live remux stream.
+  bool get isLive => false;
+
+  /// Source file behind the current live stream, if any.
+  String? get liveFilePath => null;
+
+  /// Audio index (`0:a:N`, 0-based among audio streams) in use right now.
+  int get liveAudioIndex => 0;
+
+  /// Audio tracks found when the live stream was started.
+  List<AudioStream> get liveAudioTracks => const [];
+
+  /// Known duration of the live source, when available.
+  Duration? get liveDuration => null;
+
+  /// Source offset of the current live stream.
+  ///
+  /// A restarted stream's clock starts at zero, so the real position is
+  /// `liveStartOffset + receiverPosition`.
+  Duration get liveStartOffset => Duration.zero;
+
+  /// Token identifying the current receiver-side playback session.
+  ///
+  /// Used to drop late position events from the session a restart replaced.
+  /// Chromecast returns its media session id; other protocols may return a
+  /// monotonically increasing restart counter.
+  int? get mediaSessionId => null;
+
+  /// Monotonic token that changes whenever playback is restarted.
+  int get liveSessionToken => mediaSessionId ?? 0;
+
   // -- Update methods for subclasses --
 
   /// Updates the current playback position.
@@ -211,6 +252,63 @@ abstract class CastSession {
 
   /// Sets the active subtitle track.
   Future<void> setSubtitle(CastSubtitle? subtitle);
+
+  /// Loads a local file, letting the protocol choose how to prepare it.
+  ///
+  /// Protocols that can probe the file (Chromecast, DLNA) override this to
+  /// pick direct play, remux or transcode. The default implementation loads
+  /// the file directly through the proxy, which is correct for protocols
+  /// whose receiver handles the original container.
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    CastDeviceCaps caps = const CastDeviceCaps(),
+    CastSubtitle? subtitle,
+    String streamType = 'BUFFERED',
+  }) async {
+    final lower = path.toLowerCase();
+    final type =
+        lower.endsWith('.mkv') || lower.endsWith('.webm')
+            ? CastMediaType.mkv
+            : lower.endsWith('.ts') || lower.endsWith('.m2ts')
+            ? CastMediaType.mpegTs
+            : lower.endsWith('.m3u8')
+            ? CastMediaType.hls
+            : CastMediaType.mp4;
+    await loadMedia(
+      CastMedia.file(
+        filePath: path,
+        type: type,
+        subtitles: subtitle != null ? [subtitle] : const [],
+        defaultSubtitle: subtitle,
+      ),
+    );
+  }
+
+  /// Restarts the current source at [position] with a different audio track.
+  ///
+  /// Only protocols that support live remuxing implement this; the default
+  /// throws, which the domain layer surfaces as "audio switching unsupported".
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
+  }) async {
+    throw UnsupportedError('Audio track switching is not supported');
+  }
+
+  /// Attaches, replaces or clears the current live stream's subtitle.
+  ///
+  /// The stream restarts at [position] so the change never rewinds playback.
+  Future<void> switchLiveSubtitle({
+    required CastSubtitle? subtitle,
+    required Duration position,
+  }) async {
+    throw UnsupportedError('Live subtitle switching is not supported');
+  }
 
   /// Disconnects from the cast device.
   Future<void> disconnect();

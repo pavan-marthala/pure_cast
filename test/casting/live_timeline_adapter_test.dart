@@ -712,7 +712,8 @@ void main() {
       );
     });
 
-    test('switchLiveSubtitle requires a Chromecast session', () async {
+    test('switchLiveSubtitle on a DLNA session without live media fails '
+        'cleanly', () async {
       final dlnaDevice = CastDevice(
         id: 'dlna-device',
         name: 'DLNA TV',

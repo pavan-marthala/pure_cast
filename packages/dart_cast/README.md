@@ -25,7 +25,7 @@ Cast media to Chromecast, AirPlay, and DLNA devices from pure Dart.
 |---|---|---|
 | **Chromecast** | Streaming, local files, subtitles | **Recommended** |
 | **DLNA** | Local files, especially MKV with embedded subtitles | Works |
-| **AirPlay** | Pairing and session setup | Video fails on the devices tested so far — [reports welcome](doc/AIRPLAY.md) |
+| **AirPlay** | `/play` receivers, local files, tracks | Implemented; not yet verified end to end on a `/play` receiver — [status](doc/AIRPLAY.md) |
 
 > For local file casting, remux `.ts` to `.mp4` with ffmpeg.
 > See [`doc/LOCAL_FILE_CASTING.md`](doc/LOCAL_FILE_CASTING.md).
@@ -34,19 +34,20 @@ Cast media to Chromecast, AirPlay, and DLNA devices from pure Dart.
 
 | Use Case | Chromecast | DLNA | AirPlay |
 |----------|-----------|------|---------|
-| Stream HLS (remote) | Yes | Partial (piped as TS) | Not yet* |
-| Stream MP4 (remote) | Yes | No | Not yet* |
-| Local MP4 / TS files | Yes | Yes | Not yet* |
-| Local MKV files | No | Yes | Not yet* |
-| Custom byte sources (`content://`, assets) | Yes | Yes | Not yet* |
-| Subtitles (sidecar VTT) | Yes | No | Unimplemented |
+| Stream HLS (remote) | Yes | Partial (piped as TS) | Implemented† |
+| Stream MP4 (remote) | Yes | No | Implemented† |
+| Local MP4 / TS files | Yes | Yes | Implemented† |
+| Local MKV files | No | Yes | Implemented† |
+| Custom byte sources (`content://`, assets) | Yes | Yes | Implemented† |
+| Subtitles (sidecar VTT) | Yes | No | Via VOD HLS (requires HLS bit)† |
 | Subtitles (MKV embedded) | — | Yes | — |
-| Seeking / resume from position | Yes | Yes | Not yet* |
-| Volume control | Yes | Yes | Unimplemented |
-| Subtitle switching | Yes | Requires reload | Unimplemented |
+| Seeking / resume from position | Yes | Yes | Implemented† |
+| Volume control | Yes | Yes | Bit 3 receivers only† |
+| Subtitle switching | Yes | Requires reload | Reloads at position (requires HLS bit)† |
 
-\* Implemented, but blocked by the receivers tested rather than by missing code
-— see [`doc/AIRPLAY.md`](doc/AIRPLAY.md).
+\† Implemented for receivers that expose `/play`. The receivers tested so far
+do not, so end-to-end playback is not yet recorded on hardware — see
+[`doc/AIRPLAY.md`](doc/AIRPLAY.md).
 
 ### Protocol Notes
 
@@ -64,12 +65,26 @@ Cast media to Chromecast, AirPlay, and DLNA devices from pure Dart.
 - Local file seeking via byte-range requests (206 Partial Content)
 
 **AirPlay**
-- Pairing and session setup work. Video casting fails on every receiver tested so far; no Apple TV has been tried. See [`doc/AIRPLAY.md`](doc/AIRPLAY.md) — results from other devices are very welcome
-- Screen mirroring and RAOP audio unimplemented
+- Pairing and session setup work. Local files are planned as direct play, MP4
+  remux, H.264/AAC transcode, or seekable VOD HLS; audio/subtitle switches
+  rebuild the stream and reload at the current position.
+- Playback over `/play` is implemented but not yet verified end to end. One
+  receiver answered `/play` with HTTP 400 when the request used the legacy
+  `text/parameters` body; that body is now the binary plist form pyatv sends,
+  which has not yet been run on that receiver. Other tested receivers do not
+  expose `/play`. See [`doc/AIRPLAY.md`](doc/AIRPLAY.md) for the matrix and how
+  to test your device.
+- Screen mirroring and RAOP audio are unimplemented.
 
 ### Known Limitations
 
-- **AirPlay video**: fails on the receivers tested so far -- see [`doc/AIRPLAY.md`](doc/AIRPLAY.md), which explains why and how to test your own device. Screen mirroring is unimplemented.
+- **AirPlay video**: implemented for `/play` receivers; the recorded run on a
+  "Living Room" receiver returned HTTP 400 before the binary plist body was
+  adopted, and that body is not yet verified. TCL Google TVs lack the endpoint
+  — see [`doc/AIRPLAY.md`](doc/AIRPLAY.md). On those devices, use Chromecast or
+  DLNA.
+- **AirPlay track switches**: audio and subtitle changes are a reload, not a
+  gapless switch, and need a receiver that advertises HLS support.
 - **Local TS on Chromecast**: `TsHlsMediaTransformer` has per-segment buffering and subtitle drift. Remux to MP4 via ffmpeg instead -- see [`example/lib/ffmpeg_media_transformer.dart`](example/lib/ffmpeg_media_transformer.dart).
 - **DLNA streaming**: HLS is piped as MPEG-TS, so a renderer's own on-screen duration may show a placeholder even though `durationStream` reports the real length.
 - **DLNA subtitle styling**: The TV controls styling, not the app.
@@ -475,10 +490,13 @@ try {
 
 ### Hardware status
 
-AirPlay video fails on every receiver tested so far, for a reason specific to
-those devices rather than to this package. No Apple TV has been tried. See
-[`doc/AIRPLAY.md`](doc/AIRPLAY.md) for which devices were tested, why they fail,
-and how to check your own — results from other hardware are welcome.
+Playback over `/play` is implemented for both AirPlay 1 and AirPlay 2, including
+local-file preparation, resume, track switching, subtitles and volume. No
+hardware run has been recorded yet. The receivers tested so far do not expose
+`/play` at all, for a reason specific to those devices rather than to this
+package. No Apple TV has been tried. See [`doc/AIRPLAY.md`](doc/AIRPLAY.md) for
+which devices were tested, why they fail, and how to check your own — results
+from other hardware are welcome.
 
 ## Error Handling
 

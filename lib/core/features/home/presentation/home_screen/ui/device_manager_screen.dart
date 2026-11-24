@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/discovery/cast_discovery_bloc.dart';
 import 'package:pure_cast/core/features/casting/presentation/logic/session/cast_session_bloc.dart';
+import 'package:pure_cast/core/features/casting/presentation/ui/airplay_pin_dialog.dart';
 import 'package:pure_cast/core/theme/app_theme.dart';
 import 'package:pure_cast/core/utils/app_buitton.dart';
 import 'package:pure_cast/core/utils/app_toast.dart';
@@ -27,6 +28,22 @@ class DeviceManagerScreen extends StatefulWidget {
 }
 
 class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
+  /// Guards against opening a second PIN dialog on a state rebuild.
+  bool _pinDialogOpen = false;
+
+  Future<void> _promptForPin(String deviceName) async {
+    _pinDialogOpen = true;
+    final bloc = context.read<CastSessionBloc>();
+    final pin = await showAirPlayPinDialog(context, deviceName: deviceName);
+    _pinDialogOpen = false;
+    if (!mounted) return;
+    if (pin == null) {
+      bloc.add(const CastSessionEvent.cancelPairing());
+    } else {
+      bloc.add(CastSessionEvent.connectWithPin(pin));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -36,6 +53,12 @@ class _DeviceManagerScreenState extends State<DeviceManagerScreen> {
       builder: (context, state) {
         return BlocConsumer<CastSessionBloc, CastSessionState>(
           listener: (context, sessionState) {
+            final device = sessionState.activeDevice;
+            if (sessionState.pairingRequired &&
+                !_pinDialogOpen &&
+                device != null) {
+              _promptForPin(device.name);
+            }
             if (sessionState.connectionError != null &&
                 sessionState.connectionStatus == StateStatus.error) {
               showErrorToast(message: sessionState.connectionError!);

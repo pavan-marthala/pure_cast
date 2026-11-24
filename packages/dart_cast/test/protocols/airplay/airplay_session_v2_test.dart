@@ -8,6 +8,7 @@ import 'package:dart_cast/src/core/cast_media.dart';
 import 'package:dart_cast/src/core/cast_session.dart';
 import 'package:dart_cast/src/protocols/airplay/airplay_session.dart';
 import 'package:dart_cast/src/protocols/airplay/auth/binary_plist.dart';
+import 'package:dart_cast/src/protocols/airplay/auth/hap_credentials.dart';
 import 'package:dart_cast/src/protocols/airplay/auth/tlv8.dart';
 import 'package:test/test.dart';
 
@@ -155,6 +156,37 @@ void main() {
         reason: 'X-Apple-HKP: 3 is the PIN flow this TV will never display',
       );
     });
+
+    test(
+      'supplied credentials use pair-verify, not transient pairing',
+      () async {
+        final server = await _ProbeServer.start();
+        addTearDown(server.stop);
+
+        final session = AirPlaySession(
+          _device(server.port, features: _tclFeatures),
+          credentials: HapCredentials(
+            clientPrivateKey: Uint8List(64),
+            clientPublicKey: Uint8List(32),
+            clientId: 'stored-client',
+            devicePublicKey: Uint8List(32),
+            deviceId: 'stored-device',
+          ),
+        );
+        addTearDown(session.dispose);
+
+        await expectLater(session.connect(), throwsA(isA<Exception>()));
+
+        expect(server.paths, contains('/pair-verify'));
+        expect(
+          server.hkpHeaders,
+          isNot(contains('4')),
+          reason:
+              'stored credentials must pair-verify, not start transient '
+              'pairing over the same session',
+        );
+      },
+    );
 
     test('probes GET /info before GET /server-info', () async {
       final server = await _ProbeServer.start();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'cast_device.dart';
+import 'cast_exceptions.dart';
 import 'cast_session.dart';
 import 'discovery_manager.dart';
 import 'discovery_provider.dart';
@@ -25,6 +26,13 @@ class CastService {
 
   CastSession? _activeSession;
   CastDevice? _lastDevice;
+
+  /// Session that asked for pairing during the last [connect].
+  ///
+  /// Some protocols (AirPlay) create the session before discovering that the
+  /// receiver needs a PIN. Keeping it lets the caller complete pairing on the
+  /// same object and adopt it rather than starting over.
+  CastSession? _pendingPairingSession;
 
   /// Upper bound for tearing down the previous session before connecting.
   ///
@@ -97,11 +105,59 @@ class CastService {
       }
     }
 
+    final pending = _pendingPairingSession;
+    _pendingPairingSession = null;
+    if (pending != null && !identical(pending, previousSession)) {
+      try {
+        await pending.disconnect().timeout(disconnectTimeout);
+      } catch (e) {
+        CastLogger.warning(
+          'CastService: error discarding pairing-pending session: $e',
+        );
+      }
+    }
+
     final session = _createSession(device);
-    await session.connect();
+    try {
+      await session.connect();
+    } on NeedsPairingException {
+      // Keep the half-connected session so a PIN can be entered on it.
+      _pendingPairingSession = session;
+      rethrow;
+    }
+    _pendingPairingSession = null;
     _activeSession = session;
     _lastDevice = device;
     CastLogger.info('CastService: connected to ${device.name}');
+    return session;
+  }
+
+  /// The session that requested pairing during the last [connect], if any.
+  CastSession? get pendingPairingSession => _pendingPairingSession;
+
+  /// Finishes connecting a session kept by a pairing failure.
+  ///
+  /// The caller is expected to have completed pairing on
+  /// [pendingPairingSession] already (for example by entering a PIN). This
+  /// retries the handshake on the same object and adopts it as the active
+  /// session.
+  Future<CastSession> completePendingConnect(CastDevice device) async {
+    final session = _pendingPairingSession;
+    if (session == null) {
+      throw StateError('No pairing-pending session to complete');
+    }
+    try {
+      await session.connect();
+    } on NeedsPairingException {
+      rethrow;
+    } catch (_) {
+      _pendingPairingSession = null;
+      rethrow;
+    }
+    _pendingPairingSession = null;
+    _activeSession = session;
+    _lastDevice = device;
+    CastLogger.info('CastService: pairing completed for ${device.name}');
     return session;
   }
 
@@ -138,6 +194,18 @@ class CastService {
   /// and disposes all discovery providers.
   Future<void> dispose() async {
     _discoveryManager.dispose();
+
+    final pending = _pendingPairingSession;
+    _pendingPairingSession = null;
+    if (pending != null) {
+      try {
+        await pending.disconnect();
+      } catch (e) {
+        CastLogger.warning(
+          'CastService: error during dispose of pairing session: $e',
+        );
+      }
+    }
 
     if (_activeSession != null) {
       try {

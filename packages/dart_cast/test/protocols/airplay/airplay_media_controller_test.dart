@@ -6,8 +6,22 @@ import 'dart:typed_data';
 import 'package:dart_cast/src/core/cast_exceptions.dart';
 import 'package:dart_cast/src/protocols/airplay/airplay_features.dart';
 import 'package:dart_cast/src/protocols/airplay/airplay_media_controller.dart';
+import 'package:dart_cast/src/protocols/airplay/auth/binary_plist.dart';
 import 'package:dart_cast/src/protocols/airplay/auth/hap_session.dart';
 import 'package:test/test.dart';
+
+/// Returns the body of a decrypted HTTP request.
+Uint8List _bodyOf(Uint8List raw) {
+  for (var i = 0; i + 3 < raw.length; i++) {
+    if (raw[i] == 13 &&
+        raw[i + 1] == 10 &&
+        raw[i + 2] == 13 &&
+        raw[i + 3] == 10) {
+      return Uint8List.sublistView(raw, i + 4);
+    }
+  }
+  throw StateError('request has no header terminator');
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -669,6 +683,80 @@ void main() {
         expect(requestCount, isZero);
       },
     );
+    test('converts an absolute start position to a V1 fraction', () async {
+      final pair = await createEncryptedPair();
+      server = pair.server;
+      client = pair.client;
+
+      final controller = AirPlayMediaController(
+        session: client,
+        features: _featuresV1,
+      );
+      Uint8List? playBody;
+
+      server.listen((sock) async {
+        final srvSess = _serverSession(sock, server.port);
+        try {
+          final data = await srvSess.readDecryptedData();
+          final request = utf8.decode(data, allowMalformed: true);
+          if (request.contains('POST /play')) {
+            playBody = _bodyOf(data);
+          }
+          await _sendResponse(srvSess, sock, 200, 'OK');
+        } catch (_) {}
+      });
+
+      await controller.play(
+        'https://example.com/video.m3u8',
+        startPositionSeconds: 60,
+        duration: const Duration(seconds: 120),
+      );
+
+      expect(playBody, isNotNull);
+      final plist = BinaryPlistDecoder.decode(playBody!);
+      expect(plist['Start-Position'] as double, closeTo(0.5, 0.0001));
+    });
+
+    test('sends absolute start seconds on AirPlay 2', () async {
+      final pair = await createEncryptedPair();
+      server = pair.server;
+      client = pair.client;
+
+      final controller = AirPlayMediaController(
+        session: client,
+        features: const AirPlayFeatures((1 << 38) | (1 << 49)),
+      );
+      addTearDown(controller.dispose);
+      Uint8List? playBody;
+
+      server.listen((sock) async {
+        final srvSess = _serverSession(sock, server.port);
+        while (true) {
+          try {
+            final data = await srvSess.readDecryptedData(
+              timeout: const Duration(milliseconds: 500),
+            );
+            final req = utf8.decode(data, allowMalformed: true);
+            if (req.contains('POST /play')) {
+              playBody = _bodyOf(data);
+            }
+            await _respondOk(srvSess, sock, req);
+          } catch (_) {
+            break;
+          }
+        }
+      });
+
+      await controller.play(
+        'https://example.com/video.m3u8',
+        startPositionSeconds: 60,
+        duration: const Duration(seconds: 120),
+      );
+
+      expect(playBody, isNotNull);
+      final plist = BinaryPlistDecoder.decode(playBody!);
+      expect(plist['Start-Position-Seconds'] as double, closeTo(60, 0.0001));
+    });
   });
 
   group('AirPlayMediaController.pause()', () {

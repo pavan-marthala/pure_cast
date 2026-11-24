@@ -3,39 +3,69 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
+
+import '../../core/cast_decision.dart';
 import '../../core/cast_exceptions.dart';
 import '../../core/cast_media.dart';
 import '../../core/cast_session.dart';
+import '../../core/media_probe.dart';
+import '../../core/media_prober.dart';
 import '../../core/media_proxy.dart';
 import '../../core/media_transformer.dart';
 import '../../utils/logger.dart';
 import 'airplay_client.dart';
 import 'airplay_features.dart';
 import 'airplay_media_controller.dart';
+import 'airplay_media_plan.dart';
+import 'airplay_media_preparer.dart';
 import 'auth/airplay_auth.dart';
 import 'auth/airplay_transient_auth.dart';
 import 'auth/hap_credentials.dart';
 import 'auth/hap_session.dart';
 import 'plist_codec.dart';
 
-/// AirPlay 1 cast session with playback control and position polling.
+/// AirPlay 1/2 cast session with playback control and position polling.
 ///
 /// Extends [CastSession] to implement AirPlay-specific behavior:
 /// - Connects to a device via [AirPlayClient]
 /// - Proxies media through [MediaProxy] so the AirPlay device can reach it
-/// - Polls `/playback-info` periodically to update position/duration/state
-/// - Supports HAP authentication for devices that require it (Apple TV tvOS 10.2+)
+/// - Probes and prepares local files (direct MP4, remux, transcode, VOD HLS)
+/// - Restarts the stream at the current position for audio/subtitle changes
+/// - Polls `/playback-info` to update position/duration/state
+/// - Supports HAP authentication for devices that require it (Apple TV)
 class AirPlaySession extends CastSession {
   AirPlayClient? _client;
   HapSession? _hapSession;
   AirPlayMediaController? _mediaController;
   final MediaProxy _proxy = MediaProxy();
   final MediaTransformer _mediaTransformer;
+  final MediaProber _prober;
+  final AirPlayMediaPreparer _preparer;
   Timer? _pollTimer;
   bool _isPolling = false;
   int _pollFailures = 0;
   bool _isLoadingMedia = false;
   CastMedia? _currentMedia;
+
+  /// Monotonic token that changes on every load. A poll captures it before
+  /// awaiting `/playback-info` and discards the answer if the load was
+  /// replaced in the meantime.
+  int _loadGeneration = 0;
+
+  /// Duration from the probe or caller, used when a receiver omits `duration`.
+  Duration? _expectedDuration;
+
+  /// Local-file state kept across restarts.
+  String? _localPath;
+  String? _localInput;
+  MediaProbe? _localProbe;
+  CastDeviceCaps _localCaps = const CastDeviceCaps();
+  List<AudioStream> _localAudioTracks = const [];
+  int _localAudioIndex = 0;
+  Duration? _localDuration;
+  CastSubtitle? _localSubtitle;
+  AirPlayPreparedMedia? _prepared;
 
   /// Stored HAP credentials for pair-verify. Set these before calling
   /// [connect] if the device requires authentication.
@@ -43,15 +73,35 @@ class AirPlaySession extends CastSession {
 
   /// Creates an [AirPlaySession] for the given AirPlay [device].
   ///
-  /// An optional [mediaTransformer] can customize media preparation.
+  /// [mediaTransformer] customizes how remote media is registered.
+  /// [prober] and [preparer] are test seams for local-file loading.
   AirPlaySession(
     super.device, {
     this.credentials,
     MediaTransformer? mediaTransformer,
-  }) : _mediaTransformer = mediaTransformer ?? const DefaultMediaTransformer();
+    MediaProber prober = const FfprobeMediaProber(),
+    AirPlayMediaPreparer preparer = const FfmpegAirPlayPreparer(),
+  }) : _mediaTransformer = mediaTransformer ?? const DefaultMediaTransformer(),
+       _prober = prober,
+       _preparer = preparer;
 
   /// The underlying AirPlay HTTP client (available after [connect]).
   AirPlayClient? get client => _client;
+
+  /// Audio tracks discovered for the loaded local file.
+  @override
+  List<AudioStream> get audioTracks => _localAudioTracks;
+
+  /// 0-based index among audio streams currently used by the local load.
+  @override
+  int get activeAudioIndex => _localAudioIndex;
+
+  /// Whether local playback is served by a prepared stream.
+  ///
+  /// AirPlay's prepared HLS is VOD, not a live pipe, so [isLive] stays false.
+  /// This getter exists so callers can tell "prepared local media" from
+  /// "direct local media" without protocol-specific checks.
+  bool get hasPreparedLocalMedia => _prepared != null;
 
   /// Connects to the AirPlay device.
   ///
@@ -65,11 +115,6 @@ class AirPlaySession extends CastSession {
   ///   [credentials] drive a pair-verify.
   /// - anything else that answered 403 → the same path, but pair-verify only.
   /// - otherwise → the plain HTTP AirPlay 1 client.
-  ///
-  /// Previously the encrypted path was reachable *only* through a 403 from
-  /// `/server-info`. AirPlay 2 receivers using transient encryption do not
-  /// return 403, so every one of them silently fell through to an
-  /// unauthenticated AirPlay 1 client.
   ///
   /// Throws [NeedsPairingException] when pairing is required and no usable
   /// route to it exists.
@@ -281,31 +326,372 @@ class AirPlaySession extends CastSession {
     }
     _isLoadingMedia = true;
     try {
+      await _cleanupLocalLoad();
       await _loadMediaInternal(media);
     } finally {
       _isLoadingMedia = false;
     }
   }
 
-  Future<void> _loadMediaInternal(CastMedia media) async {
+  /// Loads a local file, choosing direct play, MP4 remux, transcode, or HLS.
+  ///
+  /// The file is probed once; [planAirPlayMedia] picks the cheapest strategy
+  /// that can work. A subtitle request selects seekable VOD HLS because an
+  /// external subtitle needs a rendition.
+  @override
+  Future<void> loadLocalFile(
+    String path, {
+    int audioStreamIndex = 0,
+    CastDeviceCaps caps = const CastDeviceCaps(),
+    CastSubtitle? subtitle,
+    String streamType = 'BUFFERED',
+  }) async {
+    await _cleanupLocalLoad();
+    final input = await _resolveInput(path);
+
+    MediaProbe probe;
+    try {
+      probe = await _prober.probe(input);
+    } on ProbeFailedException {
+      rethrow;
+    } catch (e) {
+      throw ProbeFailedException('Probe failed: $e', e);
+    }
+
+    final audioIndex = _resolveAudioIndex(probe.audio, audioStreamIndex);
+    var plan = planAirPlayMedia(
+      probe,
+      audioIndex: audioIndex,
+      subtitlesRequested: subtitle != null,
+      caps: caps,
+    );
+    // `content://` cannot be served by the proxy directly, so even direct-play
+    // media is rewrapped into a readable temporary MP4.
+    if (plan is AirPlayDirectPlan && path.startsWith('content://')) {
+      plan = AirPlayContainerRemuxPlan(
+        'content:// source needs a readable MP4 copy',
+        audioIndex: audioIndex,
+      );
+    }
+
+    if (plan is AirPlayHlsPlan && !_parseFeatures().supportsHLS) {
+      throw UnsupportedFeatureException(
+        'AirPlay receiver "${device.name}" does not advertise HLS support '
+        '(bit 4), so subtitles cannot be attached',
+      );
+    }
+
+    _localPath = path;
+    _localInput = input;
+    _localProbe = probe;
+    _localCaps = caps;
+    _localAudioTracks = List.unmodifiable(probe.audio);
+    _localAudioIndex = audioIndex;
+    _localDuration = probe.duration;
+    _localSubtitle = subtitle;
+
+    switch (plan) {
+      case AirPlayDirectPlan():
+        CastLogger.info('AirPlay: local direct play (${plan.reason})');
+        await _loadMediaInternal(
+          CastMedia.file(
+            filePath: path,
+            type: CastMediaType.mp4,
+            duration: probe.duration,
+            subtitles: subtitle != null ? [subtitle] : const [],
+            defaultSubtitle: subtitle,
+          ),
+        );
+      case AirPlayContainerRemuxPlan():
+      case AirPlayAudioRemuxPlan():
+      case AirPlayTranscodePlan():
+        CastLogger.info('AirPlay: local ${plan.runtimeType} (${plan.reason})');
+        await _loadPreparedMp4(
+          inputPath: input,
+          audioIndex: audioIndex,
+          probe: probe,
+          caps: caps,
+          subtitle: subtitle,
+          transcodeVideo: plan is AirPlayTranscodePlan,
+          transcodeAudio: plan is AirPlayAudioRemuxPlan,
+        );
+      case AirPlayHlsPlan():
+        CastLogger.info('AirPlay: local HLS (${plan.reason})');
+        await _loadPreparedHls(
+          inputPath: input,
+          audioIndex: audioIndex,
+          probe: probe,
+          caps: caps,
+          subtitle: subtitle,
+          transcodeVideo: plan.transcodeVideo,
+        );
+      case AirPlayUnsupportedPlan():
+        throw UnsupportedMediaException('Unsupported: ${plan.reason}');
+    }
+  }
+
+  /// Restarts a local file with a different audio track at [position].
+  ///
+  /// AirPlay has no in-place track selection: the stream is rebuilt as VOD HLS
+  /// with the selected audio rendition and reloaded at [position]. The new
+  /// stream is prepared before the old one is replaced, so a preparation
+  /// failure leaves the current playback untouched.
+  @override
+  Future<void> switchLiveAudio({
+    required String filePath,
+    required int audioIndex,
+    required Duration position,
+    required String streamType,
+    Duration? duration,
+    List<AudioStream>? audioTracks,
+  }) async {
+    final path = _localPath ?? filePath;
+    final probe = _localProbe;
+    if (probe == null) {
+      throw StateError(
+        'switchLiveAudio requires a local file to have been loaded first',
+      );
+    }
+    if (!_parseFeatures().supportsHLS) {
+      throw UnsupportedFeatureException(
+        'AirPlay receiver does not advertise HLS support, so audio track '
+        'switching cannot be prepared',
+      );
+    }
+    final tracks = audioTracks ?? _localAudioTracks;
+    if (audioIndex < 0 || audioIndex >= tracks.length) {
+      throw ArgumentError.value(
+        audioIndex,
+        'audioIndex',
+        'is not a valid audio track index',
+      );
+    }
+
+    await _restartLocal(
+      path: path,
+      probe: probe,
+      audioIndex: audioIndex,
+      position: position,
+      duration: duration ?? _localDuration,
+      audioTracks: tracks,
+      subtitle: _localSubtitle,
+    );
+  }
+
+  /// Attaches, replaces or clears the local stream's subtitle at [position].
+  ///
+  /// A subtitle needs an HLS rendition. Receivers that clear the HLS bit get a
+  /// typed [UnsupportedFeatureException] and playback is not interrupted.
+  @override
+  Future<void> switchLiveSubtitle({
+    required CastSubtitle? subtitle,
+    required Duration position,
+  }) async {
+    final path = _localPath;
+    final probe = _localProbe;
+    if (path == null || probe == null) {
+      throw StateError(
+        'switchLiveSubtitle requires a local file to have been loaded first',
+      );
+    }
+    if (!_parseFeatures().supportsHLS) {
+      throw UnsupportedFeatureException(
+        'AirPlay receiver does not advertise HLS support, so subtitles '
+        'cannot be attached',
+      );
+    }
+    if (subtitle == null && _localSubtitle == null) return;
+
+    await _restartLocal(
+      path: path,
+      probe: probe,
+      audioIndex: _localAudioIndex,
+      position: position,
+      duration: _localDuration,
+      audioTracks: _localAudioTracks,
+      subtitle: subtitle,
+    );
+  }
+
+  Future<void> _loadPreparedMp4({
+    required String inputPath,
+    required int audioIndex,
+    required MediaProbe probe,
+    required CastDeviceCaps caps,
+    required CastSubtitle? subtitle,
+    required bool transcodeVideo,
+    required bool transcodeAudio,
+  }) async {
+    final prepared = await _preparer.prepareMp4(
+      inputPath: inputPath,
+      audioIndex: audioIndex,
+      audioTracks: probe.audio,
+      transcodeVideo: transcodeVideo,
+      transcodeAudio: transcodeAudio,
+      caps: caps,
+      duration: probe.duration,
+      subtitle: subtitle,
+    );
+    try {
+      await _activatePrepared(prepared, start: Duration.zero);
+    } catch (_) {
+      _prepared = null;
+      await prepared.dispose();
+      rethrow;
+    }
+  }
+
+  Future<void> _loadPreparedHls({
+    required String inputPath,
+    required int audioIndex,
+    required MediaProbe probe,
+    required CastDeviceCaps caps,
+    required CastSubtitle? subtitle,
+    required bool transcodeVideo,
+  }) async {
+    final prepared = await _preparer.prepareHls(
+      inputPath: inputPath,
+      audioIndex: audioIndex,
+      audioTracks: probe.audio,
+      transcodeVideo: transcodeVideo,
+      caps: caps,
+      duration: probe.duration,
+      subtitle: subtitle,
+    );
+    try {
+      await _activatePrepared(prepared, start: Duration.zero);
+    } catch (_) {
+      _prepared = null;
+      await prepared.dispose();
+      rethrow;
+    }
+  }
+
+  /// Registers [prepared] with the proxy and loads it at [start].
+  Future<void> _activatePrepared(
+    AirPlayPreparedMedia prepared, {
+    required Duration start,
+  }) async {
+    await _proxy.start(targetDeviceIp: device.address.address);
+    final url =
+        prepared.type == CastMediaType.hls
+            ? _proxy.registerHlsDirectory(
+              prepared.sessionId,
+              prepared.directory.path,
+            )
+            : _proxy.registerFile(prepared.path);
+
+    _prepared = prepared;
+    _localAudioIndex = prepared.audioIndex;
+    _localSubtitle = prepared.subtitle;
+    if (prepared.duration != null) _localDuration = prepared.duration;
+
+    await _loadMediaInternal(
+      CastMedia(
+        url: url,
+        type: prepared.type,
+        duration: prepared.duration,
+        startPosition: start == Duration.zero ? null : start,
+        title: 'AirPlay prepared',
+      ),
+      proxyUrlOverride: url,
+    );
+  }
+
+  /// Rebuilds the current local stream at [position] with new tracks.
+  Future<void> _restartLocal({
+    required String path,
+    required MediaProbe probe,
+    required int audioIndex,
+    required Duration position,
+    required Duration? duration,
+    required List<AudioStream> audioTracks,
+    required CastSubtitle? subtitle,
+  }) async {
+    if (_isLoadingMedia) {
+      throw StateError('Another cast load is already in progress');
+    }
+    _isLoadingMedia = true;
+    try {
+      final inputPath = _localInput ?? _localPathOf(path);
+      final plan = planAirPlayMedia(
+        probe,
+        audioIndex: audioIndex,
+        subtitlesRequested: subtitle != null,
+        forceHls: true,
+        caps: _localCaps,
+      );
+      if (plan is! AirPlayHlsPlan) {
+        throw UnsupportedFeatureException(
+          plan is AirPlayUnsupportedPlan
+              ? 'Cannot rebuild the stream: ${plan.reason}'
+              : 'Cannot rebuild the stream for this media',
+        );
+      }
+
+      // Prepare first: a failure leaves the old stream running.
+      final prepared = await _preparer.prepareHls(
+        inputPath: inputPath,
+        audioIndex: audioIndex,
+        audioTracks: audioTracks,
+        transcodeVideo: plan.transcodeVideo,
+        caps: _localCaps,
+        duration: duration,
+        subtitle: subtitle,
+      );
+
+      _stopPolling();
+      _loadGeneration++;
+      _proxy.cleanupPreviousMedia();
+      final previous = _prepared;
+      _prepared = null;
+      if (previous != null) {
+        _proxy.unregisterHlsDirectory(previous.sessionId);
+        await previous.dispose();
+      }
+
+      try {
+        await _activatePrepared(prepared, start: position);
+        _localAudioIndex = audioIndex;
+        _localSubtitle = subtitle;
+        _localDuration = duration ?? _localDuration;
+        _localAudioTracks = List.unmodifiable(audioTracks);
+      } catch (_) {
+        _prepared = null;
+        await prepared.dispose();
+        rethrow;
+      }
+      CastLogger.info(
+        'AirPlay: local restart complete (audio=$audioIndex, '
+        'offset=${position.inSeconds}s)',
+      );
+    } finally {
+      _isLoadingMedia = false;
+    }
+  }
+
+  Future<void> _loadMediaInternal(
+    CastMedia media, {
+    String? proxyUrlOverride,
+  }) async {
     _ensureClient();
+    // A replacement load must never be updated by the previous load's poll.
+    _stopPolling();
+    _loadGeneration++;
     stateMachine.transitionTo(SessionState.loading);
 
     try {
-      // Start proxy server
       await _proxy.start(targetDeviceIp: device.address.address);
 
       _currentMedia = media;
+      _expectedDuration = media.duration ?? _localDuration;
 
-      // Transform and register media with the proxy
-      final transformed = await _mediaTransformer.transform(media, _proxy);
-      final proxyUrl = transformed.proxyUrl;
+      final proxyUrl =
+          proxyUrlOverride ??
+          (await _mediaTransformer.transform(media, _proxy)).proxyUrl;
 
-      // Determine the final URL to send to the device
       String playUrl;
-
       if (media.subtitles.isNotEmpty && media.type == CastMediaType.hls) {
-        // Inject subtitles into HLS playlist via wrapper m3u8
         playUrl = _buildSubtitleWrapper(
           proxyUrl,
           media.subtitles,
@@ -315,33 +701,17 @@ class AirPlaySession extends CastSession {
         playUrl = proxyUrl;
       }
 
-      // `Start-Position-Seconds` (AirPlay 2) is absolute; `Start-Position`
-      // (AirPlay 1) is a 0.0-1.0 fraction. The controller converts, or warns
-      // and starts from the beginning when the version cannot express it.
       final startSeconds =
           (media.startPosition ?? Duration.zero).inMilliseconds / 1000.0;
+      final duration = media.duration ?? _localDuration;
 
-      // Start playback on the device via encrypted channel if available
       CastLogger.info(
-        'AirPlay: sending /play with URL: ${playUrl.substring(0, playUrl.length.clamp(0, 80))}... '
+        'AirPlay: sending /play with URL: '
+        '${playUrl.substring(0, playUrl.length.clamp(0, 80))}... '
         '(start=${startSeconds}s)',
       );
-      if (_mediaController != null) {
-        CastLogger.info('AirPlay: using AirPlayMediaController for /play');
-        await _mediaController!.play(
-          playUrl,
-          startPositionSeconds: startSeconds,
-        );
-      } else {
-        CastLogger.info('AirPlay: using plain HTTP for /play');
-        // AirPlay 1 has no absolute-seek parameter on /play; seek after load.
-        await _client!.play(playUrl, startPosition: 0.0);
-        if (startSeconds > 0) {
-          await _client!.scrub(startSeconds);
-        }
-      }
+      await _playOnDevice(playUrl, startSeconds, duration);
 
-      // Start polling for playback state
       _startPolling();
     } catch (e) {
       CastLogger.error('AirPlay: loadMedia failed: $e');
@@ -349,6 +719,38 @@ class AirPlaySession extends CastSession {
         stateMachine.transitionTo(SessionState.idle);
       }
       rethrow;
+    }
+  }
+
+  /// Sends `/play` with the best start-position encoding for the transport.
+  Future<void> _playOnDevice(
+    String url,
+    double startSeconds,
+    Duration? duration,
+  ) async {
+    final controller = _mediaController;
+    if (controller != null) {
+      await controller.play(
+        url,
+        startPositionSeconds: startSeconds,
+        duration: duration,
+      );
+      // AirPlay 1 fractions are only reliable with a known duration; when
+      // none was available the fraction path started at zero, so scrub.
+      if (startSeconds > 0 && (duration == null || duration <= Duration.zero)) {
+        await controller.seek(startSeconds);
+      }
+      return;
+    }
+
+    final totalMs = duration?.inMilliseconds ?? 0;
+    var fraction = 0.0;
+    if (startSeconds > 0 && totalMs > 0) {
+      fraction = (startSeconds * 1000.0 / totalMs).clamp(0.0, 1.0);
+    }
+    await _client!.play(url, startPosition: fraction);
+    if (startSeconds > 0 && fraction == 0.0) {
+      await _client!.scrub(startSeconds);
     }
   }
 
@@ -420,13 +822,13 @@ class AirPlaySession extends CastSession {
     } else {
       await _client!.stop();
     }
-    _proxy.cleanupPreviousMedia();
+    await _cleanupLocalLoad();
     if (stateMachine.canTransitionTo(SessionState.idle)) {
       stateMachine.transitionTo(SessionState.idle);
     }
   }
 
-  /// Seeks to the given [position] (sends scrub with seconds).
+  /// Seeks to the given [position] and reports it immediately.
   @override
   Future<void> seek(Duration position) async {
     _ensureClient();
@@ -437,21 +839,41 @@ class AirPlaySession extends CastSession {
     } else {
       await _client!.scrub(seconds);
     }
+    updatePosition(position);
   }
 
-  /// Sets volume. AirPlay 1 has no volume endpoint, so this stores locally.
+  /// Sets volume on receivers that advertise video volume control (bit 3).
+  ///
+  /// Throws [UnsupportedFeatureException] otherwise instead of pretending the
+  /// change was applied.
   @override
   Future<void> setVolume(double volume) async {
-    updateVolume(volume);
+    if (!_parseFeatures().supportsVideoVolumeControl) {
+      throw UnsupportedFeatureException(
+        'AirPlay receiver "${device.name}" does not advertise video volume '
+        'control (feature bit 3)',
+      );
+    }
+    _ensureClient();
+    final clamped = volume.clamp(0.0, 1.0);
+    if (_mediaController != null) {
+      await _mediaController!.setVolume(clamped);
+    } else {
+      await _client!.setVolume(clamped);
+    }
+    updateVolume(clamped);
   }
 
   /// Sets the active subtitle track.
   ///
-  /// For AirPlay 1, subtitles are delivered by rewriting the HLS playlist.
-  /// This re-loads the media with a modified playlist containing the selected
-  /// subtitle track, or without subtitles if [subtitle] is null.
+  /// Local playback restarts the prepared stream at the current position.
+  /// Remote HLS keeps the existing rewrite-the-playlist behavior.
   @override
   Future<void> setSubtitle(CastSubtitle? subtitle) async {
+    if (_localPath != null) {
+      await switchLiveSubtitle(subtitle: subtitle, position: position);
+      return;
+    }
     if (_currentMedia == null || _client == null) return;
 
     final media = _currentMedia!;
@@ -507,6 +929,7 @@ class AirPlaySession extends CastSession {
       CastLogger.warning('AirPlay: error sending Stop during disconnect: $e');
     }
 
+    await _cleanupLocalLoad();
     await _mediaController?.dispose();
     _mediaController = null;
     await _hapSession?.close();
@@ -522,6 +945,8 @@ class AirPlaySession extends CastSession {
   @override
   void dispose() {
     _stopPolling();
+    _prepared?.dispose();
+    _prepared = null;
     _mediaController?.dispose();
     _mediaController = null;
     _hapSession?.close();
@@ -531,6 +956,25 @@ class AirPlaySession extends CastSession {
     // Don't await — fire and forget during dispose
     _proxy.stop();
     super.dispose();
+  }
+
+  /// Releases the previous prepared output, HLS directory, routes and local
+  /// metadata before a new local load.
+  Future<void> _cleanupLocalLoad() async {
+    _proxy.cleanupPreviousMedia();
+    final previous = _prepared;
+    _prepared = null;
+    if (previous != null) {
+      _proxy.unregisterHlsDirectory(previous.sessionId);
+      await previous.dispose();
+    }
+    _localPath = null;
+    _localInput = null;
+    _localProbe = null;
+    _localAudioTracks = const [];
+    _localAudioIndex = 0;
+    _localDuration = null;
+    _localSubtitle = null;
   }
 
   /// Starts periodic polling of playback info.
@@ -550,11 +994,12 @@ class AirPlaySession extends CastSession {
 
   /// Polls the device for playback info and updates session state.
   ///
-  /// Consecutive failures are reported at warning level: swallowing them at
-  /// debug level is how a session that never left `loading` could look
-  /// healthy while every poll was in fact failing to parse.
+  /// The load generation is captured before awaiting the response. If a new
+  /// load replaced this one while the request was in flight, the stale values
+  /// are discarded rather than jumping the position backwards.
   Future<void> _pollPlaybackInfo() async {
     if (_client == null || _isPolling) return;
+    final generation = _loadGeneration;
     _isPolling = true;
 
     try {
@@ -563,6 +1008,12 @@ class AirPlaySession extends CastSession {
         info = await _mediaController!.getPlaybackInfo();
       } else {
         info = await _client!.getPlaybackInfo();
+      }
+      if (generation != _loadGeneration) {
+        CastLogger.debug(
+          'AirPlay: discarding playback-info from replaced load',
+        );
+        return;
       }
       _pollFailures = 0;
       _updateFromPlaybackInfo(info);
@@ -598,9 +1049,15 @@ class AirPlaySession extends CastSession {
       return;
     }
 
-    // Update position and duration
     updatePosition(Duration(milliseconds: (info.position * 1000).round()));
-    updateDuration(Duration(milliseconds: (info.duration * 1000).round()));
+
+    // A report without `duration` must not erase the probe duration. Seed the
+    // known value instead so the UI still gets a seekable range.
+    if (info.hasDuration && info.duration > 0) {
+      updateDuration(Duration(milliseconds: (info.duration * 1000).round()));
+    } else if (duration == Duration.zero && _expectedDuration != null) {
+      updateDuration(_expectedDuration!);
+    }
 
     // Update playback state based on rate and readiness
     if (!info.readyToPlay) {
@@ -631,6 +1088,39 @@ class AirPlaySession extends CastSession {
     final featuresStr =
         device.metadata['features'] ?? device.metadata['ft'] ?? '';
     return AirPlayFeatures.parse(featuresStr);
+  }
+
+  static int _resolveAudioIndex(List<AudioStream> audio, int requested) {
+    if (audio.isEmpty) return 0;
+    if (requested >= 0 && requested < audio.length) return requested;
+    for (var i = 0; i < audio.length; i++) {
+      if (audio[i].isDefault) return i;
+    }
+    return 0;
+  }
+
+  static String _localPathOf(String path) {
+    if (path.startsWith('file://')) return Uri.parse(path).toFilePath();
+    return path;
+  }
+
+  /// Resolves an input path into something FFprobe and FFmpeg can open.
+  ///
+  /// Android `content://` URIs go through the Storage Access Framework; the
+  /// returned parameter is understood by FFmpegKit's probe and prepare runs.
+  /// Plain paths and `file://` URIs are handled locally.
+  static Future<String> _resolveInput(String path) async {
+    if (path.startsWith('content://')) {
+      final saf = await FFmpegKitConfig.getSafParameterForRead(path);
+      if (saf == null || saf.isEmpty) {
+        throw UnsupportedMediaException(
+          'Cannot read the selected local file: the content URI could not be '
+          'opened. Pick the file again from storage.',
+        );
+      }
+      return saf;
+    }
+    return _localPathOf(path);
   }
 
   /// Generates a UUID v4-like string.

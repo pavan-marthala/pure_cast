@@ -96,7 +96,17 @@ FFmpeg produces the video variant and audio playlists (H.264/AAC, TS segments fo
 
 **Why:** the current code drops the start position on AirPlay 1, which breaks resume and every restart-based track change.
 
-### 7. Pairing: transient when allowed, PIN when required, credentials persisted
+### 7. AirPlay 1 `/play` always uses a binary plist body
+
+Both AirPlay 1 transports will send `POST /play` with `Content-Type: application/x-apple-binary-plist` and an Apple binary property list containing `Content-Location`, `Start-Position` (the 0.0–1.0 fraction), and `X-Apple-Session-ID`. This replaces the plain HTTP client's `text/parameters` body; the HAP controller already uses the binary form.
+
+**Why:** the recorded Living Room receiver (mDNS features `0x1e527ffff7`: video bit 0 and HLS bit 4 set, no HAP or AirPlay 2 bits) answers the plain text body with HTTP 400 before it fetches the media. The failure is on the `/play` request itself, so the local MKV remux and the media proxy are not implicated. pyatv's AirPlay 1 implementation and the published protocol notes both use the binary plist for `/play`; the text body is a legacy alternative that this receiver rejects. The receiver also exports neither `/info` nor `/server-info`, so the 400 cannot be resolved from device metadata and must be verified on the receiver.
+
+**Alternative considered:** automatically retry with the other body encoding after a 400. Rejected: a second `/play` can start a second item, and feature bits do not distinguish body-format support. If a text-only receiver appears, it gets an explicit compatibility profile and one recorded fallback rather than every rejection issuing two play commands.
+
+**Diagnostics:** the exception and log include the status code and a bounded, escaped preview of the response body. This is required because a 400 from a receiver with no device-info endpoint is otherwise indistinguishable from an unreachable media URL.
+
+### 8. Pairing: transient when allowed, PIN when required, credentials persisted
 
 - No credentials and bit 43/48 → transient pairing, no prompt.
 - No credentials and no transient support → typed pairing-required failure; the app shows a PIN dialog; successful `pairSetup` credentials are stored per device and reused.
@@ -108,7 +118,7 @@ FFmpeg produces the video variant and audio playlists (H.264/AAC, TS segments fo
 
 **Credential storage:** a small `AirPlayCredentialStore` backed by `shared_preferences`, keyed by the AirPlay `deviceid`, loaded once and cached so the synchronous `SessionFactory` can read it. Secure storage is a later hardening step; the spec does not require it.
 
-### 8. Unified media control is profile-gated and capture-validated
+### 9. Unified media control is profile-gated and capture-validated
 
 A unified-control implementation will not be enabled by feature bit alone. The design introduces an `AirPlayCommandProfile` registry keyed by receiver model/feature fingerprint. A profile is added only after a captured working video trace documents the `SETUP` streams payload and the `/command` body for play, pause, seek, stop, and status.
 
@@ -123,7 +133,7 @@ If step 1 cannot produce a working video trace, the `/play` path still ships and
 
 **Alternative considered:** implement from public reverse-engineering notes without a trace. Rejected because there is no authoritative specification and the receiver-side behavior is the only proof that matters.
 
-### 9. App integration stays thin and capability-driven
+### 10. App integration stays thin and capability-driven
 
 - Add `PureCastProtocol.airplay`; map AirPlay both ways; add AirPlay to the default discovery set and DI providers.
 - Add per-device capability inputs so AirPlay can hide volume when bit 3 is clear and subtitles when HLS bit 4 is clear. `PureCastCapabilities.forProtocol` remains the fallback.
@@ -133,12 +143,12 @@ If step 1 cannot produce a working video trace, the `/play` path still ships and
 
 **Why:** this mirrors how Chromecast and DLNA are already integrated and avoids a second casting architecture.
 
-### 10. Test seams and verification
+### 11. Test seams and verification
 
 - Reuse the package's FFmpeg/prober seams and mock AirPlay servers for deterministic tests.
-- Add tests for: planner branches, MP4 remux arguments, HLS master and subtitle validity, AirPlay 1 fraction start, stale-poll suppression, switch-at-position, credential reuse, and unified-control profile gating.
+- Add tests for: planner branches, MP4 remux arguments, HLS master and subtitle validity, AirPlay 1 binary `/play` body and fraction start, `/play` status/preview errors with no retry, stale-poll suppression, switch-at-position, credential reuse, and unified-control profile gating.
 - App tests for mapping, capabilities, pairing state, and UI gates.
-- Hardware run with `tool/airplay_hardware_check.dart` on the available `/play` receiver, recorded in `doc/specs/`.
+- Hardware run with `tool/airplay_hardware_check.dart` on the recorded Living Room receiver at `192.168.31.20:27131`, recorded in `doc/specs/`.
 - Run the package suite with the known parallel-load flakiness in mind (individually for the affected tests) and the app suite against its known `cast_player_controls_test.dart` baseline.
 
 ## Risks / Trade-offs
@@ -146,10 +156,12 @@ If step 1 cannot produce a working video trace, the `/play` path still ships and
 - **[Unified control has no working trace]** → Ship it behind the profile gate; the rest of AirPlay parity does not depend on it. Document the unsupported error and keep the capture task as a hard phase gate.
 - **[Long transcodes delay AirPlay startup]** → Direct MP4 fast path, lazy HLS, `veryfast`/1080p limits, and visible preparation state.
 - **[AirPlay 1 fraction rounding]** → Use the known probe duration and follow with `/scrub`; keep AirPlay 2 on absolute seconds.
+- **[AirPlay 1 body-format compatibility]** → Use the binary plist form that pyatv and the protocol notes specify; the recorded receiver rejects the text form. Keep the legacy text helper for diagnostics only, and add a recorded fallback profile if a genuinely text-only receiver appears. Never retry two bodies automatically.
+- **[Living Room still rejects the binary `/play`]** → The receiver advertises play-queue bit 33 but no HAP or unified-control bit. If the binary request still returns 400, capture the response body and the receiver's `/command` exchange, then implement the play-queue path only under the same captured-trace gate as unified control; otherwise record the receiver as unsupported with a precise error. Do not guess a `/command` body.
 - **[Subtitle HLS compatibility]** → Segment WebVTT with a valid target duration and test the generated playlists; gate subtitles on HLS support.
 - **[Credential security in `shared_preferences`]** → Accept for release; plan secure storage as a follow-up. Credentials are device pairing keys, not account passwords.
 - **[iOS local-network privacy / Bonjour]** → Add the service declarations and usage text; verify on device. Android multicast may need a `MulticastLock` on some devices; verify and add only if needed.
-- **[`content://` local files]** → Resolve to a cached file before preparation; otherwise AirPlay cannot read the source. Include this in the app routing work.
+- **[`content://` local files]** → Resolve through Android's Storage Access Framework (`FFmpegKitConfig.getSafParameterForRead`) before FFprobe/FFmpeg preparation; otherwise AirPlay cannot read the source. If SAF returns null, fail with a readable error instead of handing FFmpeg the raw URI. Include this in the app routing work.
 - **[User-edited UI files]** → Keep edits to the smallest capability-gate change and avoid reformatting.
 - **[Package test-suite flakiness]** → Validate new tests individually and note pre-existing parallel timeouts.
 

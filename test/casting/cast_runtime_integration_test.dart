@@ -109,6 +109,17 @@ class FakeCastService implements ICastService {
   }
 
   @override
+  Future<void> connectWithPin(PureCastDevice device, String pin) async {
+    connectCalled = true;
+    connectCalls++;
+    connectDeviceTarget = device;
+    if (connectGate != null) await connectGate!.future;
+    if (shouldConnectFail) {
+      throw const PureCastException('Pairing failed');
+    }
+  }
+
+  @override
   Future<void> disconnect() async {
     disconnectCalled = true;
   }

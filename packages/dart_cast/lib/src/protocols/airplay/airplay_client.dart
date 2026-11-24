@@ -2,7 +2,10 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import '../../utils/logger.dart';
+import 'auth/binary_plist.dart';
 import 'plist_codec.dart';
+import 'response_preview.dart';
 
 /// Low-level HTTP client for AirPlay video casting endpoints.
 ///
@@ -47,11 +50,22 @@ class AirPlayClient {
   ///
   /// [url] is the media URL (typically an HLS manifest).
   /// [startPosition] is a fraction from 0.0 to 1.0.
+  ///
+  /// The body is an Apple binary plist, which is the form AirPlay 1 receivers
+  /// and pyatv use. The older `text/parameters` body is rejected with HTTP 400
+  /// by the recorded Living Room receiver before it fetches the media.
   Future<void> play(String url, {double startPosition = 0.0}) async {
-    final body = 'Content-Location: $url\nStart-Position: $startPosition\n';
+    final body = BinaryPlistEncoder.encode({
+      'Content-Location': url,
+      'Start-Position': startPosition,
+      'X-Apple-Session-ID': _sessionId,
+    });
     final response = await _httpClient.post(
       _uri('/play'),
-      headers: {..._headers, 'Content-Type': 'text/parameters'},
+      headers: {
+        ..._headers,
+        'Content-Type': 'application/x-apple-binary-plist',
+      },
       body: body,
     );
     _checkResponse(response, 'play');
@@ -73,6 +87,15 @@ class AirPlayClient {
       headers: _headers,
     );
     _checkResponse(response, 'rate');
+  }
+
+  /// Sets the receiver volume in the 0.0–1.0 range.
+  Future<void> setVolume(double volume) async {
+    final response = await _httpClient.post(
+      _uri('/volume', queryParameters: {'volume': '${volume.clamp(0.0, 1.0)}'}),
+      headers: _headers,
+    );
+    _checkResponse(response, 'setVolume');
   }
 
   /// Stops playback and generates a new session ID.
@@ -162,11 +185,24 @@ class AirPlayClient {
   }
 
   void _checkResponse(http.Response response, String endpoint) {
-    if (response.statusCode != 200) {
-      throw AirPlayClientException(
-        'AirPlay $endpoint failed with status ${response.statusCode}',
-      );
+    if (response.statusCode == 200) return;
+
+    final preview = formatAirPlayResponsePreview(response.bodyBytes);
+    final detail = preview.isEmpty ? '' : '; body: "$preview"';
+    final message =
+        'AirPlay $endpoint failed with status ${response.statusCode}$detail';
+
+    if (endpoint == 'play') {
+      CastLogger.error(message);
+    } else {
+      CastLogger.warning(message);
     }
+
+    throw AirPlayClientException(
+      message,
+      statusCode: response.statusCode,
+      responsePreview: preview.isEmpty ? null : preview,
+    );
   }
 
   /// Parses a text/parameters response (key: value pairs separated by newlines).
@@ -205,8 +241,15 @@ class AirPlayClientException implements Exception {
   /// Description of the error.
   final String message;
 
+  /// HTTP status code returned by the receiver, when the failure was a
+  /// non-200 response rather than a transport error.
+  final int? statusCode;
+
+  /// Bounded, escaped preview of the response body, when one was present.
+  final String? responsePreview;
+
   /// Creates an [AirPlayClientException].
-  AirPlayClientException(this.message);
+  AirPlayClientException(this.message, {this.statusCode, this.responsePreview});
 
   @override
   String toString() => 'AirPlayClientException: $message';

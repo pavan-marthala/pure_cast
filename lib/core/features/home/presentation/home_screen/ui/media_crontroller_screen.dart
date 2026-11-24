@@ -122,7 +122,11 @@ class Body extends StatelessWidget {
           seekPreview,
         ) = state;
         if (preparing) {
-          return Center(child: Text('Preparing video for Chromecast...'));
+          return Center(
+            child: Text(
+              'Preparing video for ${device?.protocol.name ?? 'receiver'}...',
+            ),
+          );
         }
         if (prepareError != null) {
           return Center(child: Text(prepareError));
@@ -199,13 +203,12 @@ class Body extends StatelessWidget {
                           tracks: audioTracks,
                           activeIndex: activeAudioIndex,
                           canChange:
-                              device != null &&
-                              device.protocol == PureCastProtocol.chromecast &&
-                              device.capabilities.canChangeAudioTrack,
+                              device?.capabilities.canChangeAudioTrack ?? false,
                           restarting: restarting,
                         ),
                         GestureDetector(
-                          onTap: () {
+                          onTap: (device?.capabilities.canChangeSubtitle ?? false)
+                              ? () {
                             final extractionState = context
                                 .read<SubtitleExtractionBloc>()
                                 .state;
@@ -227,7 +230,7 @@ class Body extends StatelessWidget {
                                   ? discoveredSubtitles
                                   : (media?.subtitles ?? []),
                             );
-                          },
+                          } : null,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,

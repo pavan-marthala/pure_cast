@@ -61,12 +61,17 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
   /// [StateStatus.loading].
   String? _connectingDeviceId;
 
+  /// Device selected before a PIN prompt, restored if the prompt is cancelled.
+  PureCastDevice? _deviceBeforePairing;
+
   CastSessionBloc(
     this._castService,
     this._historyRepo, {
     @ignoreParam this.connectTimeout = const Duration(seconds: 30),
   }) : super(const CastSessionState()) {
     on<ConnectDeviceEvent>(_onConnectDevice);
+    on<ConnectWithPinEvent>(_onConnectWithPin);
+    on<CancelPairingEvent>(_onCancelPairing);
     on<DisconnectDeviceEvent>(_onDisconnectDevice);
     on<LoadMediaEvent>(_onLoadMedia);
     on<PlayMediaEvent>(_onPlayMedia);
@@ -148,6 +153,17 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       if (state.activeMedia != null) {
         add(LoadMediaEvent(state.activeMedia!));
       }
+    } on PairingRequiredException {
+      // Keep the requested device selected and wait for the PIN prompt.
+      _deviceBeforePairing = previousDevice;
+      emit(
+        state.copyWith(
+          connectionStatus: StateStatus.loading,
+          activeDevice: event.device,
+          connectionError: null,
+          pairingRequired: true,
+        ),
+      );
     } on TimeoutException {
       // Keep the requested device selected: the timed-out connect may still
       // complete underneath (e.g. a slow receiver handshake). If it does, the
@@ -171,6 +187,77 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     } finally {
       _connectingDeviceId = null;
     }
+  }
+
+  Future<void> _onConnectWithPin(
+    ConnectWithPinEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final device = state.activeDevice;
+    if (device == null) return;
+
+    _connectingDeviceId = device.id;
+    emit(
+      state.copyWith(
+        connectionStatus: StateStatus.loading,
+        connectionError: null,
+      ),
+    );
+    try {
+      await _castService
+          .connectWithPin(device, event.pin)
+          .timeout(connectTimeout);
+      emit(
+        state.copyWith(
+          connectionStatus: StateStatus.loaded,
+          pairingRequired: false,
+        ),
+      );
+      if (state.activeMedia != null) {
+        add(LoadMediaEvent(state.activeMedia!));
+      }
+    } on TimeoutException {
+      emit(
+        state.copyWith(
+          connectionStatus: StateStatus.error,
+          connectionError:
+              'Timed out pairing with ${device.name}. Check that the device '
+              'is on the same network.',
+          pairingRequired: false,
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          connectionStatus: StateStatus.error,
+          connectionError: e.toString(),
+          pairingRequired: false,
+        ),
+      );
+    } finally {
+      _connectingDeviceId = null;
+    }
+  }
+
+  Future<void> _onCancelPairing(
+    CancelPairingEvent event,
+    Emitter<CastSessionState> emit,
+  ) async {
+    final previous = _deviceBeforePairing;
+    _deviceBeforePairing = null;
+    try {
+      await _castService.disconnect();
+    } catch (_) {
+      // The half-connected session is best-effort; the UI is cleared anyway.
+    }
+    emit(
+      state.copyWith(
+        connectionStatus: StateStatus.initial,
+        connectionError: null,
+        activeDevice: previous,
+        pairingRequired: false,
+      ),
+    );
   }
 
   Future<void> _onDisconnectDevice(
@@ -204,7 +291,8 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       return;
     }
     // Save where the outgoing media stopped before its state is replaced.
-    if (state.activeMedia != null && state.activeMedia!.uri != event.media.uri) {
+    if (state.activeMedia != null &&
+        state.activeMedia!.uri != event.media.uri) {
       _checkpointHistory(force: true);
     }
     _lastCheckpointPosition = null;
@@ -255,10 +343,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       final startAt = event.media.startPosition;
       if (startAt != null && startAt > Duration.zero) {
         try {
-          log(
-            "Seeking to resume position $startAt",
-            name: "Cast Session Bloc",
-          );
+          log("Seeking to resume position $startAt", name: "Cast Session Bloc");
           await _castService.seek(startAt);
         } catch (e) {
           // Resuming is best effort: playback still starts from the beginning.
@@ -274,8 +359,10 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
       // the file (best effort — failures never block playback).
       final isLive = _castService.isLiveStream;
       var tracks = _castService.audioTracks;
-      int? activeIndex = isLive ? _castService.activeAudioIndex : null;
-      if (!isLive && event.media.isLocalFile) {
+      int? activeIndex = (isLive || tracks.isNotEmpty)
+          ? _castService.activeAudioIndex
+          : null;
+      if (tracks.isEmpty && event.media.isLocalFile) {
         final probed = await _probeAudioTracks(event.media.uri);
         if (probed != null) {
           tracks = probed;
@@ -365,7 +452,6 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     _cancelSeekPreview();
     try {
       await _castService.stop();
-      
     } catch (e) {
       emit(state.copyWith(playbackError: e.toString()));
     } finally {
@@ -488,11 +574,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     _restartInFlight = true;
     _cancelSeekPreview();
     emit(
-      state.copyWith(
-        restarting: true,
-        playbackError: null,
-        seekPreview: null,
-      ),
+      state.copyWith(restarting: true, playbackError: null, seekPreview: null),
     );
     try {
       await _castService.switchLiveAudio(
@@ -515,12 +597,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
         ),
       );
     } catch (e) {
-      emit(
-        state.copyWith(
-          restarting: false,
-          playbackError: e.toString(),
-        ),
-      );
+      emit(state.copyWith(restarting: false, playbackError: e.toString()));
     } finally {
       _restartInFlight = false;
     }
@@ -996,8 +1073,7 @@ class CastSessionBloc extends Bloc<CastSessionEvent, CastSessionState> {
     // While playing, only write when enough new progress has accumulated.
     if (!force && !isCompleted) {
       final last = _lastCheckpointPosition;
-      if (last != null &&
-          (position - last).abs() < _checkpointInterval) {
+      if (last != null && (position - last).abs() < _checkpointInterval) {
         return;
       }
     }

@@ -20,27 +20,55 @@ void main() {
 
   group('AirPlayClient', () {
     group('play()', () {
-      test(
-        'sends POST /play with Content-Location and Start-Position',
-        () async {
-          await client.play('https://example.com/video.m3u8');
+      test('sends a binary plist /play body', () async {
+        await client.play('https://example.com/video.m3u8');
 
-          expect(mockServer.lastMethod, equals('POST'));
-          expect(mockServer.lastPath, equals('/play'));
-          expect(mockServer.lastContentType, contains('text/parameters'));
-          expect(
-            mockServer.lastBody,
-            contains('Content-Location: https://example.com/video.m3u8'),
-          );
-          expect(mockServer.lastBody, contains('Start-Position: 0.0'));
-        },
-      );
+        expect(mockServer.lastMethod, equals('POST'));
+        expect(mockServer.lastPath, equals('/play'));
+        expect(
+          mockServer.lastContentType,
+          contains('application/x-apple-binary-plist'),
+        );
 
-      test('sends custom start position', () async {
+        final body = mockServer.lastPlayBody;
+        expect(body, isNotNull);
+        expect(body!['Content-Location'], 'https://example.com/video.m3u8');
+        expect(body['Start-Position'], closeTo(0.0, 0.0001));
+        expect(body['X-Apple-Session-ID'], mockServer.lastSessionId);
+      });
+
+      test('sends custom start position as a fraction', () async {
         await client.play('https://example.com/video.m3u8', startPosition: 0.5);
 
-        expect(mockServer.lastBody, contains('Start-Position: 0.5'));
+        final body = mockServer.lastPlayBody;
+        expect(body, isNotNull);
+        expect(body!['Start-Position'], closeTo(0.5, 0.0001));
       });
+
+      test(
+        'a 400 carries status and body preview and is not retried',
+        () async {
+          mockServer
+            ..playStatusCode = 400
+            ..playErrorBody = 'bad request';
+
+          await expectLater(
+            client.play('https://example.com/video.m3u8'),
+            throwsA(
+              isA<AirPlayClientException>()
+                  .having((e) => e.statusCode, 'statusCode', 400)
+                  .having(
+                    (e) => e.responsePreview,
+                    'responsePreview',
+                    contains('bad request'),
+                  )
+                  .having((e) => e.message, 'message', contains('status 400')),
+            ),
+          );
+
+          expect(mockServer.playRequestCount, 1);
+        },
+      );
     });
 
     group('scrub()', () {

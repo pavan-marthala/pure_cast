@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:dart_cast/dart_cast.dart' as dart_cast;
 import 'package:injectable/injectable.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/i_cast_service.dart';
+import 'package:pure_cast/core/features/casting/data/data_source/airplay_credential_store.dart';
 import 'package:pure_cast/core/features/casting/data/model/pure_cast_models.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/transcode_settings.dart';
 import 'package:pure_cast/core/features/casting/data/data_source/receiver_codec_memory.dart';
@@ -13,12 +14,18 @@ import 'package:pure_cast/core/features/casting/data/repository/live_timeline_ma
 
 /// Probes a local file and returns the media information needed to map audio
 /// tracks. Injectable so tests can avoid starting FFmpeg.
-typedef DartCastMediaProbe = Future<dart_cast.MediaProbe?> Function(String path);
+typedef DartCastMediaProbe = Future<dart_cast.MediaProbe?> Function(
+  String path,
+);
+
+/// Returns the FFmpeg/transcode capabilities for local-file preparation.
+typedef DartCastCapsProvider = Future<dart_cast.CastDeviceCaps> Function();
 
 /// Concrete adapter wrapping dart_cast package services.
 class DartCastAdapter implements ICastService {
   final dart_cast.CastService _castService;
   final DartCastMediaProbe _mediaProbe;
+  final DartCastCapsProvider _capsProvider;
 
   StreamSubscription<dart_cast.SessionState>? _sessionStateSub;
   StreamSubscription<Duration>? _positionSub;
@@ -48,40 +55,65 @@ class DartCastAdapter implements ICastService {
   DartCastAdapter({
     dart_cast.CastService? castService,
     DartCastMediaProbe? mediaProbe,
+    DartCastCapsProvider? capsProvider,
     dart_cast.MediaProber? prober,
   }) : _castService =
            castService ??
            dart_cast.CastService(
-             discoveryProviders: [
-               dart_cast.ChromecastDiscoveryProvider(),
-               dart_cast.DlnaDiscoveryProvider(),
-             ],
-             sessionFactory: (device) {
-               switch (device.protocol) {
-                 case dart_cast.CastProtocol.chromecast:
-                   return dart_cast.ChromecastSession(device: device);
-                 case dart_cast.CastProtocol.dlna:
-                   return dart_cast.DlnaSession.fromDevice(device);
-                 case dart_cast.CastProtocol.airplay:
-                   throw UnsupportedError('AirPlay is not enabled for V1');
-               }
-             },
+             discoveryProviders: defaultDiscoveryProviders(),
+             sessionFactory: defaultSessionFactory,
            ),
        _mediaProbe =
            mediaProbe ??
-           _probeWithProber(prober ?? const dart_cast.FfprobeMediaProber());
+           _probeWithProber(prober ?? const dart_cast.FfprobeMediaProber()),
+       _capsProvider = capsProvider ?? _detectCaps;
+
+  /// Discovery providers used when the adapter creates its own service.
+  static List<dart_cast.DeviceDiscoveryProvider> defaultDiscoveryProviders() =>
+      [
+        dart_cast.ChromecastDiscoveryProvider(),
+        dart_cast.DlnaDiscoveryProvider(),
+        dart_cast.AirPlayDiscoveryProvider(),
+      ];
+
+  /// Session factory used when the adapter creates its own service.
+  static dart_cast.CastSession defaultSessionFactory(
+    dart_cast.CastDevice device,
+  ) {
+    switch (device.protocol) {
+      case dart_cast.CastProtocol.chromecast:
+        return dart_cast.ChromecastSession(device: device);
+      case dart_cast.CastProtocol.dlna:
+        return dart_cast.DlnaSession.fromDevice(device);
+      case dart_cast.CastProtocol.airplay:
+        final session = dart_cast.AirPlaySession(device);
+        // Reuse a previous pair-setup so the receiver does not ask for a PIN
+        // again. The cache is loaded before connect() creates the session.
+        session.credentials = AirPlayCredentialStore.instance.credentialsFor(
+          device.id,
+        );
+        return session;
+    }
+  }
+
+  /// Protocols scanned when the caller does not pass a filter.
+  static const Set<PureCastProtocol> defaultProtocols = {
+    PureCastProtocol.chromecast,
+    PureCastProtocol.dlna,
+    PureCastProtocol.airplay,
+  };
 
   @override
   Stream<List<PureCastDevice>> discoverDevices({
     Set<PureCastProtocol>? protocols,
   }) {
     final targetProtocols = protocols != null
-        ? protocols.map(_mapProtocolToDartCast).toSet()
-        : {dart_cast.CastProtocol.chromecast, dart_cast.CastProtocol.dlna};
+        ? protocols.map(mapProtocolToDartCast).toSet()
+        : defaultProtocols.map(mapProtocolToDartCast).toSet();
 
     return _castService
         .startDiscovery(protocols: targetProtocols)
-        .map((devices) => devices.map(_mapDeviceToDomain).toList());
+        .map((devices) => devices.map(mapDeviceToDomain).toList());
   }
 
   @override
@@ -92,15 +124,58 @@ class DartCastAdapter implements ICastService {
   @override
   Future<void> connect(PureCastDevice device) async {
     try {
-      final dartDevice = _mapDeviceToDartCast(device);
+      // AirPlay session factories are synchronous, so credentials must be in
+      // the cache before the package creates the session.
+      await AirPlayCredentialStore.instance.ensureLoaded();
+      final dartDevice = mapDeviceToDartCast(device);
       final session = await _castService.connect(dartDevice);
 
       _subscribeToSession(session);
+    } on dart_cast.NeedsPairingException catch (e) {
+      // Stored credentials that no longer verify are useless; drop them so
+      // the next attempt asks for a PIN instead of failing the same way.
+      await AirPlayCredentialStore.instance.delete(device.id);
+      throw PairingRequiredException(device.id, device.name, e);
     } catch (e) {
       dart_cast.CastLogger.error(
         'PureCast: connect failed to ${device.name}: $e',
       );
       throw PureCastException('Failed to connect to ${device.name}', e);
+    }
+  }
+
+  @override
+  Future<void> connectWithPin(PureCastDevice device, String pin) async {
+    final session = _castService.pendingPairingSession;
+    if (session is! dart_cast.AirPlaySession) {
+      throw PureCastException(
+        'No pending AirPlay pairing session for ${device.name}',
+      );
+    }
+
+    try {
+      final credentials = await session.pairSetup(pin);
+      await AirPlayCredentialStore.instance.save(device.id, credentials);
+    } catch (e) {
+      dart_cast.CastLogger.error(
+        'PureCast: pairing failed with ${device.name}: $e',
+      );
+      throw PureCastException('Failed to pair with ${device.name}', e);
+    }
+
+    try {
+      final connected = await _castService.completePendingConnect(
+        mapDeviceToDartCast(device),
+      );
+      _subscribeToSession(connected);
+    } catch (e) {
+      dart_cast.CastLogger.error(
+        'PureCast: connect after pairing failed to ${device.name}: $e',
+      );
+      throw PureCastException(
+        'Pairing succeeded but connecting to ${device.name} failed',
+        e,
+      );
     }
   }
 
@@ -128,7 +203,11 @@ class DartCastAdapter implements ICastService {
   }) async {
     if (media.isLocalFile) {
       try {
-        return await loadLocalFile(media.uri, subtitles: media.subtitles);
+        return await loadLocalFile(
+          media.uri,
+          subtitle: media.defaultSubtitle,
+          subtitles: media.subtitles,
+        );
       } catch (e) {
         // Only fall back to direct load for probe failures.
         if (shouldFallbackToDirect(e)) {
@@ -173,7 +252,7 @@ class DartCastAdapter implements ICastService {
     }
   }
 
-  Future<dart_cast.CastDeviceCaps> _detectCaps() async {
+  static Future<dart_cast.CastDeviceCaps> _detectCaps() async {
     final caps = await dart_cast.CastFfmpegCapabilities.detect();
     final transcodeEnabled = await TranscodeSettings.isEnabled();
     return dart_cast.CastDeviceCaps(
@@ -305,10 +384,10 @@ class DartCastAdapter implements ICastService {
   @override
   List<PureCastAudioTrack> get audioTracks {
     final session = _castService.activeSession;
-    if (session == null || !session.isLive) {
-      return const [];
-    }
-    final streams = session.liveAudioTracks;
+    if (session == null) return const [];
+    // Protocol-neutral: live sessions report their live tracks and AirPlay
+    // reports the tracks found while preparing a local file.
+    final streams = session.audioTracks;
     return [
       for (var i = 0; i < streams.length; i++)
         PureCastAudioTrack(
@@ -323,7 +402,7 @@ class DartCastAdapter implements ICastService {
 
   @override
   int get activeAudioIndex {
-    return _castService.activeSession?.liveAudioIndex ?? 0;
+    return _castService.activeSession?.activeAudioIndex ?? 0;
   }
 
   @override
@@ -354,7 +433,7 @@ class DartCastAdapter implements ICastService {
           path,
           audioStreamIndex: audioStreamIndex,
           // Detect FFmpeg capabilities at runtime instead of hardcoding false.
-          caps: await _detectCaps(),
+          caps: await _capsProvider(),
           subtitle: dartSubtitle,
           streamType: streamType,
           memoryLookup: (receiverId, codecKey) =>
@@ -367,7 +446,7 @@ class DartCastAdapter implements ICastService {
         await session.loadLocalFile(
           path,
           audioStreamIndex: audioStreamIndex,
-          caps: await _detectCaps(),
+          caps: await _capsProvider(),
           subtitle: dartSubtitle,
           streamType: streamType,
         );
@@ -597,45 +676,70 @@ class DartCastAdapter implements ICastService {
   }
 
   // ── Data Mappers ──
-  static PureCastDevice _mapDeviceToDomain(dart_cast.CastDevice d) {
-    final protocol = _mapProtocolToDomain(d.protocol);
+
+  /// Maps a package device to the application model.
+  ///
+  /// AirPlay capabilities come from the receiver's advertised feature bits:
+  /// HLS support gates track switching, and bit 3 gates volume.
+  static PureCastDevice mapDeviceToDomain(dart_cast.CastDevice d) {
+    final protocol = mapProtocolToDomain(d.protocol);
+    var supportsHls = false;
+    var supportsVolume = false;
+    if (protocol == PureCastProtocol.airplay) {
+      final features = dart_cast.AirPlayFeatures.parse(
+        d.metadata['features'] ?? d.metadata['ft'] ?? '',
+      );
+      supportsHls = features.supportsHLS;
+      supportsVolume = features.supportsVideoVolumeControl;
+    }
     return PureCastDevice(
       id: d.id,
       name: d.name,
       protocol: protocol,
       host: d.address.address,
       port: d.port,
-      capabilities: PureCastCapabilities.forProtocol(protocol),
+      metadata: Map.unmodifiable(d.metadata),
+      capabilities: PureCastCapabilities.forProtocol(
+        protocol,
+        supportsHls: supportsHls,
+        supportsVolume: supportsVolume,
+      ),
     );
   }
 
-  static dart_cast.CastDevice _mapDeviceToDartCast(PureCastDevice d) {
+  /// Maps the application model back to the package device.
+  static dart_cast.CastDevice mapDeviceToDartCast(PureCastDevice d) {
     return dart_cast.CastDevice(
       id: d.id,
       name: d.name,
-      protocol: _mapProtocolToDartCast(d.protocol),
+      protocol: mapProtocolToDartCast(d.protocol),
       address: InternetAddress(d.host),
       port: d.port,
+      metadata: d.metadata,
     );
   }
 
-  static PureCastProtocol _mapProtocolToDomain(dart_cast.CastProtocol p) {
+  /// Maps a package protocol to the application value.
+  static PureCastProtocol mapProtocolToDomain(dart_cast.CastProtocol p) {
     switch (p) {
       case dart_cast.CastProtocol.chromecast:
         return PureCastProtocol.chromecast;
       case dart_cast.CastProtocol.dlna:
         return PureCastProtocol.dlna;
       case dart_cast.CastProtocol.airplay:
-        return PureCastProtocol.chromecast;
+        return PureCastProtocol.airplay;
     }
   }
 
-  static dart_cast.CastProtocol _mapProtocolToDartCast(PureCastProtocol p) {
+  /// Maps an application protocol to the package value.
+  static dart_cast.CastProtocol mapProtocolToDartCast(PureCastProtocol p) {
     switch (p) {
       case PureCastProtocol.chromecast:
         return dart_cast.CastProtocol.chromecast;
       case PureCastProtocol.dlna:
         return dart_cast.CastProtocol.dlna;
+      case PureCastProtocol.airplay:
+        return dart_cast.CastProtocol.airplay;
     }
   }
 

@@ -198,6 +198,19 @@ abstract class CastSession {
   /// Monotonic token that changes whenever playback is restarted.
   int get liveSessionToken => mediaSessionId ?? 0;
 
+  /// Audio tracks available for the current media, for protocols that expose
+  /// them outside a live remux (AirPlay).
+  ///
+  /// Defaults to the live track list, so Chromecast and DLNA keep their
+  /// existing behavior.
+  List<AudioStream> get audioTracks => isLive ? liveAudioTracks : const [];
+
+  /// Index (`0:a:N`) of the audio track currently in use.
+  ///
+  /// Defaults to the live index so protocols without a separate track model
+  /// keep working unchanged.
+  int get activeAudioIndex => isLive ? liveAudioIndex : 0;
+
   // -- Update methods for subclasses --
 
   /// Updates the current playback position.

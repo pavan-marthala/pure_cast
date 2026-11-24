@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_cast/src/core/cast_device.dart';
+import 'package:dart_cast/src/core/cast_exceptions.dart';
 import 'package:dart_cast/src/core/cast_media.dart';
 import 'package:dart_cast/src/core/cast_session.dart';
 import 'package:dart_cast/src/protocols/airplay/airplay_session.dart';
@@ -198,14 +199,13 @@ void main() {
       expect(pos.inSeconds, greaterThanOrEqualTo(0));
     });
 
-    test('setVolume stores volume locally (AirPlay 1 limitation)', () async {
+    test('setVolume reports unsupported without the volume bit', () async {
       await session.connect();
 
-      final volumeFuture = session.volumeStream.first;
-      await session.setVolume(0.5);
-
-      final vol = await volumeFuture.timeout(const Duration(seconds: 2));
-      expect(vol, 0.5);
+      await expectLater(
+        session.setVolume(0.5),
+        throwsA(isA<UnsupportedFeatureException>()),
+      );
     });
   });
 }

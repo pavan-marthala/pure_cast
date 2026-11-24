@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_cast/src/core/cast_device.dart';
+import 'package:dart_cast/src/core/cast_exceptions.dart';
 import 'package:dart_cast/src/core/cast_media.dart';
 import 'package:dart_cast/src/core/cast_session.dart';
 import 'package:dart_cast/src/protocols/airplay/airplay_session.dart';
@@ -74,7 +75,7 @@ void main() {
 
         expect(mockServer.lastPath, equals('/play'));
         expect(mockServer.lastMethod, equals('POST'));
-        expect(mockServer.lastBody, contains('Content-Location:'));
+        expect(mockServer.lastPlayLocation, isNotNull);
       });
 
       test('transitions through loading to playing', () async {
@@ -299,15 +300,15 @@ void main() {
     });
 
     group('setVolume()', () {
-      test(
-        'stores volume locally (AirPlay 1 has no volume endpoint)',
-        () async {
-          await session.connect();
+      test('reports unsupported when the receiver has no volume bit', () async {
+        await session.connect();
 
-          // Should not throw — just stores locally
-          await session.setVolume(0.5);
-        },
-      );
+        await expectLater(
+          session.setVolume(0.5),
+          throwsA(isA<UnsupportedFeatureException>()),
+        );
+        expect(session.volume, isNull);
+      });
     });
   });
 }

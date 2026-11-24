@@ -11,7 +11,17 @@ abstract class ICastService {
   Future<void> stopDiscovery();
 
   /// Connects to a target cast device.
+  ///
+  /// Throws [PairingRequiredException] when the receiver needs a PIN before
+  /// the session can be established.
   Future<void> connect(PureCastDevice device);
+
+  /// Completes a pairing-required connection with the PIN shown on the
+  /// receiver.
+  ///
+  /// Must be called after [connect] threw [PairingRequiredException] for the
+  /// same device. Credentials are persisted for future reconnects.
+  Future<void> connectWithPin(PureCastDevice device, String pin);
 
   /// Disconnects from the active cast session.
   Future<void> disconnect();

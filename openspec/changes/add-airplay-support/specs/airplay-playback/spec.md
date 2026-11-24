@@ -25,6 +25,42 @@ The system SHALL serve remote MP4 and HLS media through its local proxy and give
 - **WHEN** the upstream media request fails
 - **THEN** the load fails with a typed media error and the session does not remain in a loading state
 
+### Requirement: AirPlay 1 `/play` uses a binary plist body
+
+The system SHALL send `POST /play` with `Content-Type: application/x-apple-binary-plist` and an Apple binary property list body on every transport. The body SHALL contain `Content-Location` set to the media URL, `Start-Position` set to the 0.0–1.0 start fraction, and `X-Apple-Session-ID`. The plain AirPlay 1 transport SHALL NOT send a `text/parameters` body.
+
+#### Scenario: Plain AirPlay 1 receiver
+
+- **WHEN** a receiver is connected through the plain AirPlay 1 transport
+- **THEN** the `/play` request body is a binary plist containing the media URL, start fraction, and session identifier
+- **AND** the request content type is `application/x-apple-binary-plist`
+
+#### Scenario: HAP-backed receiver
+
+- **WHEN** a receiver is connected through the HAP transport and uses the AirPlay 1 `/play`
+- **THEN** the request uses the same binary plist keys and content type
+
+#### Scenario: Receiver rejects the legacy text body
+
+- **WHEN** a receiver accepts URL playback but rejects the legacy `text/parameters` body
+- **THEN** the binary plist request is accepted and playback starts
+
+### Requirement: `/play` rejections are diagnosable and are not retried
+
+The system SHALL include the receiver's HTTP status code and a bounded, escaped preview of the response body in the error surfaced when `/play` is rejected, and SHALL log the same status with the endpoint. It SHALL NOT automatically issue a second `/play` with a different body encoding for the same load.
+
+#### Scenario: Receiver rejects the request
+
+- **WHEN** the receiver answers `/play` with a non-200 status
+- **THEN** the error identifies the endpoint, status code, and a bounded response preview
+- **AND** the session leaves the loading state
+- **AND** no second `/play` request is sent for that load
+
+#### Scenario: Receiver is unreachable during `/play`
+
+- **WHEN** the `/play` request cannot reach the receiver
+- **THEN** the failure is reported as a transport error rather than a playback rejection
+
 ### Requirement: Compatible local media is played directly
 
 The system SHALL probe a local file and play it directly when it is a compatible container with H.264 video and AAC or MP3 audio and no subtitle or multi-audio requirement exists.

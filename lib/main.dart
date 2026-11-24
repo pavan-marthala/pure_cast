@@ -32,11 +32,12 @@ final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final window = WindowManager.instance.getCurrent()!;
-  window.maximumSize = const Size(800, double.infinity).toNative();
-  window.center();
-  window.show();
-
+  if (PlatformChecker.isMacOS() || PlatformChecker.isWindows()) {
+    final window = WindowManager.instance.getCurrent()!;
+    window.maximumSize = const Size(800, double.infinity).toNative();
+    window.center();
+    window.show();
+  }
   // await dotenv.load(fileName: "app_config.env");
   await configureDependencies();
   await CastPrepareSession.cleanupLeftovers();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_cast/src/core/cast_device.dart';
+import 'package:dart_cast/src/core/cast_exceptions.dart';
 import 'package:dart_cast/src/core/cast_media.dart';
 import 'package:dart_cast/src/core/cast_service.dart';
 import 'package:dart_cast/src/core/cast_session.dart';
@@ -106,6 +107,33 @@ class HangingMockCastSession extends MockCastSession {
   }
 }
 
+class PairingRequiredSession extends MockCastSession {
+  PairingRequiredSession(super.device);
+
+  @override
+  Future<void> connect() async {
+    stateMachine.transitionTo(SessionState.connecting);
+    throw NeedsPairingException('AirPlay device requires pairing');
+  }
+}
+
+class PairingThenConnectSession extends MockCastSession {
+  PairingThenConnectSession(super.device);
+
+  int attempts = 0;
+  bool paired = false;
+
+  @override
+  Future<void> connect() async {
+    attempts++;
+    stateMachine.transitionTo(SessionState.connecting);
+    if (!paired) {
+      throw NeedsPairingException('AirPlay device requires pairing');
+    }
+    stateMachine.transitionTo(SessionState.connected);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -171,6 +199,47 @@ void main() {
       expect(provider.stopped, isTrue);
 
       service.dispose();
+    });
+
+    test('connect propagates NeedsPairingException unchanged', () async {
+      final service = CastService(
+        sessionFactory: (device) => PairingRequiredSession(device),
+      );
+      addTearDown(service.dispose);
+
+      await expectLater(
+        service.connect(_device('a1', CastProtocol.airplay)),
+        throwsA(isA<NeedsPairingException>()),
+      );
+      expect(service.activeSession, isNull);
+    });
+
+    test('a pairing failure can be completed on the same session', () async {
+      late PairingThenConnectSession created;
+      final service = CastService(
+        sessionFactory: (device) {
+          created = PairingThenConnectSession(device);
+          return created;
+        },
+      );
+      addTearDown(service.dispose);
+
+      final device = _device('a1', CastProtocol.airplay);
+      await expectLater(
+        service.connect(device),
+        throwsA(isA<NeedsPairingException>()),
+      );
+      expect(service.pendingPairingSession, same(created));
+      expect(service.activeSession, isNull);
+
+      created.paired = true;
+      final session = await service.completePendingConnect(device);
+
+      expect(session, same(created));
+      expect(service.activeSession, same(created));
+      expect(service.pendingPairingSession, isNull);
+      expect(created.attempts, 2);
+      expect(session.state, SessionState.connected);
     });
 
     test('connect creates correct session type per protocol', () async {

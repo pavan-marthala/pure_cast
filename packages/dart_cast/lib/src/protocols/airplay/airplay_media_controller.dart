@@ -6,6 +6,7 @@ import 'package:dart_cast/src/protocols/airplay/airplay_features.dart';
 import 'package:dart_cast/src/protocols/airplay/auth/binary_plist.dart';
 import 'package:dart_cast/src/protocols/airplay/auth/hap_session.dart';
 import 'package:dart_cast/src/protocols/airplay/plist_codec.dart';
+import 'package:dart_cast/src/protocols/airplay/response_preview.dart';
 import 'package:dart_cast/src/protocols/airplay/timing_server.dart';
 import 'package:dart_cast/src/utils/logger.dart';
 
@@ -153,15 +154,20 @@ class AirPlayMediaController {
 
   /// Starts video playback, choosing the protocol version from [features].
   ///
-  /// [startPositionSeconds] is an absolute offset. AirPlay 1 cannot express
-  /// that — its `Start-Position` is a fraction of a duration the sender does
-  /// not know yet — so a non-zero value is dropped with a warning on the V1
-  /// path rather than being silently reinterpreted as "99% of the way in".
+  /// [startPositionSeconds] is an absolute offset. AirPlay 2 receives it
+  /// directly as `Start-Position-Seconds`. AirPlay 1 can only express a
+  /// 0.0-1.0 fraction, so [duration] is required to convert it; when the
+  /// duration is unknown the fraction path starts at zero and the caller may
+  /// follow with [seek].
   ///
   /// Throws [UnsupportedFeatureException] if the device advertises no usable
   /// video bit, and [PlaybackException] if the receiver rejects `/play` or the
   /// mandatory `/rate` that follows it.
-  Future<void> play(String url, {double startPositionSeconds = 0.0}) async {
+  Future<void> play(
+    String url, {
+    double startPositionSeconds = 0.0,
+    Duration? duration,
+  }) async {
     if (features.isV2Protocol) {
       if (!features.supportsVideoV2) {
         throw UnsupportedFeatureException(
@@ -187,7 +193,7 @@ class AirPlayMediaController {
             'AirPlayMediaController: AirPlay 2 /play returned 404 and this '
             'device also advertises AirPlay 1 video (bit 0) — retrying on V1',
           );
-          return _playV1AfterV2Fallback(url, startPositionSeconds);
+          return _playV1AfterV2Fallback(url, startPositionSeconds, duration);
         }
 
         // Verified on a TCL Google TV running Apple's licensed AirPlay
@@ -208,8 +214,12 @@ class AirPlayMediaController {
         );
       }
       if (resp.statusCode != 200) {
+        final detail = _responseDetail(resp);
+        CastLogger.error(
+          'AirPlay: /play failed: status=${resp.statusCode}$detail',
+        );
         throw PlaybackException(
-          'Device rejected AirPlay 2 /play: ${resp.statusCode}',
+          'Device rejected AirPlay 2 /play: ${resp.statusCode}$detail',
           statusCode: resp.statusCode,
         );
       }
@@ -225,25 +235,41 @@ class AirPlayMediaController {
       );
     }
 
-    if (startPositionSeconds != 0.0) {
-      CastLogger.warning(
-        'AirPlayMediaController: AirPlay 1 Start-Position is a 0.0-1.0 '
-        'fraction, not seconds — starting from the beginning instead of '
-        '${startPositionSeconds}s',
-      );
-    }
-
+    final fraction = _fractionFor(startPositionSeconds, duration);
     CastLogger.info('AirPlayMediaController: play via AirPlay 1 (bit 0)');
-    final resp = await playV1(url, 0.0);
+    final resp = await playV1(url, fraction);
     CastLogger.debug(
       'AirPlayMediaController: playV1 response: ${resp.statusCode}',
     );
     if (resp.statusCode != 200) {
+      final detail = _responseDetail(resp);
+      CastLogger.error(
+        'AirPlay: /play failed: status=${resp.statusCode}$detail',
+      );
       throw PlaybackException(
-        'Device rejected AirPlay 1 /play: ${resp.statusCode}',
+        'Device rejected AirPlay 1 /play: ${resp.statusCode}$detail',
         statusCode: resp.statusCode,
       );
     }
+  }
+
+  /// Converts an absolute start position into the AirPlay 1 fraction.
+  ///
+  /// Without a known duration the fraction cannot be computed; the caller
+  /// starts at zero and follows with [seek].
+  static double _fractionFor(double startSeconds, Duration? duration) {
+    if (startSeconds <= 0) return 0.0;
+    final total = duration?.inMilliseconds ?? 0;
+    if (total <= 0) {
+      CastLogger.warning(
+        'AirPlayMediaController: AirPlay 1 Start-Position is a 0.0-1.0 '
+        'fraction and the duration is unknown — starting from the beginning '
+        'and relying on a follow-up scrub for ${startSeconds}s',
+      );
+      return 0.0;
+    }
+    final fraction = (startSeconds * 1000.0) / total;
+    return fraction.clamp(0.0, 1.0);
   }
 
   /// Retries playback over AirPlay 1 after an AirPlay 2 `/play` returned 404.
@@ -255,23 +281,22 @@ class AirPlayMediaController {
   Future<void> _playV1AfterV2Fallback(
     String url,
     double startPositionSeconds,
+    Duration? duration,
   ) async {
-    if (startPositionSeconds != 0.0) {
-      CastLogger.warning(
-        'AirPlayMediaController: AirPlay 1 Start-Position is a 0.0-1.0 '
-        'fraction, not seconds — starting from the beginning instead of '
-        '${startPositionSeconds}s',
-      );
-    }
+    final fraction = _fractionFor(startPositionSeconds, duration);
 
-    final resp = await playV1(url, 0.0);
+    final resp = await playV1(url, fraction);
     CastLogger.debug(
       'AirPlayMediaController: V1 fallback response: ${resp.statusCode}',
     );
     if (resp.statusCode != 200) {
+      final detail = _responseDetail(resp);
+      CastLogger.error(
+        'AirPlay: /play fallback failed: status=${resp.statusCode}$detail',
+      );
       throw PlaybackException(
         'Device rejected both the AirPlay 2 /play (404) and the AirPlay 1 '
-        '/play (${resp.statusCode}), despite advertising both versions.',
+        '/play (${resp.statusCode})$detail, despite advertising both versions.',
         statusCode: resp.statusCode,
       );
     }
@@ -308,8 +333,12 @@ class AirPlayMediaController {
       '/rate?value=1.000000',
     );
     if (rateResp.statusCode != 200) {
+      final detail = _responseDetail(rateResp);
+      CastLogger.error(
+        'AirPlay: /rate failed: status=${rateResp.statusCode}$detail',
+      );
       throw PlaybackException(
-        'Device rejected /rate after /play: ${rateResp.statusCode}. '
+        'Device rejected /rate after /play: ${rateResp.statusCode}$detail. '
         'AirPlay 2 playback starts paused without it.',
         statusCode: rateResp.statusCode,
       );
@@ -374,6 +403,24 @@ class AirPlayMediaController {
     await _sendControl('POST', '/stop');
   }
 
+  /// Sets the receiver volume in the 0.0–1.0 range.
+  ///
+  /// Only call this after checking the receiver advertises video volume
+  /// control. The command is `/volume?volume=<value>` over the same transport
+  /// as the other control commands.
+  Future<void> setVolume(double volume) async {
+    final value = volume.clamp(0.0, 1.0);
+    CastLogger.info('AirPlayMediaController: volume $value');
+    await _sendControl(
+      'POST',
+      '/volume',
+      queryParameters: {'volume': '$value'},
+    );
+  }
+
+  /// Whether playback fell back to AirPlay 1 after a 404 from the V2 `/play`.
+  bool get usingV1Fallback => _usingV1Fallback;
+
   // ---------------------------------------------------------------------------
   // Info
   // ---------------------------------------------------------------------------
@@ -425,6 +472,11 @@ class AirPlayMediaController {
       return;
     }
     await session.sendRequest(method, path, queryParameters: queryParameters);
+  }
+
+  static String _responseDetail(HapHttpResponse response) {
+    final preview = formatAirPlayResponsePreview(response.body);
+    return preview.isEmpty ? '' : '; body: "$preview"';
   }
 
   static String _buildQuery(Map<String, String>? queryParameters) {

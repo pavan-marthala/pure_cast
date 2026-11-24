@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:dart_cast/src/protocols/airplay/auth/binary_plist.dart';
 
 /// An extended mock AirPlay HTTP server for integration testing.
 ///
@@ -91,24 +94,31 @@ class MockAirPlayServer {
   }
 
   Future<void> _handlePlay(HttpRequest request) async {
-    // Parse the text/parameters body
+    // Parse the binary plist /play body.
     final bodyBytes = await request.fold<List<int>>(
       <int>[],
       (prev, chunk) => prev..addAll(chunk),
     );
-    final body = String.fromCharCodes(bodyBytes);
 
-    // Extract Content-Location
-    final locationMatch = RegExp(r'Content-Location:\s*(.+)').firstMatch(body);
-    if (locationMatch != null) {
-      lastMediaUrl = locationMatch.group(1)!.trim();
+    duration = 5400.0; // Default 1.5 hours
+    position = 0.0;
+    lastMediaUrl = null;
+    try {
+      final body = BinaryPlistDecoder.decode(Uint8List.fromList(bodyBytes));
+      final location = body['Content-Location'];
+      if (location is String) lastMediaUrl = location;
+      // AirPlay 1's /play start fraction, applied to the default duration.
+      final fraction = body['Start-Position'];
+      if (fraction is num) {
+        position = fraction.toDouble().clamp(0.0, 1.0) * duration;
+      }
+    } catch (_) {
+      // A malformed body still starts playback from the beginning.
     }
 
     // Start playing
     readyToPlay = true;
     rate = 1.0;
-    position = 0.0;
-    duration = 5400.0; // Default 1.5 hours
 
     request.response.statusCode = HttpStatus.ok;
     await request.response.close();

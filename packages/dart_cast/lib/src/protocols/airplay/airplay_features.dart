@@ -53,6 +53,9 @@ class AirPlayFeatures {
   /// Whether the device supports HLS streaming (bit 4).
   bool get supportsHLS => _hasBit(4);
 
+  /// Whether the device supports video volume control (bit 3).
+  bool get supportsVideoVolumeControl => _hasBit(3);
+
   /// Whether the device supports screen mirroring (bit 7).
   bool get supportsScreen => _hasBit(7);
 

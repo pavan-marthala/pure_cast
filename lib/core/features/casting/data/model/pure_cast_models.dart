@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 /// Supported casting protocols in Pure Cast.
-enum PureCastProtocol { chromecast, dlna }
+enum PureCastProtocol { chromecast, dlna, airplay }
 
 /// Types of media supported by Pure Cast.
 enum PureCastMediaType { video, audio, hls, mp4, mkv }
@@ -39,7 +39,11 @@ class PureCastCapabilities {
     this.canQueue = false,
   });
 
-  factory PureCastCapabilities.forProtocol(PureCastProtocol protocol) {
+  factory PureCastCapabilities.forProtocol(
+    PureCastProtocol protocol, {
+    bool supportsHls = false,
+    bool supportsVolume = false,
+  }) {
     switch (protocol) {
       case PureCastProtocol.chromecast:
         return const PureCastCapabilities(
@@ -59,6 +63,19 @@ class PureCastCapabilities {
           canSetVolume: true,
           canChangeAudioTrack: true,
           canChangeSubtitle: true,
+          canQueue: false,
+        );
+      case PureCastProtocol.airplay:
+        // AirPlay switches audio and subtitles by rebuilding a VOD HLS stream,
+        // so both depend on the receiver advertising HLS support. Volume is
+        // only real when the receiver advertises video volume control.
+        return PureCastCapabilities(
+          canPlay: true,
+          canPause: true,
+          canSeek: true,
+          canSetVolume: supportsVolume,
+          canChangeAudioTrack: supportsHls,
+          canChangeSubtitle: supportsHls,
           canQueue: false,
         );
     }
@@ -97,6 +114,12 @@ class PureCastDevice {
   final int port;
   final PureCastCapabilities capabilities;
 
+  /// Protocol-specific discovery metadata, such as AirPlay feature bits.
+  ///
+  /// Kept so a device restored from saved state can be handed back to the
+  /// package with the same capabilities it was discovered with.
+  final Map<String, String> metadata;
+
   const PureCastDevice({
     required this.id,
     required this.name,
@@ -104,6 +127,7 @@ class PureCastDevice {
     required this.host,
     required this.port,
     required this.capabilities,
+    this.metadata = const {},
   });
 
   @override
@@ -304,4 +328,21 @@ class PureCastException implements Exception {
 
   @override
   String toString() => 'PureCastException: $message';
+}
+
+/// The receiver requires a PIN before it can be cast to.
+///
+/// Callers should show a pairing prompt and then use `connectWithPin`.
+class PairingRequiredException extends PureCastException {
+  /// Device that asked for pairing.
+  final String deviceId;
+
+  /// Human-readable device name, for the prompt.
+  final String deviceName;
+
+  const PairingRequiredException(
+    this.deviceId,
+    this.deviceName, [
+    Object? originalError,
+  ]) : super('Pairing required for $deviceName', originalError);
 }

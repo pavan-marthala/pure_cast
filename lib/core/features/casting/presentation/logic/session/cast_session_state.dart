@@ -11,6 +11,9 @@ abstract class CastSessionState with _$CastSessionState {
     @Default(null) PureCastSubtitleTrack? activeSubtitle,
     @Default(StateStatus.initial) StateStatus connectionStatus,
     String? connectionError,
+
+    /// A connection is waiting for the receiver's PIN.
+    @Default(false) bool pairingRequired,
     @Default(StateStatus.initial) StateStatus playbackStatus,
     String? playbackError,
     @Default(Duration.zero) Duration position,
@@ -26,6 +29,7 @@ abstract class CastSessionState with _$CastSessionState {
     int? activeAudioIndex,
     @Default(false) bool isLive,
     @Default(false) bool restarting,
+
     /// Accumulated target of pending relative-seek taps, shown by the seek bar
     /// and the time labels until the debounced seek is committed.
     Duration? seekPreview,

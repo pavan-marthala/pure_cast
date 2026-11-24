@@ -53,9 +53,9 @@ void main() {
       expect(mockServer.lastPath, equals('/play'));
       expect(mockServer.lastMethod, equals('POST'));
       // The play body should contain a proxy URL (not the original)
-      expect(mockServer.lastBody, contains('Content-Location:'));
+      expect(mockServer.lastPlayLocation, isNotNull);
       // Should contain synthetic (wrapper) URL since subtitles are present
-      expect(mockServer.lastBody, contains('/synthetic/'));
+      expect(mockServer.lastPlayLocation, contains('/synthetic/'));
     });
 
     test('loadMedia without subtitles sends original proxy URL', () async {
@@ -69,10 +69,10 @@ void main() {
       await session.loadMedia(media);
 
       expect(mockServer.lastPath, equals('/play'));
-      expect(mockServer.lastBody, contains('Content-Location:'));
+      expect(mockServer.lastPlayLocation, isNotNull);
       // Should NOT contain synthetic URL since no subtitles
-      expect(mockServer.lastBody, isNot(contains('/synthetic/')));
-      expect(mockServer.lastBody, contains('/stream/'));
+      expect(mockServer.lastPlayLocation, isNot(contains('/synthetic/')));
+      expect(mockServer.lastPlayLocation, contains('/stream/'));
     });
 
     test('loadMedia with subtitles on non-HLS type does not inject', () async {
@@ -93,8 +93,8 @@ void main() {
 
       await session.loadMedia(media);
 
-      expect(mockServer.lastBody, isNot(contains('/synthetic/')));
-      expect(mockServer.lastBody, contains('/stream/'));
+      expect(mockServer.lastPlayLocation, isNot(contains('/synthetic/')));
+      expect(mockServer.lastPlayLocation, contains('/stream/'));
     });
 
     test('setSubtitle re-sends play with subtitle wrapper', () async {
@@ -107,7 +107,7 @@ void main() {
       );
 
       await session.loadMedia(media);
-      expect(mockServer.lastBody, isNot(contains('/synthetic/')));
+      expect(mockServer.lastPlayLocation, isNot(contains('/synthetic/')));
 
       // Now set a subtitle
       await session.setSubtitle(
@@ -120,7 +120,7 @@ void main() {
       );
 
       expect(mockServer.lastPath, equals('/play'));
-      expect(mockServer.lastBody, contains('/synthetic/'));
+      expect(mockServer.lastPlayLocation, contains('/synthetic/'));
     });
 
     test('setSubtitle with null removes subtitles', () async {
@@ -141,15 +141,15 @@ void main() {
       );
 
       await session.loadMedia(media);
-      expect(mockServer.lastBody, contains('/synthetic/'));
+      expect(mockServer.lastPlayLocation, contains('/synthetic/'));
 
       // Remove subtitles
       await session.setSubtitle(null);
 
       expect(mockServer.lastPath, equals('/play'));
       // Without subtitles, should use stream URL directly
-      expect(mockServer.lastBody, isNot(contains('/synthetic/')));
-      expect(mockServer.lastBody, contains('/stream/'));
+      expect(mockServer.lastPlayLocation, isNot(contains('/synthetic/')));
+      expect(mockServer.lastPlayLocation, contains('/stream/'));
     });
 
     test('setSubtitle is no-op when no media loaded', () async {

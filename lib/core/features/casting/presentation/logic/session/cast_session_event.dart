@@ -4,6 +4,13 @@ part of 'cast_session_bloc.dart';
 abstract class CastSessionEvent with _$CastSessionEvent {
   const factory CastSessionEvent.connectDevice(PureCastDevice device) =
       ConnectDeviceEvent;
+
+  /// Completes a connection that requires a receiver PIN.
+  const factory CastSessionEvent.connectWithPin(String pin) =
+      ConnectWithPinEvent;
+
+  /// Cancels a PIN prompt and discards the half-connected session.
+  const factory CastSessionEvent.cancelPairing() = CancelPairingEvent;
   const factory CastSessionEvent.disconnectDevice() = DisconnectDeviceEvent;
   const factory CastSessionEvent.loadMedia(PureCastMedia media) =
       LoadMediaEvent;
@@ -13,6 +20,7 @@ abstract class CastSessionEvent with _$CastSessionEvent {
   const factory CastSessionEvent.seekMedia(Duration position) = SeekMediaEvent;
   const factory CastSessionEvent.seekRelative(Duration delta) =
       SeekRelativeEvent;
+
   /// Internal: commits the accumulated [CastSessionState.seekPreview].
   const factory CastSessionEvent.commitSeekPreview() = CommitSeekPreviewEvent;
   const factory CastSessionEvent.selectAudio(int index) = SelectAudioEvent;

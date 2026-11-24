@@ -1,6 +1,8 @@
 ## Unreleased
 
 ### New
+- AirPlay `/play` receivers can play local files. Files are planned as direct play, MP4 remux, H.264/AAC transcode, or seekable VOD HLS with audio and subtitle renditions. Seeking and resume use the receiver's start position, and audio/subtitle changes rebuild the stream and reload at the current position. Track and subtitle switching need a receiver that advertises HLS; volume needs the video-volume feature bit. **Unverified end to end on hardware**
+- `CastService.pendingPairingSession` and `CastService.completePendingConnect` keep the AirPlay session that asked for a PIN and finish the handshake on that same session after `pairSetup`, instead of creating a second one. `NeedsPairingException` stays typed through `connect`
 - `MediaProbe` now exposes `duration` (a `Duration?` derived from `durationSeconds`) and `hasSubtitles`, and its stream models carry the extra fields an app needs to build a track picker: `AudioStream.trackIndex` and `AudioStream.title`; `SubtitleStream.trackIndex`, `SubtitleStream.title`, `SubtitleStream.isImageBased` and `SubtitleStream.displayLabel`. `trackIndex` is the 0-based position among streams of that type (`-map 0:a:N` / `-map 0:s:N`) while the existing `index` remains the absolute container index (`-map 0:N`). All new constructor parameters are optional, so existing code compiles unchanged
 - `MediaProber` (with `FfprobeMediaProber`) probes a file and returns a `MediaProbe`, throwing the existing `ProbeFailedException` on timeout, missing media information or probe errors
 - `FfprobeRunner` (with `FFmpegKitFfprobeRunner`) exposes the raw FFprobe conversion so tests and alternative backends can replace FFmpegKit
@@ -14,6 +16,10 @@
 ### Changed
 - MediaProber throws ProbeFailedException when FFprobe returns no media information; previously the Chromecast load path treated that as an empty probe and attempted a direct load. Apps that already catch ProbeFailedException need no change.
 - SubtitleCache part temp files now end with the real output extension (`<name>.part.<suffix>.<ext>`) so FFmpeg can select a muxer from the temp file name, and `commit()` rejects files whose names are not cache temp names. This API was unreleased, so released versions are unaffected; old-shape part files are treated as foreign by cleanup
+
+### Fixed
+- AirPlay 1: `/play` now sends the Apple binary plist body instead of `text/parameters`. The recorded "Living Room" receiver rejected the text body with HTTP 400 before fetching the media; the binary form is the one pyatv sends. **Not yet verified on that receiver**
+- AirPlay: a rejected `/play` reports the HTTP status and a bounded preview of the response body, so the next failure names what the receiver answered instead of only "failed". The request is not retried with a second body encoding
 
 ## 0.7.5
 
